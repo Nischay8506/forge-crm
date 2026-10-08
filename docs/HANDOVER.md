@@ -33,7 +33,7 @@ Phase 1 steps:
 |---|---|---|
 | 0 | Foundations: repo, migrations, tenancy (RLS), login + RBAC, event outbox, worker, LLM gateway, UI shell | **Done 2026-10-08** (see section 6 for what is still open) |
 | 1 | F12.1 Golden Record & Data Steward (dedup/merge/enrich, hygiene score, adjudication screen) | **Done 2026-10-08**, with one accepted gap: ≥95% auto-resolve not met on the synthetic set (54% with S3A); re-measure on real legacy data before Phase 2 (decision S5 A) |
-| 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). Four small defaults wait for Nischay's confirmation (U1-U4, section 7) |
+| 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). U1-U3 confirmed as built; U4 still waits for Nischay (section 7) |
 | 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | Next |
 | 4 | F12.4 Audit replay UI, redaction, retention | Not started |
 | 5 | F12.3 Human Approval Inbox (Design File frame 05) | Not started |
@@ -73,8 +73,11 @@ recommendation, and record the answer here.
 | T6 A | One audit hash chain per tenant | 2026-10-08 |
 | T7 A | First behind the gate: the Data Steward's merges, plus a test-only Sandbox Agent with amounts for the over-limit test | 2026-10-08 |
 | T8 A | Human takeover = a person takes over a whole record; agents do nothing on it until it is handed back; both steps audited | 2026-10-08 |
+| U1 A | Account tiers are Strategic, Key, Standard (blank counts as Standard) | 2026-10-08 |
+| U2 A | A site or group company with no tier of its own takes its parent's tier (a plant of a strategic customer is treated as strategic) | 2026-10-08 |
+| U3 A | When a rule routes a decision to a role (e.g. Finance), people with that role and full-access admins can decide it | 2026-10-08 |
 
-Still open (section 7): D3 new LLM keys, D4 daily update time, U1-U4 (Step 2 defaults to confirm).
+Still open (section 7): D3 new LLM keys, D4 daily update time, U4 (stops and overrides on a merge).
 
 ## 4. How to run it
 
@@ -342,12 +345,7 @@ Open questions for Nischay:
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
   rotated, never copied). Meaning match (S2A) starts working as soon as the Gemini key is set.
 - **D4** Daily handover update time: 18:50 IST set by default; change?
-- **U1-U4** Defaults Claude chose while building Step 2. Each is built as option A and is a small
-  change to switch:
-  - **U1 Account tiers.** A: Strategic, Key, Standard (blank = Standard). B: other names or more tiers.
-  - **U2 Tier of sites and group companies.** A: a site or company with no tier of its own takes its
-    parent's (a plant of a strategic customer is treated as strategic). B: each record only has its own.
-  - **U3 When a rule names who decides (e.g. Finance).** A: people with that role, and full-access
-    admins. B: only people with that role.
+- **U4** A default Claude chose while building Step 2 (U1-U3 were answered A and are in section 3).
+  It is built as option A and is a small change to switch:
   - **U4 Merging an account that has a stop or an autonomy override.** A: the stop or override moves to
     the kept account (undo moves it back). B: it stays on the merged record and stops applying.

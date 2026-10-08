@@ -44,7 +44,8 @@ S5 A: accept the unmet 95% auto-resolve check for now.
 
 **Not done / next**
 - U1-U4 (tier names, tier inheritance, admins deciding role-named cards, controls following a merge)
-  are built as option A and wait for Nischay's confirmation (HANDOVER section 7).
+  were built as option A. Nischay confirmed U1 A, U2 A, U3 A the same day (no code change needed);
+  U4 still waits for his answer (HANDOVER section 7).
 - Drift monitors and per-release golden-set evals wait for model-driven agents; slow actions approved
   from a card will need to run in the worker. See HANDOVER section 6 "Known gaps".
 - Next: Step 3, F12.6 Integration Framework and the ERPNext adapter, starting with design questions.
