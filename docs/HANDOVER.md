@@ -77,7 +77,7 @@ recommendation, and record the answer here.
 | U2 A | A site or group company with no tier of its own takes its parent's tier (a plant of a strategic customer is treated as strategic) | 2026-10-08 |
 | U3 A | When a rule routes a decision to a role (e.g. Finance), people with that role and full-access admins can decide it | 2026-10-08 |
 
-Still open (section 7): D3 new LLM keys, D4 daily update time, U4 (stops and overrides on a merge).
+Still open (section 7): D3 new LLM keys, D4 daily update time, U4 (stops and overrides on a merge), Step 3 questions E1-E9 and V1-V3.
 
 ## 4. How to run it
 
@@ -339,7 +339,9 @@ Known gaps (none block Step 3):
 ## 7. Next step and open questions
 
 **Next: Step 3, F12.6 Integration Framework & Connector SDK with the ERPNext adapter (decision 5A).**
-Design questions go to Nischay first, as for Steps 1 and 2.
+The design questions E1-E9 and small defaults V1-V3 were sent to Nischay on 2026-10-08
+(`plans/Step3_Integration_Questions.md` in the Claude project files). Parts that don't depend on
+the answers (shared contracts, adapter interface, test harness) can start; the rest waits for them.
 
 Open questions for Nischay:
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
