@@ -9,7 +9,9 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents import runtime
 from app.api.v1.accounts import MergeSummary
+from app.audit import chain
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import AppError, NotFound
 from app.db import get_db
@@ -124,9 +126,12 @@ async def merge_candidate(
     if body.survivor_id not in (c.left_id, c.right_id):
         raise AppError("survivor_id must be one of the two records")
     merged_id = c.right_id if body.survivor_id == c.left_id else c.left_id
-    return await merge.merge_records(db, c.record_type, body.survivor_id, merged_id,
-                                     actor=_actor(current), automatic=False,
-                                     overrides=body.field_choices)
+    event = await merge.merge_records(db, c.record_type, body.survivor_id, merged_id,
+                                      actor=_actor(current), automatic=False,
+                                      overrides=body.field_choices)
+    await runtime.supersede(db, merge.merge_dedupe_key(c.id), _actor(current),
+                            "A person merged this pair from the review queue")
+    return event
 
 
 @router.post("/candidates/{candidate_id}/not-duplicate", response_model=CandidateOut)
@@ -138,6 +143,12 @@ async def reject_candidate(
     if c is None or c.status != "open":
         raise NotFound("Candidate not found or already decided")
     await decide(c, "not_duplicate", _actor(current))
+    await runtime.supersede(db, merge.merge_dedupe_key(c.id), _actor(current),
+                            "A person marked this pair as not a duplicate")
+    await chain.append(db, current.tenant_id, "candidate.not_duplicate", actor=_actor(current),
+                       record_type=c.record_type, record_id=c.left_id,
+                       data={"candidate_id": c.id, "left_id": c.left_id, "right_id": c.right_id,
+                             "score": float(c.score)})
     model = MODELS[c.record_type]
     from app.steward.hygiene import refresh_hygiene
 

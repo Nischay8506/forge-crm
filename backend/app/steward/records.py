@@ -13,10 +13,10 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import AppError
+from app.core.errors import AppError, ValidationFailed
 from app.events.outbox import publish
 from app.models import Account, Contact, FieldProvenance
-from app.models.golden import ACCOUNT_KINDS, SITE_TYPES
+from app.models.golden import ACCOUNT_KINDS, ACCOUNT_TIERS, SITE_TYPES
 from app.steward import identifiers as ids
 from app.steward.normalize import normalize_name, phonetic_keys
 
@@ -31,7 +31,7 @@ VERIFYING_SOURCES = frozenset({"registry", "erp", "manual"})
 ACCOUNT_FIELDS = (
     "kind", "site_type", "parent_id", "name", "legal_name", "gstin", "pan", "cin", "website",
     "domain", "email", "phone", "address_line1", "address_line2", "city", "state", "pincode",
-    "country", "industry",
+    "country", "industry", "tier",
 )
 ACCOUNT_KEY_FIELDS = (
     "name", "legal_name", "gstin", "pan", "cin", "website", "email", "phone", "address_line1",
@@ -46,15 +46,6 @@ CONTACT_KEY_FIELDS = ("full_name", "email", "phone", "designation", "department"
 MODELS = {"account": Account, "contact": Contact}
 KEY_FIELDS = {"account": ACCOUNT_KEY_FIELDS, "contact": CONTACT_KEY_FIELDS}
 ALL_FIELDS = {"account": ACCOUNT_FIELDS, "contact": CONTACT_FIELDS}
-
-
-class ValidationFailed(AppError):
-    status_code = 422
-    code = "validation_failed"
-
-    def __init__(self, problems: list[str]):
-        super().__init__("; ".join(problems))
-        self.problems = problems
 
 
 def _blank(v: Any) -> bool:
@@ -79,6 +70,10 @@ def clean_account(data: dict[str, Any]) -> tuple[dict[str, Any], list[str], list
         errors.append(f"kind must be one of {', '.join(ACCOUNT_KINDS)}")
     if out.get("site_type") and out["site_type"] not in SITE_TYPES:
         errors.append(f"site_type must be one of {', '.join(SITE_TYPES)}")
+    if out.get("tier"):
+        out["tier"] = out["tier"].lower()
+        if out["tier"] not in ACCOUNT_TIERS:
+            errors.append(f"tier must be one of {', '.join(ACCOUNT_TIERS)}")
 
     if "gstin" in out:
         g = ids.check_gstin(out["gstin"])

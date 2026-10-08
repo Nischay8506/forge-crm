@@ -15,6 +15,7 @@ import { usePermissions } from "@/stores/authStore"
 import { Actor } from "@/features/steward/Actor"
 import { KIND_LABELS, SITE_TYPE_LABELS, SOURCE_LABELS, fieldLabel } from "@/features/steward/labels"
 import type { Account, AccountDetail, Provenance } from "@/features/steward/types"
+import { TakeoverPanel } from "@/features/agents/TakeoverPanel"
 import { HygieneBreakdown } from "./HygieneBreakdown"
 
 const SHOWN_FIELDS: (keyof Account)[] = [
@@ -55,6 +56,7 @@ export function AccountDetailPage() {
           </div>
           <div className="flex items-center gap-2">
             <Tag>{a.kind === "site" && a.site_type ? SITE_TYPE_LABELS[a.site_type] ?? a.site_type : KIND_LABELS[a.kind]}</Tag>
+            {a.tier && a.tier !== "standard" && <Tag variant="gold">{a.tier} account</Tag>}
             {!active && <Tag variant="amber">{a.status}</Tag>}
             {a.gstin && <Nameplate id={a.gstin} />}
             {a.parent_id && <Link to={`/accounts/${a.parent_id}`} className="text-[12px] text-teal-600 hover:underline">Parent record</Link>}
@@ -70,6 +72,7 @@ export function AccountDetailPage() {
         )}
       </div>
 
+      {active && <TakeoverPanel recordType="account" recordId={a.id} />}
       {a.status === "merged" && a.merged_into_id && (
         <div className="rounded-md bg-amber-100 text-amber-500 text-[13px] p-3">
           This record was merged. <Link to={`/accounts/${a.merged_into_id}`} className="underline font-semibold">Open the surviving record</Link>

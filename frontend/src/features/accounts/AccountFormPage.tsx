@@ -58,6 +58,7 @@ export function AccountFormPage() {
   const [kind, setKind] = useState<Kind>((search.get("kind") as Kind) || "entity")
   const [siteType, setSiteType] = useState("plant")
   const [parent, setParent] = useState<AccountSummary | null>(null)
+  const [tier, setTier] = useState("")
   const [values, setValues] = useState<Values>(emptyValues)
   const [initial, setInitial] = useState<Values>(emptyValues)
   const [problems, setProblems] = useState<string[]>([])
@@ -67,6 +68,7 @@ export function AccountFormPage() {
     if (!a) return
     setKind(a.kind)
     setSiteType(a.site_type ?? "plant")
+    setTier(a.tier && a.tier !== "standard" ? a.tier : "")
     setValues(valuesOf(a))
     setInitial(valuesOf(a))
   }, [existing.data])
@@ -103,6 +105,8 @@ export function AccountFormPage() {
       }
       const parentChanged = (parent?.id ?? null) !== (existing.data?.account.parent_id ?? null)
       if (!editing || parentChanged) body.parent_id = parent?.id ?? null
+      const oldTier = existing.data?.account.tier ?? ""
+      if (!editing ? tier : tier !== (oldTier === "standard" ? "" : oldTier)) body.tier = tier || null
       if (!editing) body.kind = kind
       if (kind === "site") body.site_type = siteType
       const r = editing
@@ -150,6 +154,15 @@ export function AccountFormPage() {
               {parentKind && (
                 <Field label={kind === "site" ? "Company this site belongs to *" : "Group (optional)"} className="col-span-2" group>
                   <AccountPicker value={parent} onChange={setParent} kind={parentKind} />
+                </Field>
+              )}
+              {kind !== "site" && (
+                <Field label="Account tier" hint="Agents can be set to be more careful with strategic and key accounts." className="col-span-2">
+                  <Select value={tier} onChange={(e) => setTier(e.target.value)}>
+                    <option value="">Standard</option>
+                    <option value="key">Key</option>
+                    <option value="strategic">Strategic</option>
+                  </Select>
                 </Field>
               )}
               {TEXT_FIELDS.map(([f, label]) => (

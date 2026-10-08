@@ -35,9 +35,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     llm_default_monthly_budget_usd: float = 50.0
 
-    # Data Steward (F12.1). Until the policy gate exists (Step 2) automatic merges
-    # are controlled by this switch; every merge is recorded and can be undone.
-    steward_auto_merge: bool = True
+    # Data Steward (F12.1). Automatic merges go through the policy gate (Step 2): stop
+    # or slow them on the Agents screen, not here. Every merge can be undone.
     # Decision S3: "b" would also auto-merge close name + same city/pincode without IDs.
     steward_name_only_auto_merge: bool = False
     steward_candidate_limit: int = 200

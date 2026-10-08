@@ -17,9 +17,19 @@ from typing import Any
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import chain
 from app.core.errors import AppError, NotFound
 from app.events.outbox import publish
-from app.models import Account, Contact, FieldProvenance, MatchCandidate, MergeEvent
+from app.models import (
+    Account,
+    AutonomyOverride,
+    Contact,
+    FieldProvenance,
+    KillSwitch,
+    MatchCandidate,
+    MergeEvent,
+    SandboxAction,
+)
 from app.steward.candidates import decide, ordered
 from app.steward.hygiene import refresh_hygiene
 from app.steward.identifiers import normalize_domain
@@ -35,7 +45,13 @@ from app.steward.records import (
 )
 
 REFERENCES: dict[str, list[tuple[type, str]]] = {
-    "account": [(Account, "parent_id"), (Contact, "account_id")],
+    "account": [
+        (Account, "parent_id"), (Contact, "account_id"),
+        # Agent controls follow the surviving account, so a stop or a stricter autonomy
+        # level set on either record still applies after the merge (undo moves them back).
+        (KillSwitch, "account_id"), (AutonomyOverride, "account_id"),
+        (SandboxAction, "account_id"),
+    ],
     "contact": [],
 }
 UUID_FIELDS = frozenset({"parent_id", "account_id", "merged_into_id"})
@@ -46,6 +62,11 @@ NOT_MERGED_FIELDS = frozenset({"kind", "domain"})
 # Tables keyed by the record itself (its own data, e.g. its name vector). They are not
 # re-pointed on merge: the merged record keeps its own row.
 OWN_ROWS: set[tuple[str, str]] = {("account_embeddings", "account_id")}
+
+
+def merge_dedupe_key(candidate_id: uuid.UUID) -> str:
+    """Key of the Data Steward's approval request for one candidate pair."""
+    return f"steward.merge:{candidate_id}"
 
 
 def register_reference(record_type: str, model: type, column: str) -> None:
@@ -206,19 +227,31 @@ async def merge_records(
     if cand is not None:
         await decide(cand, "merged", actor)
         event.candidate_id = cand.id
-    # Other pairs involving the merged record are re-evaluated against the survivor.
-    await session.execute(
+    # Other pairs involving the merged record are re-evaluated against the survivor;
+    # approvals waiting on those pairs are closed with them.
+    stale = (await session.scalars(
         update(MatchCandidate)
         .where(MatchCandidate.status == "open",
                or_(MatchCandidate.left_id == m.id, MatchCandidate.right_id == m.id))
-        .values(status="superseded")
-        .execution_options(synchronize_session="fetch"))
+        .values(status="superseded").returning(MatchCandidate.id)
+        .execution_options(synchronize_session="fetch"))).all()
+    if stale:
+        from app.agents.runtime import supersede
+
+        for cid in stale:
+            await supersede(session, merge_dedupe_key(cid), actor,
+                            "One of the records was merged into another record")
 
     event.field_choices = choices
     event.repointed = repointed
     event.survivor_after = snapshot(s, record_type)
     await session.flush()
     await refresh_hygiene(session, s, record_type)
+    await chain.append(session, s.tenant_id, "record.merged", actor=actor,
+                       record_type=record_type, record_id=s.id,
+                       data={"merge_event_id": event.id, "survivor_id": s.id,
+                             "merged_id": m.id, "automatic": automatic,
+                             "repointed": {k: len(v) for k, v in repointed.items()}})
     await publish(session, s.tenant_id, "record.merged", {
         "record_type": record_type, "survivor_id": str(s.id), "merged_id": str(m.id),
         "merge_event_id": str(event.id), "automatic": automatic})
@@ -299,6 +332,10 @@ async def undo_merge(session: AsyncSession, event_id: uuid.UUID, *, actor: str) 
     await session.flush()
     await refresh_hygiene(session, s, ev.record_type)
     await refresh_hygiene(session, m, ev.record_type)
+    await chain.append(session, s.tenant_id, "merge.undone", actor=actor,
+                       record_type=ev.record_type, record_id=m.id,
+                       data={"merge_event_id": ev.id, "survivor_id": s.id,
+                             "restored_id": m.id, "notes": notes})
     await publish(session, s.tenant_id, "record.unmerged", {
         "record_type": ev.record_type, "survivor_id": str(s.id), "restored_id": str(m.id),
         "merge_event_id": str(ev.id)})

@@ -31,6 +31,8 @@ from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 
 ACCOUNT_KINDS = ("group", "entity", "site")
 SITE_TYPES = ("plant", "ship_to", "bill_to", "office", "warehouse", "branch")
+# Used by autonomy overrides and policy rules (F12.2). Empty means standard.
+ACCOUNT_TIERS = ("strategic", "key", "standard")
 RECORD_STATUSES = ("active", "merged", "inactive")
 
 
@@ -58,6 +60,7 @@ class Account(IdMixin, TenantMixin, TimestampMixin, Base):
     pincode: Mapped[str | None] = mapped_column(String(6), index=True)
     country: Mapped[str] = mapped_column(String(2), nullable=False, default="IN")
     industry: Mapped[str | None] = mapped_column(String(100))
+    tier: Mapped[str | None] = mapped_column(String(20))
 
     # Matching helpers, maintained by app.steward.records.refresh_match_fields()
     normalized_name: Mapped[str] = mapped_column(String(300), nullable=False, default="")

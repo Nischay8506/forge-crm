@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom"
 import { useAuthStore, usePermissions } from "@/stores/authStore"
 import { hasPermission } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
+import { useDecisionCount } from "@/features/decisions/DecisionsPage"
 
 /** Nav items appear only when the user holds the permission (null = everyone).
  *  Add each module's pages here as they are built. */
@@ -10,6 +11,8 @@ const NAV: { name: string; path: string; permission: string | null }[] = [
   { name: "Accounts", path: "/accounts", permission: "accounts.read" },
   { name: "Contacts", path: "/contacts", permission: "accounts.read" },
   { name: "Data Steward", path: "/steward", permission: "steward.read" },
+  { name: "Decisions", path: "/decisions", permission: "decisions.decide" },
+  { name: "Agents", path: "/agents", permission: "agents.read" },
   { name: "Users", path: "/admin/users", permission: "users.read" },
 ]
 
@@ -17,6 +20,8 @@ export function AppBar() {
   const { me, logout } = useAuthStore()
   const permissions = usePermissions()
   const location = useLocation()
+  const count = useDecisionCount(hasPermission(permissions, "decisions.decide"))
+  const waiting = count.data?.waiting ?? 0
   const initials = me?.full_name
     ? me.full_name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()
     : "U"
@@ -39,6 +44,9 @@ export function AppBar() {
                   active && "text-white border-gold-500 bg-white/5"
                 )}>
                 {item.name}
+                {item.path === "/decisions" && waiting > 0 && (
+                  <span className="ml-1.5 rounded-full bg-gold-500 text-ink-900 text-[10px] font-bold px-1.5 leading-[16px]">{waiting}</span>
+                )}
               </Link>
             )
           }

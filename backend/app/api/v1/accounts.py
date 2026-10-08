@@ -40,6 +40,7 @@ class AccountIn(BaseModel):
     state: str | None = None
     pincode: str | None = None
     industry: str | None = None
+    tier: str | None = None
 
 
 class AccountSummary(BaseModel):
@@ -55,6 +56,7 @@ class AccountSummary(BaseModel):
     status: str
     merged_into_id: uuid.UUID | None
     hygiene_score: int | None
+    tier: str | None
 
 
 class AccountOut(AccountSummary):

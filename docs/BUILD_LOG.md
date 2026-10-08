@@ -5,6 +5,50 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-08 (Day 1, continued): Step 2 Agent Runtime, Policy Gate, Autonomy, Audit Chain
+
+**Decisions (Nischay):** T1-T8 all A (structured rules as sentences; Decision + "Waiting for you" now;
+autonomy per agent with tier/account overrides; definitions in code; own runtime on Celery; one hash
+chain per tenant; Data Steward + test-only Sandbox Agent first; takeover of a whole record).
+S5 A: accept the unmet 95% auto-resolve check for now.
+
+**Done**
+- Migration `0004_agent_runtime`: agent_settings, autonomy_overrides, kill_switches, policy_rules,
+  record_takeovers, agent_runs, decisions, audit_records (append-only: privileges revoked + trigger),
+  sandbox_actions, and `accounts.tier`. All with forced RLS.
+- `app/agents/`: registry (agents, tools, facts, levels), the policy gate, `call_tool()` runtime with
+  decisions and resume-on-approval, rule matching/validation/sentences, controls (levels, overrides,
+  kill-switches, takeovers, tier inheritance), the Sandbox Agent. `app/audit/chain.py`: append + verify.
+- Data Steward: merge tool + charter (`app/steward/agent.py`); `process_record` proposes merges through
+  the gate; manual merges and "not a duplicate" close waiting cards; merges and undos are audited;
+  stops and overrides follow the kept account on a merge. `STEWARD_AUTO_MERGE` removed.
+- API: `/agents`, `/agents/{key}/level`, overrides, `/agents/sandbox/try`, `/kill-switches`,
+  `/policies` (+ catalog, preview), `/decisions` (+ count, approve, reject, acknowledge), `/audit`
+  (+ verify), `/takeovers`, `/roles`, `/permissions`, `POST /users`, `PUT /users/{id}/roles`.
+- Frontend: Decisions page and nav count; Agents section (agent page, policy rule builder, stops, audit
+  log with chain check, sandbox "Try it"); takeover banner and tier on accounts; Users with roles.
+- `evals/policy_gate.py` chaos test: 312/312 over-limit calls correct, 400/400 overall, 10/10
+  approvals executed once, chain verified. Duplicate eval unchanged through the gate (0 wrong merges).
+- Tests: 58 backend (17 new: gate, rules, overrides, stops, takeover, approvals by role, resume
+  re-check, steward behind the gate, tamper detection, chaos), 10 frontend. Browser walkthrough: rule
+  builder → sandbox try → Decisions approve (payment and merge) → notices → takeover → stop all →
+  audit chain check → users and roles.
+
+**Problems found and fixed**
+- A new amount condition defaulted to "is less than"; the builder now starts with "is more than".
+- Sentences lower-cased "INR"; rupee amounts now use Indian grouping (₹1,50,000).
+- A decided card vanished from "Waiting for you" before showing its outcome; it now stays, marked.
+- Concurrent approvals could both run the action; the decision row is now locked and re-read first.
+- `pgrep -f`/`pkill -f` with the pattern in the same shell command matches the shell itself; stop
+  servers by PID from `ps | grep "[p]attern"`.
+
+**Not done / next**
+- U1-U4 (tier names, tier inheritance, admins deciding role-named cards, controls following a merge)
+  are built as option A and wait for Nischay's confirmation (HANDOVER section 7).
+- Drift monitors and per-release golden-set evals wait for model-driven agents; slow actions approved
+  from a card will need to run in the worker. See HANDOVER section 6 "Known gaps".
+- Next: Step 3, F12.6 Integration Framework and the ERPNext adapter, starting with design questions.
+
 ## 2026-10-08 (Day 1, continued): Step 1 Golden Record & Data Steward
 
 **Decisions (Nischay):** D1 A Docker Desktop for local Postgres + Redis; D2 A login with company code +

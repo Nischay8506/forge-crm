@@ -26,6 +26,17 @@ class NotFound(AppError):
     code = "not_found"
 
 
+class ValidationFailed(AppError):
+    """One or more problems with submitted data, listed for the form."""
+
+    status_code = 422
+    code = "validation_failed"
+
+    def __init__(self, problems: list[str]):
+        super().__init__("; ".join(problems))
+        self.problems = problems
+
+
 async def app_error_handler(_: Request, exc: AppError) -> JSONResponse:
     error = {"code": exc.code, "message": exc.message}
     if getattr(exc, "problems", None):

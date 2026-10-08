@@ -16,6 +16,7 @@ export interface AccountSummary {
   status: string
   merged_into_id: string | null
   hygiene_score: number | null
+  tier: string | null
 }
 
 export interface HygieneDetails {

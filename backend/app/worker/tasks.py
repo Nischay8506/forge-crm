@@ -1,12 +1,15 @@
 import asyncio
 
+from app.agents.registry import load_definitions
 from app.db import dispose_engine
 from app.events.outbox import dispatch_batch
 from app.steward import handlers as steward_handlers
 from app.worker.celery_app import celery_app
 
-# Outbox handlers must be registered in the worker process before delivery starts.
+# Outbox handlers and agent definitions must be registered in the worker process
+# before delivery starts.
 steward_handlers.register()
+load_definitions()
 
 
 async def _dispatch() -> int:

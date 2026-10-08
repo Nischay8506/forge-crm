@@ -16,6 +16,13 @@ import { MergesPage } from '@/features/steward/MergesPage'
 import { ReviewDetailPage } from '@/features/steward/ReviewDetailPage'
 import { ReviewQueuePage } from '@/features/steward/ReviewQueuePage'
 import { StewardLayout } from '@/features/steward/StewardLayout'
+import { AgentDetailPage } from '@/features/agents/AgentDetailPage'
+import { AgentsLayout } from '@/features/agents/AgentsLayout'
+import { AgentsPage } from '@/features/agents/AgentsPage'
+import { AuditPage } from '@/features/agents/AuditPage'
+import { PoliciesPage } from '@/features/agents/PoliciesPage'
+import { StopsPage } from '@/features/agents/StopsPage'
+import { DecisionsPage } from '@/features/decisions/DecisionsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -46,6 +53,19 @@ const router = createBrowserRouter([
           { path: 'merges/:id', element: <MergeDetailPage /> },
           { path: 'imports', element: <ImportsPage /> },
           { path: 'hygiene', element: <HygienePage /> },
+        ],
+      },
+      { path: 'decisions', element: <DecisionsPage /> },
+      {
+        path: 'agents',
+        element: <AgentsLayout />,
+        children: [
+          { index: true, element: <Navigate to="list" replace /> },
+          { path: 'list', element: <AgentsPage /> },
+          { path: 'list/:key', element: <AgentDetailPage /> },
+          { path: 'policies', element: <PoliciesPage /> },
+          { path: 'stops', element: <StopsPage /> },
+          { path: 'audit', element: <AuditPage /> },
         ],
       },
       { path: '*', element: <NotFoundPage /> },
