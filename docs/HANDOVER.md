@@ -34,7 +34,7 @@ Phase 1 steps:
 | 0 | Foundations: repo, migrations, tenancy (RLS), login + RBAC, event outbox, worker, LLM gateway, UI shell | **Done 2026-10-08** (see section 6 for what is still open) |
 | 1 | F12.1 Golden Record & Data Steward (dedup/merge/enrich, hygiene score, adjudication screen) | **Done 2026-10-08**, with one accepted gap: ≥95% auto-resolve not met on the synthetic set (54% with S3A); re-measure on real legacy data before Phase 2 (decision S5 A) |
 | 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). U1-U3 confirmed as built; U4 still waits for Nischay (section 7) |
-| 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | Next |
+| 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **In progress**: groundwork in (shared contracts, ERPNext adapter, contract tests passing on a real ERPNext v16). Tables, sync engine and screens wait for Nischay's answers E1-E9, V1-V3 (section 7) |
 | 4 | F12.4 Audit replay UI, redaction, retention | Not started |
 | 5 | F12.3 Human Approval Inbox (Design File frame 05) | Not started |
 | 6 | F12.5 Multilingual & Channel Fabric (email, WhatsApp, SMS, caps) | Not started |
@@ -266,7 +266,8 @@ Only the parts that do not depend on the open questions: no tables, screens or s
   including 12 customers forced to share one modified time. The ERPNext user needs the roles Sales
   User, Accounts User, Stock User and Sales Master Manager (prices); `check(full=True)` names any
   record type it cannot read. ERPNext only lets System Managers read the site time zone, so the
-  connection carries it (Asia/Kolkata unless set).
+  connection carries it (Asia/Kolkata unless set). The local ERPNext used for this is described by
+  `dev/erpnext/compose.yml` in the Claude project files; it moves into this repo once E1 is answered.
 - **Contract-test suite** (`app/integrations/testing/contract.py`), generic for any adapter: connects,
   wrong key gives "auth_rejected", unreachable gives "unreachable", paging returns each record once and
   matches reconciliation, `since` is exact, `fetch` matches the listing. Passes on the fake ERPNext in

@@ -32,6 +32,8 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 **Not done / next**
 - Tables, sync engine, mapping studio, health page and alerts wait for E1-E9 and V1-V3.
+- End of day: waiting on Nischay for E1-E9 and V1-V3 (Step 3 design), U4 (stops and overrides on a
+  merge), D3 (new Groq/Gemini keys) and D4 (daily update time). Nothing is blocked on anyone else.
 
 ## 2026-10-08 (Day 1, continued): Step 2 Agent Runtime, Policy Gate, Autonomy, Audit Chain
 
