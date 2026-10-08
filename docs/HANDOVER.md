@@ -32,7 +32,7 @@ Phase 1 steps:
 | Step | What | Status |
 |---|---|---|
 | 0 | Foundations: repo, migrations, tenancy (RLS), login + RBAC, event outbox, worker, LLM gateway, UI shell | **Done 2026-10-08** (see section 6 for what is still open) |
-| 1 | F12.1 Golden Record & Data Steward (dedup/merge/enrich, hygiene score, adjudication screen) | **Done 2026-10-08** (meaning match waits for the Gemini key, D3; see section 6) |
+| 1 | F12.1 Golden Record & Data Steward (dedup/merge/enrich, hygiene score, adjudication screen) | **Built 2026-10-08.** One "Done When" check is not met: ≥95% of seeded duplicates auto-resolved (54% with S3A). Waiting on Nischay (S5, section 7) |
 | 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | Next |
 | 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | Not started |
 | 4 | F12.4 Audit replay UI, redaction, retention | Not started |
@@ -193,7 +193,7 @@ docs/                  this file, BUILD_LOG.md
 
 ## 6. Current state (end of 2026-10-08)
 
-Step 0 (foundations) is done; see the build log. Step 1 (F12.1) is done:
+Step 0 (foundations) is done; see the build log. Step 1 (F12.1) is built:
 - Accounts as group → legal entity → sites (plant, ship-to, bill-to, office, warehouse, branch) and
   contacts, with the source and verified date of every key field (`field_provenance`)
 - Offline GSTIN/PAN/CIN checks; PAN and state filled from the GSTIN; phone, email, pincode normalised
@@ -217,6 +217,12 @@ Matching quality on the synthetic set (seed 7, 400 companies, 660 records):
 - Look-alike companies with different PANs: all kept apart. 154 pairs open for review in total
 - With S3 option b (name-only auto-merge) the same set gives 0 wrong merges, 96% of duplicates merged
   and 34 open reviews. Nischay chose A; the switch exists if that changes.
+
+**F12.1 "Done When" check:** "≥95% auto-resolved correctly, zero wrong merges". Zero wrong merges is
+met. ≥95% is **not** met: 54.2% of all planted cases are auto-resolved with S3A (89.6% with S3b),
+because S3A sends every duplicate without a GSTIN/PAN/CIN to a person. The result depends on the mix
+in the synthetic set, which Claude chose: 40% of its duplicates carry no identifier. Real legacy data
+may have a different mix. Open question S5.
 
 Known gaps (none block Step 2):
 - **Auto-merges run without the policy gate** until Step 2 builds it. They are controlled by
@@ -242,3 +248,5 @@ Open questions for Nischay:
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
   rotated, never copied). Meaning match (S2A) starts working as soon as the Gemini key is set.
 - **D4** Daily handover update time: 18:50 IST set by default; change?
+- **S5** The F12.1 "≥95% auto-resolved" check is not met with S3A (section 6). Accept the gap and
+  measure again on the real legacy data, switch on S3b (89.6%), or keep tuning before Step 2?

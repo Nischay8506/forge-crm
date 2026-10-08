@@ -42,6 +42,7 @@ S3 A auto-merge only on hard identifiers; S4 A synthetic duplicate set.
   to its first control); `Field` has a `group` mode for such widgets.
 
 **Not done / next**
+- The F12.1 "≥95% auto-resolved" check is not met with S3A (54.2%); asked Nischay how to treat it (S5).
 - Meaning match waits for the Gemini key (D3). Auto-merge goes behind the policy gate in Step 2.
 - Next: Step 2 (agent runtime, policy gate, autonomy, audit chain), starting with design questions.
 
