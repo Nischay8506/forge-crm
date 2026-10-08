@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+/* Design tokens from Forge_CRM_Design_File page 00 (carried over from the old CRM).
+   Teal = an agent acted; gold = a human decides. */
+
+@theme {
+  --color-ink-900: #0e1729;
+  --color-ink-700: #1f3050;
+  --color-ink-500: #33415c;
+  --color-ink-300: #8a94a6;
+  --color-surface-0: #f6f7f9;
+  --color-surface-1: #ffffff;
+  --color-surface-2: #f1f4f8;
+  --color-line: #dce2ea;
+  
+  --color-teal-600: #0a5b63;
+  --color-teal-500: #0e7c86;
+  --color-teal-100: #e3f1f2;
+  
+  --color-gold-500: #c9a227;
+  --color-gold-100: #f8f1dc;
+  
+  --color-green-500: #1e8e5a;
+  --color-green-100: #e2f3ea;
+  
+  --color-red-500: #c0392b;
+  --color-red-100: #fbe9e7;
+  
+  --color-amber-500: #c77700;
+  --color-amber-100: #fdf1de;
+
+  --font-disp: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  /* Semantic Colors */
+  --color-background: var(--color-surface-0);
+  --color-foreground: var(--color-ink-900);
+  
+  --color-card: var(--color-surface-1);
+  --color-card-foreground: var(--color-ink-900);
+  
+  --color-popover: var(--color-surface-1);
+  --color-popover-foreground: var(--color-ink-900);
+  
+  --color-primary: var(--color-teal-500);
+  --color-primary-foreground: var(--color-surface-1);
+  
+  --color-secondary: var(--color-surface-2);
+  --color-secondary-foreground: var(--color-ink-700);
+  
+  --color-muted: var(--color-surface-2);
+  --color-muted-foreground: var(--color-ink-500);
+  
+  --color-accent: var(--color-teal-100);
+  --color-accent-foreground: var(--color-teal-600);
+  
+  --color-destructive: var(--color-red-500);
+  --color-destructive-foreground: var(--color-surface-1);
+
+  --color-border: var(--color-line);
+  --color-input: var(--color-line);
+  --color-ring: var(--color-teal-500);
+
+  --radius: var(--radius-md);
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-disp;
+  }
+  
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-ink-300);
+    border-radius: var(--radius-sm);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ink-500);
+  }
+}

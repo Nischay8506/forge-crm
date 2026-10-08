@@ -1,0 +1,50 @@
+import { Link, useLocation } from "react-router-dom"
+import { useAuthStore, usePermissions } from "@/stores/authStore"
+import { hasPermission } from "@/lib/permissions"
+import { cn } from "@/lib/utils"
+
+/** Nav items appear only when the user holds the permission (null = everyone).
+ *  Add each module's pages here as they are built. */
+const NAV: { name: string; path: string; permission: string | null }[] = [
+  { name: "Home", path: "/", permission: null },
+  { name: "Users", path: "/admin/users", permission: "users.read" },
+]
+
+export function AppBar() {
+  const { me, logout } = useAuthStore()
+  const permissions = usePermissions()
+  const location = useLocation()
+  const initials = me?.full_name
+    ? me.full_name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()
+    : "U"
+
+  return (
+    <header className="flex items-center gap-3 bg-ink-700 px-4 h-[52px] w-full shrink-0">
+      <Link to="/" className="font-disp font-bold text-white text-[14px] tracking-[0.02em] shrink-0">
+        FORGE<b className="text-gold-500 font-bold mx-[1px]">·</b>CRM
+      </Link>
+      <nav className="flex gap-1 h-full flex-1 ml-2">
+        {NAV.filter((i) => i.permission === null || hasPermission(permissions, i.permission)).map(
+          (item) => {
+            const active =
+              location.pathname === item.path ||
+              (item.path !== "/" && location.pathname.startsWith(item.path))
+            return (
+              <Link key={item.path} to={item.path}
+                className={cn(
+                  "text-[#B9C4D6] text-[12px] font-medium px-2 h-full flex items-center border-b-2 border-transparent hover:text-white hover:bg-white/5",
+                  active && "text-white border-gold-500 bg-white/5"
+                )}>
+                {item.name}
+              </Link>
+            )
+          }
+        )}
+      </nav>
+      <button onClick={logout} title={`Log out ${me?.email ?? ""}`}
+        className="shrink-0 w-[30px] h-[30px] rounded-full bg-teal-500 text-white grid place-items-center text-[12px] font-bold hover:bg-teal-600">
+        {initials}
+      </button>
+    </header>
+  )
+}
