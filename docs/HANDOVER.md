@@ -241,8 +241,8 @@ Known gaps (none block Step 2):
 **Next: Step 2, F12.2 Agent Runtime, Policy Engine, Autonomy + minimal audit chain (6A).** Agents run
 as Celery tasks, every side-effecting tool call passes a policy gate (rules stored in the database,
 decision 2B) and writes an audit record. The first agent to put behind it is the Data Steward's
-auto-merge. Before building, ask Nischay the design questions for this step (policy rule format,
-autonomy levels per agent, what the audit chain records), with options and a recommendation.
+auto-merge. The design questions T1-T8 were sent to Nischay on 2026-10-08
+(`plans/Step2_Agent_Runtime_Questions.md` in the Claude project files); build only after his answers.
 
 Open questions for Nischay:
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
