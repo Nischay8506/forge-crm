@@ -5,6 +5,34 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-08 (Day 1, continued): Step 3 questions and groundwork
+
+**Decisions (Nischay):** U1 A, U2 A, U3 A (built that way already). U4 still open.
+
+**Done**
+- Step 3 design questions E1-E9 and small defaults V1-V3 sent
+  (`plans/Step3_Integration_Questions.md` in the Claude project files).
+- Groundwork that does not depend on the answers: shared contracts, the adapter interface with
+  failure causes, the ERPNext adapter (reads all seven contracts), a fake ERPNext, seed data and the
+  generic contract-test suite with a command-line runner. 31 new tests.
+- Ran a real ERPNext v16.50.0 (official Docker image, demo data) in the build environment and passed
+  the contract suite against it, including 12 customers sharing one modified time.
+
+**Problems found and fixed**
+- ERPNext's list API only returns child-table rows (order lines, payment allocations) when asked for
+  the child type directly with `parent=<parent type>`; the adapter fetches them that way in one call
+  per page.
+- Item Price needs the Sales Master Manager role (Sales User alone gets "Insufficient Permission");
+  the full connection check now lists unreadable record types by name.
+- The site time zone is only readable by System Managers, so it is a connection setting
+  (Asia/Kolkata by default) and the check says where it came from.
+- On a freshly created site, an API key generated before the workers restarted failed with "Failed to
+  decrypt key"; restarting ERPNext and generating the key again fixed it. Worth a line in the setup
+  steps.
+
+**Not done / next**
+- Tables, sync engine, mapping studio, health page and alerts wait for E1-E9 and V1-V3.
+
 ## 2026-10-08 (Day 1, continued): Step 2 Agent Runtime, Policy Gate, Autonomy, Audit Chain
 
 **Decisions (Nischay):** T1-T8 all A (structured rules as sentences; Decision + "Waiting for you" now;

@@ -179,6 +179,11 @@ backend/
       controls.py        levels and overrides, kill-switches, takeovers, account tiers
       sandbox.py         test-only Sandbox Agent (pretend payments with amounts)
     audit/chain.py     append() and verify() for the per-tenant hash chain (T6)
+    integrations/      F12.6 (Step 3, groundwork only so far; start here: adapter.py):
+      contracts.py       the shared contracts (Customer, Item, Price, Order, Invoice, Receipt, Stock)
+      adapter.py         the adapter interface, ConnectorError and its causes (for alerts)
+      erpnext/           client.py (Frappe REST, errors -> causes), adapter.py (ERPNext -> contracts)
+      testing/           contract.py (the certification suite + CLI), fake_erpnext.py, seed.py
   alembic/versions/    migrations (0001 foundation, 0002 golden records, 0003 embeddings,
                        0004 agent runtime + audit + account tier)
   evals/duplicates.py  synthetic duplicate set and quality report (S4A)
@@ -234,11 +239,39 @@ docs/                  this file, BUILD_LOG.md
     everyone; `GET /audit/verify` (and the "Check the chain" button) recomputes every hash.
 13. **A change to the gate must be re-checked with `evals/policy_gate.py`**: every over-limit call must
     still be stopped with the right escalation (100%).
+14. **Adapters only translate.** An adapter maps its system's records to `app/integrations/contracts.py`
+    and its failures to a cause; retries, dead-letter, alerts and the policy gate on writes belong to
+    the sync engine. An adapter counts as certified only when `app/integrations/testing/contract.py`
+    passes against a real instance of its system.
 
 ## 6. Current state (end of 2026-10-08)
 
-Steps 0, 1 and 2 are done. Tests: 58 backend, 10 frontend, all passing; every new screen was checked
-in a browser.
+Steps 0, 1 and 2 are done; Step 3 has its groundwork in (below). Tests: 89 backend (plus 1 that runs
+only when a live ERPNext is configured), 10 frontend, all passing; every new screen was checked in a
+browser.
+
+### Step 3 groundwork (F12.6), built while E1-E9 wait for answers
+Only the parts that do not depend on the open questions: no tables, screens or sync engine yet.
+- **Shared contracts** for Customer, Item, Price, Order, Invoice, Receipt and Stock
+  (`app/integrations/contracts.py`): ERP ids, UTC times, Decimal money, the ERP's own codes, and one
+  canonical status list per contract with the ERP's own word kept beside it.
+- **Adapter interface** (`app/integrations/adapter.py`): `check()`, `changes()` (keyset paging on
+  modified time + id, so a bulk import sharing one time is neither skipped nor repeated), `fetch()`,
+  `stamps()` (for nightly reconciliation). Every failure carries a cause (auth rejected, permission
+  denied, unreachable, timeout, rate limited, server error, bad response, rejected, not configured)
+  so an alert can name it. A record that cannot be translated is reported with its reason (for
+  example "qty is not a number: 'ten'") and the rest of the page still arrives.
+- **ERPNext adapter** reads all seven contracts from ERPNext's REST API with an API key. Checked
+  against a real ERPNext v16.50.0 site with demo data (official Docker image `frappe/erpnext`),
+  including 12 customers forced to share one modified time. The ERPNext user needs the roles Sales
+  User, Accounts User, Stock User and Sales Master Manager (prices); `check(full=True)` names any
+  record type it cannot read. ERPNext only lets System Managers read the site time zone, so the
+  connection carries it (Asia/Kolkata unless set).
+- **Contract-test suite** (`app/integrations/testing/contract.py`), generic for any adapter: connects,
+  wrong key gives "auth_rejected", unreachable gives "unreachable", paging returns each record once and
+  matches reconciliation, `since` is exact, `fetch` matches the listing. Passes on the fake ERPNext in
+  CI and on the real v16 site. Run it against any site with
+  `uv run python -m app.integrations.testing.contract erpnext --url ... --key ... --secret ...`.
 
 ### Step 2 (F12.2 + minimal F12.4)
 - **Agents** are defined in code (T4): charter text, tools, default and highest level, triggers, model
