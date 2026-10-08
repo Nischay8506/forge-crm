@@ -36,3 +36,9 @@ export function errorMessage(err: unknown, fallback: string): string {
   if (axios.isAxiosError(err)) return err.response?.data?.error?.message ?? fallback
   return fallback
 }
+
+/** Validation errors (422) also carry the list of problems, one per field. */
+export function errorProblems(err: unknown): string[] {
+  if (axios.isAxiosError(err)) return err.response?.data?.error?.problems ?? []
+  return []
+}

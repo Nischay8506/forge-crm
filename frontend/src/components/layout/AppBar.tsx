@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils"
  *  Add each module's pages here as they are built. */
 const NAV: { name: string; path: string; permission: string | null }[] = [
   { name: "Home", path: "/", permission: null },
+  { name: "Accounts", path: "/accounts", permission: "accounts.read" },
+  { name: "Contacts", path: "/contacts", permission: "accounts.read" },
+  { name: "Data Steward", path: "/steward", permission: "steward.read" },
   { name: "Users", path: "/admin/users", permission: "users.read" },
 ]
 

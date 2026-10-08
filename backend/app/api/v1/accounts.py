@@ -257,20 +257,27 @@ class ContactOut(ContactSummary):
     updated_at: datetime
 
 
-@router.get("/contacts", response_model=list[ContactSummary])
+class ContactRow(ContactSummary):
+    account_name: str | None = None
+
+
+@router.get("/contacts", response_model=list[ContactRow])
 async def list_contacts(
     q: str | None = None, account_id: uuid.UUID | None = None, status: str = "active",
     limit: int = Query(50, le=500), offset: int = 0,
     _: CurrentUser = Depends(require_permission("accounts.read")),
     db: AsyncSession = Depends(get_db),
-) -> list[Contact]:
-    stmt = select(Contact).where(Contact.status == status)
+) -> list[ContactRow]:
+    stmt = select(Contact, Account.name).outerjoin(Account, Account.id == Contact.account_id) \
+        .where(Contact.status == status)
     if account_id:
         stmt = stmt.where(Contact.account_id == account_id)
     if q:
         like = f"%{q.strip()}%"
         stmt = stmt.where(or_(Contact.full_name.ilike(like), Contact.email.ilike(like)))
-    return list(await db.scalars(stmt.order_by(Contact.full_name).limit(limit).offset(offset)))
+    rows = await db.execute(stmt.order_by(Contact.full_name).limit(limit).offset(offset))
+    return [ContactRow(**ContactSummary.model_validate(c).model_dump(), account_name=name)
+            for c, name in rows.all()]
 
 
 @router.post("/contacts", response_model=ContactOut, status_code=201)

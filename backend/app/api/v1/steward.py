@@ -149,17 +149,29 @@ async def reject_candidate(
     return c
 
 
-@router.get("/merges", response_model=list[MergeSummary])
+class MergeRow(MergeSummary):
+    survivor_name: str | None
+    merged_name: str | None
+
+
+def _name(snap: dict[str, Any]) -> str | None:
+    return snap.get("name") or snap.get("full_name")
+
+
+@router.get("/merges", response_model=list[MergeRow])
 async def list_merges(
     record_type: str | None = None, limit: int = Query(50, le=200), offset: int = 0,
     _: CurrentUser = Depends(require_permission("steward.read")),
     db: AsyncSession = Depends(get_db),
-) -> list[MergeEvent]:
+) -> list[MergeRow]:
     stmt = select(MergeEvent)
     if record_type:
         stmt = stmt.where(MergeEvent.record_type == record_type)
-    return list(await db.scalars(stmt.order_by(MergeEvent.created_at.desc())
-                                 .limit(limit).offset(offset)))
+    events = await db.scalars(stmt.order_by(MergeEvent.created_at.desc())
+                              .limit(limit).offset(offset))
+    return [MergeRow(**MergeSummary.model_validate(ev).model_dump(),
+                     survivor_name=_name(ev.survivor_before), merged_name=_name(ev.merged_before))
+            for ev in events]
 
 
 @router.get("/merges/{merge_id}")
@@ -171,6 +183,7 @@ async def get_merge(
     if ev is None:
         raise NotFound("Merge not found")
     return {**MergeSummary.model_validate(ev).model_dump(mode="json"),
+            "survivor_name": _name(ev.survivor_before), "merged_name": _name(ev.merged_before),
             "field_choices": ev.field_choices, "repointed": ev.repointed,
             "survivor_before": ev.survivor_before, "merged_before": ev.merged_before,
             "undo_notes": ev.undo_notes, "undone_by": ev.undone_by}

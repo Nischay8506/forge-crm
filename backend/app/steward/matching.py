@@ -172,7 +172,8 @@ def compare_accounts(
     r = MatchResult(DISTINCT, 0.0)
     sim = name_similarity(a.name, b.name)
     full = full_name_similarity(a.name, b.name)
-    r.add("name_similarity", f"{full:.0f}/100 (core words {sim:.0f}/100)", "info")
+    r.add("name_similarity", f"Name similarity {full:.0f}/100 (core words {sim:.0f}/100)",
+          "info")
 
     if a.kind == "site" and b.kind == "site":
         return _compare_sites(a, b, sim, r)
@@ -248,7 +249,7 @@ def _compare_sites(a: AccountRec, b: AccountRec, sim: float, r: MatchResult) -> 
     addr = fuzz.token_set_ratio(normalize_address(a.address), normalize_address(b.address))
     same_gstin, gstin_conflict = _eq(a.gstin, b.gstin), _conflict(a.gstin, b.gstin)
     same_pincode = _eq(a.pincode, b.pincode)
-    r.add("address_similarity", f"{addr:.0f}/100", "info")
+    r.add("address_similarity", f"Address similarity {addr:.0f}/100", "info")
     if gstin_conflict:
         r.add("gstin_conflict", f"GSTIN {a.gstin} vs {b.gstin}", "distinct")
     if same_gstin:
@@ -269,7 +270,7 @@ def compare_contacts(a: ContactRec, b: ContactRec) -> MatchResult:
     r = MatchResult(DISTINCT, 0.0)
     # token_set: "Rajesh Kumar" and "Rajesh Kumar Sharma" are the same person's name
     sim = float(fuzz.token_set_ratio(normalize_name(a.full_name), normalize_name(b.full_name)))
-    r.add("name_similarity", f"{sim:.0f}/100", "info")
+    r.add("name_similarity", f"Name similarity {sim:.0f}/100", "info")
     same_email, same_phone = _eq(a.email, b.email), _eq(a.phone, b.phone)
     same_account = _eq(str(a.account_id or ""), str(b.account_id or ""))
     shared_mailbox = bool(a.email) and a.email.split("@")[0] in GENERIC_MAILBOXES
