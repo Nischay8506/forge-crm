@@ -29,6 +29,11 @@ ROUTES: dict[str, list[Route]] = {
         Route("gemini", "gemini-2.5-pro"),
         Route("groq", "llama-3.3-70b-versatile"),
     ],
+    # Text embeddings (Data Steward meaning match, decision S2A). Vectors from different
+    # models cannot be compared, so callers store the model next to each vector.
+    "embedding": [
+        Route("gemini", "gemini-embedding-001"),
+    ],
 }
 
 PRICES_PER_MTOK: dict[str, tuple[float, float]] = {

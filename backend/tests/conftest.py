@@ -24,6 +24,9 @@ APP_URL = os.environ.get(
 os.environ["DATABASE_URL"] = APP_URL
 os.environ["MIGRATION_DATABASE_URL"] = OWNER_URL
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-hs256"
+# Tests never call real model providers, even if backend/.env holds keys.
+for _key in ("GROQ_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY"):
+    os.environ[_key] = ""
 
 from app.cli import create_tenant  # noqa: E402
 from app.config import get_settings  # noqa: E402
@@ -43,8 +46,13 @@ def _alembic_cfg() -> Config:
 async def migrated_db():
     engine = create_async_engine(OWNER_URL)
     async with engine.begin() as conn:
-        await conn.execute(text("DROP SCHEMA public CASCADE"))
-        await conn.execute(text("CREATE SCHEMA public"))
+        # Drop the tables but keep the schema and its extensions (pgvector can only be
+        # installed by a superuser, see infra/postgres-init.sql).
+        tables = await conn.execute(
+            text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+        )
+        for (table,) in tables.all():
+            await conn.execute(text(f'DROP TABLE IF EXISTS public."{table}" CASCADE'))
     await engine.dispose()
     import asyncio
 

@@ -27,6 +27,7 @@ class NotFound(AppError):
 
 
 async def app_error_handler(_: Request, exc: AppError) -> JSONResponse:
-    return JSONResponse(
-        status_code=exc.status_code, content={"error": {"code": exc.code, "message": exc.message}}
-    )
+    error = {"code": exc.code, "message": exc.message}
+    if getattr(exc, "problems", None):
+        error["problems"] = exc.problems
+    return JSONResponse(status_code=exc.status_code, content={"error": error})

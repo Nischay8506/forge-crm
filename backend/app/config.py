@@ -35,6 +35,18 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     llm_default_monthly_budget_usd: float = 50.0
 
+    # Data Steward (F12.1). Until the policy gate exists (Step 2) automatic merges
+    # are controlled by this switch; every merge is recorded and can be undone.
+    steward_auto_merge: bool = True
+    # Decision S3: "b" would also auto-merge close name + same city/pincode without IDs.
+    steward_name_only_auto_merge: bool = False
+    steward_candidate_limit: int = 200
+    # Decision S2A: meaning match through the gateway's "embedding" tier (review only).
+    # Runs only when a key for that tier is set (GEMINI_API_KEY).
+    steward_embeddings: bool = True
+    steward_embedding_neighbours: int = 10
+    import_max_rows: int = 20000
+
     outbox_batch_size: int = 100
     outbox_max_attempts: int = 8
 

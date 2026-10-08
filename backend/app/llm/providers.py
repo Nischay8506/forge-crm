@@ -1,5 +1,6 @@
 """Provider clients. Groq, Gemini and Anthropic all expose an OpenAI-compatible
-chat-completions endpoint, so one small httpx client covers all three."""
+chat-completions endpoint, so one small httpx client covers all three. Gemini also
+serves embeddings on the OpenAI-compatible /embeddings endpoint."""
 
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -16,12 +17,20 @@ class ProviderResponse:
     output_tokens: int
 
 
+@dataclass
+class EmbeddingResponse:
+    vectors: list[list[float]]
+    input_tokens: int
+
+
 class Provider(Protocol):
     name: str
 
     async def chat(
         self, model: str, messages: list[dict[str, str]], **kwargs: Any
     ) -> ProviderResponse: ...
+
+    async def embed(self, model: str, texts: list[str]) -> EmbeddingResponse: ...
 
 
 class OpenAICompatibleProvider:
@@ -53,6 +62,22 @@ class OpenAICompatibleProvider:
             text=data["choices"][0]["message"]["content"] or "",
             input_tokens=int(usage.get("prompt_tokens", 0)),
             output_tokens=int(usage.get("completion_tokens", 0)),
+        )
+
+    async def embed(self, model: str, texts: list[str]) -> EmbeddingResponse:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(
+                f"{self.base_url}/embeddings",
+                headers={"Authorization": f"Bearer {self._key()}"},
+                json={"model": model, "input": texts},
+            )
+            r.raise_for_status()
+            data = r.json()
+        items = sorted(data["data"], key=lambda d: d.get("index", 0))
+        usage = data.get("usage") or {}
+        return EmbeddingResponse(
+            vectors=[[float(x) for x in d["embedding"]] for d in items],
+            input_tokens=int(usage.get("prompt_tokens", 0)),
         )
 
 
