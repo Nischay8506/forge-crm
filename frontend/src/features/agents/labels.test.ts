@@ -15,6 +15,13 @@ describe("auditLine", () => {
     expect(auditLine({ kind: "agent.level_changed", data: { from: 2, to: 0 } }))
       .toBe("Changed autonomy level from L2 to L0")
   })
+  it("explains integration records", () => {
+    expect(auditLine({ kind: "mapping.changed",
+      data: { erp_code: "Nos", after: { forge_code: "NOS", status: "confirmed" } } }))
+      .toBe("Changed a code mapping: Nos → NOS")
+    expect(auditLine({ kind: "erp.write.refused", data: { reasons: ["Already in ERPNext as CUST-1"] } }))
+      .toBe("Refused to create an ERP customer: Already in ERPNext as CUST-1")
+  })
   it("falls back to the kind it does not know", () => {
     expect(auditLine({ kind: "something.new", data: {} })).toBe("something.new")
   })

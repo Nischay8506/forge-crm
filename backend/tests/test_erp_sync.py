@@ -137,6 +137,25 @@ async def test_credentials_are_encrypted_bound_and_never_shown(erp, caplog):
     assert any(a.kind == "integration.connection.created" for a in audit)
 
 
+async def test_erpnext_time_zone_is_used_when_none_was_set(make_tenant):
+    tid = await _tenant_id((await make_tenant())[0])
+    fake = FakeERPNext(time_zone="Asia/Dubai")
+    fake.shares_time_zone = True
+    e = await _connect(tid, fake)
+    async with tenant_session(tid) as s:
+        conn = await s.get(ErpConnection, e.conn_id)
+        assert (await connections.check_connection(s, conn, full=True)).ok
+        assert conn.settings["time_zone"] == "Asia/Dubai"
+        adapter = connections.adapter_for(conn)
+        assert adapter.settings.time_zone == "Asia/Dubai"
+        await adapter.aclose()
+        # A time zone someone set is kept.
+        conn.settings = {"time_zone": "Asia/Kolkata"}
+        await connections.check_connection(s, conn, full=True)
+        assert conn.settings["time_zone"] == "Asia/Kolkata"
+    use_transport(e.url, None)
+
+
 async def test_key_rotation_reencrypts_and_old_key_can_go(erp, monkeypatch):
     old = get_settings().credential_keys
     monkeypatch.setenv("CREDENTIAL_KEYS", f"{secrets.new_key_spec('knew')},{old}")
@@ -308,15 +327,24 @@ async def test_a_revoked_key_raises_an_alert_naming_the_cause_and_clears_when_fi
     assert alert is not None and "rejected Forge's API key" in alert.title
     assert "API Access" in alert.reasons[0]
     assert any(a.kind == "integration.alert.raised" for a in await _all(erp, select(AuditRecord)))
+    # A scheduled read during the outage fails too.
+    flow = (await _all(erp, select(SyncFlow).where(SyncFlow.entity == "customer")))[0]
+    await run_sync(erp.tid, flow.id, sleep=no_sleep)
 
-    # Fixed: a new key entered on the connection; the next check clears the alert.
+    # Fixed: a new key entered on the connection. The next check re-runs the failed
+    # read at once, and the alert clears when it succeeds.
     erp.fake.revoked = False
     erp.fake.api_key, erp.fake.api_secret = "new-key-1234", "new-secret-5678"
     async with tenant_session(erp.tid) as s:
         conn = await s.get(ErpConnection, erp.conn_id)
         await connections.change_credentials(s, conn, "new-key-1234", "new-secret-5678",
                                              "user:test")
-    await tick(now=t0 + timedelta(minutes=2), enqueue=Enqueued())
+    q = Enqueued(erp.tid)
+    await tick(now=t0 + timedelta(minutes=2), enqueue=q)
+    assert ("sync", flow.id, "manual") in q  # the others never ran here, so they are due anyway
+    assert await _alert(erp) is not None  # the failed read still counts until it is re-run
+    await run_sync(erp.tid, flow.id, sleep=no_sleep)
+    await tick(now=t0 + timedelta(minutes=3), enqueue=Enqueued())
     assert await _alert(erp) is None
     kinds = [a.kind for a in await _all(erp, select(AuditRecord))]
     assert "integration.alert.resolved" in kinds and "integration.credentials.changed" in kinds

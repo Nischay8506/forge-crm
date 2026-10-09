@@ -16,6 +16,8 @@ export function Actor({ actor }: { actor: string | null | undefined }) {
     staleTime: 5 * 60_000,
   })
   if (!actor) return <span className="text-ink-300">–</span>
+  if (actor.startsWith("system:")) return <span className="text-ink-500">Forge</span>
+  if (actor.startsWith("mcp:")) return <span className="text-ink-700">{actor.slice(4)} (outside AI tool)</span>
   if (actor.startsWith("agent:")) {
     const name = actor.slice(6).replace(/_/g, " ").toUpperCase()
     return <AgentBadge label={name} />

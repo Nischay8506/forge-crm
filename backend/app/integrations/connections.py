@@ -48,7 +48,7 @@ CAUSE_TITLES = {
 }
 CAUSE_FIXES = {
     "auth_rejected": "In ERPNext open the integration user, generate a new API key and secret "
-                     "(API Access), and enter them on this connection's Credentials tab.",
+                     "(API Access), and enter them on this connection's Settings and login tab.",
     "permission_denied": "Give the integration user the roles Sales User, Accounts User, Stock "
                          "User and Sales Master Manager in ERPNext.",
     "unreachable": "Check that ERPNext is running and that the address on this connection is "
@@ -57,6 +57,10 @@ CAUSE_FIXES = {
     "server_error": "Check ERPNext's error log; Forge keeps retrying.",
     "not_configured": "Open the connection and fill in the missing setting.",
 }
+
+# Failures that are about reaching or logging in to the ERP, not about the records.
+CONNECTION_CAUSES = frozenset({"auth_rejected", "permission_denied", "unreachable", "timeout",
+                               "rate_limited", "server_error", "not_configured"})
 
 # Test hook: base_url -> transport, so tests can point a stored connection at a fake.
 _TRANSPORTS: dict[str, httpx.AsyncBaseTransport] = {}
@@ -284,6 +288,17 @@ async def check_connection(session: AsyncSession, conn: ErpConnection, *, full: 
     if check.ok:
         conn.last_ok_at = now
         conn.about = {**conn.about, **check.about}
+        tz = check.about.get("time_zone")
+        if (full and tz and check.about.get("time_zone_source") == "erpnext"
+                and not (conn.settings or {}).get("time_zone")):
+            # Nobody set one: use ERPNext's own, which its timestamps are written in.
+            conn.settings = {**(conn.settings or {}), "time_zone": tz}
+        # The login works again: re-run flows that failed only because it did not, so
+        # their failures clear within a minute instead of at the next scheduled read.
+        for f in await flows_of(session, conn):
+            if (f.enabled and f.consecutive_failures and f.last_error_cause in CONNECTION_CAUSES
+                    and f.run_requested_at is None and f.running_since is None):
+                f.run_requested_at = now
     await refresh_health(session, conn, now=now)
     return check
 

@@ -64,7 +64,8 @@ async def sync_alert(session: AsyncSession, tenant_id: uuid.UUID, *, key: str,
         return None
     problems = sorted(problems, key=lambda p: -p.severity)
     title = f"{subject}: {problems[0].title}"[:300]
-    reasons = [p.detail + (f" What to do: {p.fix}" if p.fix else "") for p in problems]
+    reasons = [p.detail.rstrip(".") + "." + (f" What to do: {p.fix}" if p.fix else "")
+               for p in problems]
     codes = sorted({p.code for p in problems})
     args = {"problems": [{"code": p.code, "title": p.title, **p.data} for p in problems]}
     if card is None:

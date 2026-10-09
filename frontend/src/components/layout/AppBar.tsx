@@ -3,6 +3,7 @@ import { useAuthStore, usePermissions } from "@/stores/authStore"
 import { hasPermission } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { useDecisionCount } from "@/features/decisions/DecisionsPage"
+import { useOverview } from "@/features/integrations/hooks"
 
 /** Nav items appear only when the user holds the permission (null = everyone).
  *  Add each module's pages here as they are built. */
@@ -13,6 +14,7 @@ const NAV: { name: string; path: string; permission: string | null }[] = [
   { name: "Data Steward", path: "/steward", permission: "steward.read" },
   { name: "Decisions", path: "/decisions", permission: "decisions.decide" },
   { name: "Agents", path: "/agents", permission: "agents.read" },
+  { name: "Integrations", path: "/integrations", permission: "integrations.read" },
   { name: "Users", path: "/admin/users", permission: "users.read" },
 ]
 
@@ -22,6 +24,8 @@ export function AppBar() {
   const location = useLocation()
   const count = useDecisionCount(hasPermission(permissions, "decisions.decide"))
   const waiting = count.data?.waiting ?? 0
+  const overview = useOverview(hasPermission(permissions, "integrations.read"))
+  const erpBroken = (overview.data?.connections ?? []).some((c) => c.health === "problem")
   const initials = me?.full_name
     ? me.full_name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()
     : "U"
@@ -44,6 +48,9 @@ export function AppBar() {
                   active && "text-white border-gold-500 bg-white/5"
                 )}>
                 {item.name}
+                {item.path === "/integrations" && erpBroken && (
+                  <span className="ml-1.5 w-2 h-2 rounded-full bg-red-500" title="A connection needs attention" />
+                )}
                 {item.path === "/decisions" && waiting > 0 && (
                   <span className="ml-1.5 rounded-full bg-gold-500 text-ink-900 text-[10px] font-bold px-1.5 leading-[16px]">{waiting}</span>
                 )}

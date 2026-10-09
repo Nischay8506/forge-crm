@@ -96,7 +96,7 @@ export interface Check { check: string; ok: boolean; detail: string }
 
 export interface DecisionCard {
   id: string
-  kind: "approval" | "notice"
+  kind: "approval" | "notice" | "alert" | "task"
   status: string
   title: string
   agent_key: string

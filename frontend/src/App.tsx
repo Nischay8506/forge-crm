@@ -23,6 +23,13 @@ import { AuditPage } from '@/features/agents/AuditPage'
 import { PoliciesPage } from '@/features/agents/PoliciesPage'
 import { StopsPage } from '@/features/agents/StopsPage'
 import { DecisionsPage } from '@/features/decisions/DecisionsPage'
+import { CodesPage } from '@/features/integrations/CodesPage'
+import { ConnectionDetailPage } from '@/features/integrations/ConnectionDetailPage'
+import { ConnectionsPage } from '@/features/integrations/ConnectionsPage'
+import { ConnectionWizardPage } from '@/features/integrations/ConnectionWizardPage'
+import { CustomersPage } from '@/features/integrations/CustomersPage'
+import { IntegrationsLayout } from '@/features/integrations/IntegrationsLayout'
+import { McpClientsPage } from '@/features/integrations/McpClientsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -66,6 +73,19 @@ const router = createBrowserRouter([
           { path: 'policies', element: <PoliciesPage /> },
           { path: 'stops', element: <StopsPage /> },
           { path: 'audit', element: <AuditPage /> },
+        ],
+      },
+      {
+        path: 'integrations',
+        element: <IntegrationsLayout />,
+        children: [
+          { index: true, element: <Navigate to="connections" replace /> },
+          { path: 'connections', element: <ConnectionsPage /> },
+          { path: 'connections/:id', element: <ConnectionDetailPage /> },
+          { path: 'new', element: <ConnectionWizardPage /> },
+          { path: 'customers', element: <CustomersPage /> },
+          { path: 'codes', element: <CodesPage /> },
+          { path: 'mcp', element: <McpClientsPage /> },
         ],
       },
       { path: '*', element: <NotFoundPage /> },

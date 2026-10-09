@@ -78,6 +78,7 @@ class FakeERPNext(httpx.AsyncBaseTransport):
         self.child_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self.denied: set[str] = set()
         self.read_only: set[str] = set()  # doctypes the key may read but not create
+        self.shares_time_zone = False  # whether the key may read System Settings
         self.fault: str | None = None
         # Do the next insert, then answer as if the connection dropped (lost answer).
         self.lose_next_answer = False
@@ -164,6 +165,8 @@ class FakeERPNext(httpx.AsyncBaseTransport):
                 "erpnext": {"title": "ERPNext", "version": self.version},
             }})
         if name == "frappe.client.get_single_value":
+            if self.shares_time_zone:
+                return _json(200, {"message": self.tz.key})
             return _frappe_error(403, "PermissionError", "No permission for System Settings")
         return _frappe_error(404, "DoesNotExistError", f"Method {name} not found")
 

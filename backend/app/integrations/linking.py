@@ -330,7 +330,7 @@ async def refresh_review_task(session: AsyncSession, conn: ErpConnection) -> Non
                "accounts") if n else None,
         reasons=["The match is not certain (no shared verified ID, or several possible "
                  "accounts). Pick the account, create a new one, or ignore the customer in "
-                 "Integrations > Mapping studio."],
+                 "Integrations > Customers."],
         args={"connection_id": str(conn.id), "waiting": n},
         done_note="Every customer is linked or ignored")
 

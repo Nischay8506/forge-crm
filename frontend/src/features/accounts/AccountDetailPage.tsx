@@ -16,6 +16,7 @@ import { Actor } from "@/features/steward/Actor"
 import { KIND_LABELS, SITE_TYPE_LABELS, SOURCE_LABELS, fieldLabel } from "@/features/steward/labels"
 import type { Account, AccountDetail, Provenance } from "@/features/steward/types"
 import { TakeoverPanel } from "@/features/agents/TakeoverPanel"
+import { AccountErpCard } from "@/features/integrations/AccountErpCard"
 import { HygieneBreakdown } from "./HygieneBreakdown"
 
 const SHOWN_FIELDS: (keyof Account)[] = [
@@ -116,6 +117,8 @@ export function AccountDetailPage() {
               </table>
             </CardContent>
           </Card>
+
+          <AccountErpCard accountId={a.id} isEntity={a.kind === "entity" && active} />
 
           {data.proposals.length > 0 && (
             <Card>

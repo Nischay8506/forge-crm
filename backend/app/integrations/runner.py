@@ -28,7 +28,7 @@ from app.db import system_session, tenant_session
 from app.integrations import linking, mapping
 from app.integrations.adapter import ConnectorError, RecordProblem
 from app.integrations.alerts import sync_task
-from app.integrations.connections import adapter_for, refresh_health
+from app.integrations.connections import ENTITY_ORDER, adapter_for, refresh_health
 from app.integrations.contracts import ENTITY_LABELS, Entity, Record
 from app.integrations.store import DbSink
 from app.integrations.sync import DEFAULT_RETRY, FlowState, RetryPolicy, reconcile, run_flow
@@ -295,7 +295,6 @@ async def tick(*, now: datetime | None = None, enqueue: Enqueue | None = None) -
         enqueue = _celery_enqueue
     async with system_session() as s:
         conns = [(c.id, c.tenant_id, c.status) for c in await s.scalars(select(ErpConnection))]
-        flows = list(await s.scalars(select(SyncFlow)))
     counts = {"checked": 0, "sync": 0, "reconcile": 0}
     active = {cid for cid, _, status in conns if status == "active"}
     for conn_id, tenant_id, status in conns:
@@ -306,7 +305,12 @@ async def tick(*, now: datetime | None = None, enqueue: Enqueue | None = None) -
                 counts["checked"] += 1
             else:
                 await refresh_health(s, conn, now=now)  # paused: clears its alert
-    for f in flows:
+    # Read after the checks: a check that finds the login working again asks for reruns.
+    async with system_session() as s:
+        flows = list(await s.scalars(select(SyncFlow)))
+    # Customers first, so orders and invoices land on linked accounts sooner.
+    rank = {e.value: i for i, e in enumerate(ENTITY_ORDER)}
+    for f in sorted(flows, key=lambda f: (str(f.connection_id), rank.get(f.entity, 99))):
         if f.connection_id not in active:
             continue
         what = due(f, now)

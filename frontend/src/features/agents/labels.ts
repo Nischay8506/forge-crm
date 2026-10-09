@@ -10,7 +10,7 @@ export const OUTCOME_LABELS: Record<string, { label: string; tone: Tone }> = {
 
 export const STATUS_TONES: Record<string, Tone> = {
   pending: "gold", approved: "green", rejected: "red", superseded: "neutral", failed: "red",
-  open: "teal", acknowledged: "neutral",
+  open: "teal", acknowledged: "neutral", resolved: "green", done: "green",
 }
 
 export const LEVEL_HELP: Record<number, string> = {
@@ -45,6 +45,33 @@ export const AUDIT_KINDS: Record<string, string> = {
   "role.created": "Created a role",
   "role.updated": "Changed a role",
   "user.roles_changed": "Changed a user's roles",
+  "integration.connection.created": "Connected an ERP",
+  "integration.connection.changed": "Changed an ERP connection",
+  "integration.credentials.changed": "Changed an ERP login",
+  "integration.credentials.reencrypted": "Re-encrypted an ERP login with the new key",
+  "integration.flow.changed": "Turned a record type on or off",
+  "integration.sync.requested": "Asked for a sync",
+  "integration.webhook.token_issued": "Made a webhook secret",
+  "integration.record.retried": "Retried a failed ERP record",
+  "integration.record.skipped": "Skipped a failed ERP record",
+  "integration.alert.raised": "Integration alert raised",
+  "integration.alert.changed": "Integration alert changed",
+  "integration.alert.resolved": "Integration alert resolved",
+  "integration.alert.acknowledged": "Took on an integration alert",
+  "integration.task.opened": "Opened an integration task",
+  "integration.task.closed": "Closed an integration task",
+  "erp.customer.linked": "Linked an ERP customer",
+  "erp.customer.account_created": "Made an account from an ERP customer",
+  "erp.customer.ignored": "Ignored an ERP customer",
+  "erp.customer.unlinked": "Unlinked an ERP customer",
+  "erp.write.requested": "Asked to create an ERP customer",
+  "erp.write.refused": "Refused to create an ERP customer",
+  "erp.write.succeeded": "Created an ERP customer",
+  "mapping.codes_found": "Found new ERP codes",
+  "mapping.changed": "Changed a code mapping",
+  "mapping.code_added": "Added a Forge code",
+  "mcp.client.created": "Made an outside AI tool token",
+  "mcp.client.revoked": "Stopped an outside AI tool token",
 }
 
 export const AUDIT_FAMILIES: { value: string; label: string }[] = [
@@ -56,6 +83,10 @@ export const AUDIT_FAMILIES: { value: string; label: string }[] = [
   { value: "takeover.", label: "Takeovers" },
   { value: "agent.", label: "Autonomy levels" },
   { value: "record.", label: "Merges" },
+  { value: "integration.", label: "ERP connections" },
+  { value: "erp.", label: "ERP customers and writes" },
+  { value: "mapping.", label: "Code mappings" },
+  { value: "mcp.", label: "Outside AI tools" },
 ]
 
 const str = (v: unknown) => (typeof v === "string" ? v : "")
@@ -86,6 +117,25 @@ export function auditLine(row: Pick<AuditRow, "kind" | "data">): string {
     case "decision.approved":
     case "decision.rejected":
       return d.note ? `${base}: "${str(d.note)}"` : base
+    case "integration.alert.raised":
+    case "integration.alert.changed":
+      return `${base}: ${str(d.title)}`
+    case "integration.record.skipped":
+    case "integration.record.retried":
+      return `${base}: ${str(d.external_id)}${d.note ? ` ("${str(d.note)}")` : ""}`
+    case "erp.customer.linked":
+    case "erp.customer.ignored":
+    case "erp.customer.unlinked":
+    case "erp.customer.account_created":
+      return `${base}: ${str(d.erp_customer)}${d.note ? ` ("${str(d.note)}")` : ""}`
+    case "erp.write.succeeded":
+      return `${base}: ${str(d.external_id)} in ${str(d.connection)}`
+    case "erp.write.refused":
+      return `${base}: ${(Array.isArray(d.reasons) ? d.reasons : []).join("; ")}`
+    case "mapping.changed": {
+      const after = (d.after ?? {}) as Record<string, unknown>
+      return `${base}: ${str(d.erp_code)} → ${str(after.forge_code) || "not mapped"}`
+    }
     default:
       return base
   }

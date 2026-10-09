@@ -577,15 +577,26 @@ async def codes(connection_id: uuid.UUID | None = None,
     labels = {(r.list, r.code): r.label for r in await db.execute(
         select(ForgeCode.list, ForgeCode.code, ForgeCode.label))}
     conns = dict((await db.execute(select(ErpConnection.id, ErpConnection.name))).all())
-    counts = {}
+    return {"lists": await _code_lists(db, connection_id),
+            "items": [_code(r, labels, conns) for r in rows]}
+
+
+async def _code_lists(db: AsyncSession, connection_id: uuid.UUID | None) -> list[dict[str, Any]]:
+    counts: dict[str, dict[str, int]] = {}
     for lst, st, n in (await db.execute(
             select(CodeMap.list, CodeMap.status, func.count())
             .where(*([CodeMap.connection_id == connection_id] if connection_id else []))
             .group_by(CodeMap.list, CodeMap.status))).all():
         counts.setdefault(lst, {})[st] = n
-    return {"lists": [{"list": k, "label": v, "standard": k in mapping.STANDARD_LISTS,
-                       "counts": counts.get(k, {})} for k, v in mapping.LISTS.items()],
-            "items": [_code(r, labels, conns) for r in rows]}
+    return [{"list": k, "label": v, "standard": k in mapping.STANDARD_LISTS,
+             "counts": counts.get(k, {})} for k, v in mapping.LISTS.items()]
+
+
+@router.get("/codes/lists")
+async def code_lists(connection_id: uuid.UUID | None = None, current: CurrentUser = Depends(READ),
+                     db: AsyncSession = Depends(get_db)) -> list[dict[str, Any]]:
+    """Each list with how many codes are suggested, unmapped and confirmed."""
+    return await _code_lists(db, connection_id)
 
 
 @router.get("/forge-codes")
