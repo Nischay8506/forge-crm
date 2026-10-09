@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { auditLine, conditionProblem, offset, triggerLabel } from "./labels"
 import type { FactInfo } from "./types"
+import { monthLabel, rate } from "./EvidenceTab"
+import { monthsLabel } from "@/features/audit/RetentionPage"
 
 const amount: FactInfo = { key: "amount", label: "Amount (INR)", type: "money", choices: [],
   ops: ["lt", "lte", "gt", "gte", "eq", "ne"] }
@@ -52,5 +54,36 @@ describe("run labels", () => {
     expect(offset(t0, "2026-10-09T10:00:00.250Z")).toBe("+250 ms")
     expect(offset(t0, "2026-10-09T10:00:01.400Z")).toBe("+1.4 s")
     expect(offset(t0, "2026-10-09T10:05:00.000Z")).toBe("+5 min")
+  })
+})
+
+describe("Step 4 labels", () => {
+  it("explains audit records added in Step 4", () => {
+    expect(auditLine({ kind: "model.called",
+      data: { model: "llama-3.3-70b", provider: "groq", input_tokens: 120, output_tokens: 40 } }))
+      .toBe("Asked a model: llama-3.3-70b (groq), 120 in, 40 out")
+    expect(auditLine({ kind: "audit.personal_data_revealed", data: { reason: "Customer asked what we hold" } }))
+      .toBe('Revealed personal data in the trail: "Customer asked what we hold"')
+    expect(auditLine({ kind: "retention.run", data: { removed: { other: 3, sync_runs: 2, skeleton_records: 0 } } }))
+      .toBe("Ran the nightly clean-up: removed 5 old items")
+    expect(auditLine({ kind: "retention.run", data: { removed: { other: 0 } } }))
+      .toBe("Ran the nightly clean-up: nothing was old enough")
+    expect(auditLine({ kind: "contact.erased", data: { stores: { contacts: 1, audit_evidence: 4, messages: 0 } } }))
+      .toBe("Erased a contact's personal data (5 items in 2 places)")
+  })
+  it("says what started privacy and message runs", () => {
+    expect(triggerLabel({ trigger: "erasure_request", trigger_ref: null }))
+      .toBe("A person asked to erase a contact's personal data")
+    expect(triggerLabel({ trigger: "try_message", trigger_ref: null })).toBe("Test message asked for by a person")
+  })
+  it("writes months, periods and rates for people", () => {
+    expect(monthLabel("2026-10")).toBe("Oct 2026")
+    expect(rate(null)).toBe("–")
+    expect(rate(0.25)).toBe("25%")
+    expect(rate(0.05)).toBe("5.0%")
+    expect(monthsLabel(96)).toBe("8 years")
+    expect(monthsLabel(18)).toBe("1 year 6 months")
+    expect(monthsLabel(1)).toBe("1 month")
+    expect(monthsLabel(0)).toBe("")
   })
 })

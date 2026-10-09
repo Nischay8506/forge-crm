@@ -71,6 +71,7 @@ export interface AgentDetail extends AgentSummary {
   rules: Rule[]
   activity: { done: number; blocked: number; failed: number; asked: number }
   recent: { seq: number; kind: string; actor: string; created_at: string; data: Record<string, unknown> }[]
+  version: number | null
 }
 
 export interface FactInfo {
@@ -119,6 +120,7 @@ export interface DecisionCard {
   note: string | null
   result: { status: string; result: Record<string, unknown>; error: string | null; reasons: string[] } | null
   can_decide: boolean
+  why_not: string | null
 }
 
 export interface AuditRow {
@@ -131,11 +133,36 @@ export interface AuditRow {
   record_type: string | null
   record_id: string | null
   data: Record<string, unknown>
+  /** Where this record's details stand (R1): inline = written before Step 4. */
+  evidence: {
+    state: "present" | "removed" | "missing" | "unreadable" | "none" | "inline"
+    class?: string
+    removed_at?: string
+    reason?: string
+  }
+  format: number
   prev_hash: string
   hash: string
 }
 
-export interface ChainCheck { ok: boolean; checked: number; first_bad_seq: number | null; problem: string | null }
+export interface ChainCheck {
+  ok: boolean
+  checked: number
+  first_bad_seq: number | null
+  problem: string | null
+  starts_at: number
+  details_removed: number
+  seals: {
+    state: "on" | "off" | "misconfigured"
+    checked: number
+    sealed_upto: number | null
+    sealed_at: string | null
+    unknown_keys: string[]
+  }
+  warning: string | null
+}
+
+export interface PersonalData { hidden: number; revealed: boolean }
 
 export interface Takeover {
   id: string
@@ -170,6 +197,7 @@ export interface RunRow {
   summary: Record<string, unknown> | null
   tally: RunTally
   waiting: number
+  agent_version: number | null
 }
 
 export interface ReplayDecision {
@@ -212,4 +240,81 @@ export interface Replay {
   model_calls: ModelCall[]
   records: { record_type: string; record_id: string; name: string | null }[]
   integrity: StepCheck
+  personal_data: PersonalData
+}
+
+/** What an agent was given (R2): a record as its tool saw it, or a passage it read. */
+export interface Input {
+  source: string
+  record_type: string | null
+  record_id: string | null
+  read_at: string
+  content: unknown
+}
+
+export type Outcome = "proposed" | "acted_alone" | "asked" | "approved" | "rejected" | "undone" | "blocked" | "failed"
+
+export interface ScoreRow extends Record<Outcome, number> {
+  month: string
+  version: number | null
+  override_rate: number | null
+}
+
+export interface Scorecard {
+  agent_key: string
+  rows: ScoreRow[]
+  versions: { number: number; first_seen_at: string; changes: string[] }[]
+}
+
+export interface Message {
+  id: string
+  channel: "email" | "whatsapp" | string
+  direction: string
+  status: "draft" | "sent" | "failed"
+  subject: string | null
+  body: string
+  ai_generated: boolean
+  disclosure: string | null
+  account_id: string | null
+  account_name: string | null
+  contact_id: string | null
+  contact_name: string | null
+  run_id: string | null
+  created_by: string
+  created_at: string
+  sent_at: string | null
+  sent_by: string | null
+  erased_at: string | null
+}
+
+export interface Provenance {
+  message: Message
+  run: Replay | null
+  takeovers: AuditRow[]
+  active_takeovers: Takeover[]
+  personal_data: PersonalData
+}
+
+export interface Retention {
+  profile: string
+  periods: Record<string, number>
+  basis: Record<string, string>
+  legal_review: { reviewed_by: string; note: string | null; recorded_by: string; recorded_at: string } | null
+  updated_by: string | null
+  updated_at: string | null
+  is_default: boolean
+  categories: Record<string, string>
+  profiles: Record<string, string>
+  minimums: { skeleton: number; other: number }
+}
+
+export interface LegalHold {
+  id: string
+  account_id: string
+  account_name: string | null
+  reason: string
+  placed_by: string
+  placed_at: string
+  lifted_by: string | null
+  lifted_at: string | null
 }

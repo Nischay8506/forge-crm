@@ -103,12 +103,14 @@ async def _message_run(session: AsyncSession, ctx: AgentContext, a: MessageArgs
     acc = await session.get(Account, a.account_id)
     if acc is None:
         raise ValueError("Account not found")
+    c = None
     if a.contact_id:
         c = await session.get(Contact, a.contact_id)
         if c is None or c.account_id != acc.id:
             raise ValueError("That contact is not at this account")
-    body = a.body or (f"Hello from Forge. This is a test message for {acc.name}, drafted by "
-                      "the Sandbox Agent. It will never be sent.")
+    greeting = f"Dear {c.full_name},\n\n" if c else ""
+    body = a.body or (f"{greeting}Hello from Forge. This is a test message for {acc.name}, "
+                      "drafted by the Sandbox Agent. It will never be sent.")
     msg = Message(tenant_id=ctx.tenant_id, account_id=acc.id, contact_id=a.contact_id,
                   channel=a.channel, direction="out", status="draft",
                   subject=a.subject or ("Test message" if a.channel == "email" else None),

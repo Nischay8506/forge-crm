@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useParams, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/config/api"
 import { Button } from "@/components/ui/Button"
@@ -13,6 +13,7 @@ import { usePermissions } from "@/stores/authStore"
 import { AccountPicker } from "@/features/accounts/AccountPicker"
 import { Actor } from "@/features/steward/Actor"
 import type { AccountSummary } from "@/features/steward/types"
+import { EvidenceTab } from "./EvidenceTab"
 import { LEVEL_HELP, OUTCOME_LABELS, auditLine, lowerFirst } from "./labels"
 import type { AgentDetail, TryResult } from "./types"
 
@@ -187,6 +188,8 @@ export function AgentDetailPage() {
   const perms = usePermissions()
   const canManage = hasPermission(perms, "agents.manage")
   const canAudit = hasPermission(perms, "audit.read")
+  const [search, setSearch] = useSearchParams()
+  const tab = search.get("tab") === "evidence" ? "evidence" : "overview"
   const { data: a, isLoading, error } = useQuery({
     queryKey: ["agents", key],
     queryFn: async () => (await api.get<AgentDetail>(`/agents/${key}`)).data,
@@ -206,6 +209,17 @@ export function AgentDetailPage() {
         <p className="text-[13px] text-ink-500 max-w-3xl">{a.purpose}</p>
       </div>
 
+      <nav className="flex gap-1 border-b border-line">
+        {([["overview", "Overview"], ["evidence", "Evidence"]] as const).map(([k, label]) => (
+          <button key={k} onClick={() => setSearch(k === "overview" ? {} : { tab: k })}
+            className={cn("px-3 py-2 text-[13px] font-medium text-ink-500 border-b-2 border-transparent -mb-px hover:text-ink-900",
+              tab === k && "text-ink-900 border-teal-500")}>
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "evidence" ? <EvidenceTab agent={a} /> : (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Card>
           <CardHeader><CardTitle>What it can do</CardTitle></CardHeader>
@@ -303,6 +317,7 @@ export function AgentDetailPage() {
           </Card>
         )}
       </div>
+      )}
     </div>
   )
 }

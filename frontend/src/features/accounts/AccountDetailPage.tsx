@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api, errorMessage, errorProblems } from "@/config/api"
@@ -17,6 +17,9 @@ import { KIND_LABELS, SITE_TYPE_LABELS, SOURCE_LABELS, fieldLabel } from "@/feat
 import type { Account, AccountDetail, Provenance } from "@/features/steward/types"
 import { TakeoverPanel } from "@/features/agents/TakeoverPanel"
 import { AccountErpCard } from "@/features/integrations/AccountErpCard"
+import { EraseContact } from "@/features/audit/EraseContact"
+import { LegalHoldCard } from "@/features/audit/LegalHoldCard"
+import { MessagesCard } from "@/features/audit/MessagesCard"
 import { HygieneBreakdown } from "./HygieneBreakdown"
 
 const SHOWN_FIELDS: (keyof Account)[] = [
@@ -174,6 +177,7 @@ export function AccountDetailPage() {
           )}
 
           <ContactsCard accountId={a.id} contacts={data.contacts} canWrite={canWrite && active} />
+          <MessagesCard accountId={a.id} contacts={data.contacts} />
         </div>
 
         <div className="space-y-4">
@@ -203,6 +207,7 @@ export function AccountDetailPage() {
               )}
             </CardContent>
           </Card>
+          <LegalHoldCard accountId={a.id} />
           <p className="text-[11.5px] text-ink-300">
             Created {formatDateTime(a.created_at)} from {SOURCE_LABELS[a.source] ?? a.source}
           </p>
@@ -216,6 +221,9 @@ function ContactsCard({ accountId, contacts, canWrite }: {
   accountId: string; contacts: AccountDetail["contacts"]; canWrite: boolean
 }) {
   const qc = useQueryClient()
+  const perms = usePermissions()
+  const canErase = hasPermission(perms, "privacy.erase")
+  const [erasing, setErasing] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ full_name: "", email: "", phone: "", designation: "" })
   const add = useMutation({
@@ -259,13 +267,24 @@ function ContactsCard({ accountId, contacts, canWrite }: {
           <table className="w-full text-[13px]">
             <tbody>
               {contacts.map((c) => (
-                <tr key={c.id} className="border-b border-line last:border-0">
-                  <td className="py-2 pr-3 font-medium">{c.full_name}</td>
-                  <td className="py-2 pr-3 text-ink-500">{c.designation ?? ""}</td>
-                  <td className="py-2 pr-3">{c.email ?? ""}</td>
-                  <td className="py-2 pr-3">{c.phone ?? ""}</td>
-                  <td className="py-2 text-right"><ScoreBadge score={c.hygiene_score} /></td>
-                </tr>
+                <Fragment key={c.id}>
+                  <tr className="border-b border-line last:border-0">
+                    <td className="py-2 pr-3 font-medium">{c.full_name}</td>
+                    <td className="py-2 pr-3 text-ink-500">{c.designation ?? ""}</td>
+                    <td className="py-2 pr-3">{c.email ?? ""}</td>
+                    <td className="py-2 pr-3">{c.phone ?? ""}</td>
+                    <td className="py-2 text-right"><ScoreBadge score={c.hygiene_score} /></td>
+                    {canErase && (
+                      <td className="py-2 pl-2 text-right">
+                        <button className="text-[12px] text-ink-300 hover:text-red-500 hover:underline"
+                          onClick={() => setErasing(erasing === c.id ? null : c.id)}>Erase…</button>
+                      </td>
+                    )}
+                  </tr>
+                  {erasing === c.id && (
+                    <tr><td colSpan={6} className="pb-2"><EraseContact contactId={c.id} onClose={() => setErasing(null)} /></td></tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>

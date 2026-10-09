@@ -5,6 +5,38 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-09 (Day 2, evening): Step 4 built, both F12.4 checks pass
+
+**Decisions (Nischay):** R1-R8 all A; seven Step 4 safeguards (handover section 3); R3 B (outside
+write-once copy of the seals) recorded for real deployment, before the first paying customer.
+Pending: whether erasing a contact also blanks Forge's copy of ERP records (built as "erase and block").
+
+**Done** (commits 503a84e, d5e4ce0 and today's last commit)
+- Audit records split into a hashed skeleton and encrypted evidence (EVIDENCE_KEYS, required);
+  secrets stripped before storing; personal-looking values kept out of the skeleton.
+- Hourly signed seals chained to each other (AUDIT_SEAL_KEYS, rotatable); the chain check catches
+  changed, deleted or cut records, changed or missing evidence, and missing, forged or reordered seals.
+- Replay shows what the agent was given and the exact model prompt and answer; agents have versions.
+- Personal data hidden by default, revealed with a permission and a recorded reason; name parts
+  ("Meera") hidden too, company names kept readable.
+- Retention: India profile per category with its law, editable, unconfirmed until a CA or lawyer is
+  recorded; legal holds; nightly clean-up at 03:00 IST that trims only up to a seal.
+- Erasure through the Privacy agent at L0 with four eyes; keeps money and message evidence by law.
+- Message provenance: Messages card, test drafts (never sent), "Trace this message" page.
+- Evidence tab per agent (by month and version, links to the runs behind each number).
+- Screens checked in a browser on a fresh company: trace opens in 0.2 s; erasure blocked for the asker,
+  approved by a second person; chain intact after erasure and sealing.
+- 148 backend + 16 frontend tests passing.
+
+**Problems found and fixed**
+- New tables got DELETE/UPDATE for the app role through default privileges; revoked in 0006.
+- A first name in a takeover reason showed in the trace before reveal; name parts are now hidden.
+- The sealing-stopped test was passing for the wrong reason; rewritten.
+
+**Not done / next**
+- Nischay: the ERP-copy answer; D3 keys; D4 time; his Step 3 check; legal validation of the periods.
+- Step 5 (F12.3 approval inbox): questions first.
+
 ## 2026-10-09 (Day 2, afternoon): Step 4 started, run replay built
 
 **Decisions (Nischay):** X1 A (integration defaults kept); start Step 4 before his own Step 3 check.

@@ -5,7 +5,10 @@ two ways:
 
 - known fields: values under keys such as full_name, email, phone or address are
   hidden whole, and the same values are then hidden wherever else they appear in
-  what is being shown (so a contact's name in a decision's title is hidden too);
+  what is being shown (so a contact's name in a decision's title is hidden too).
+  Each part of a person's name is hidden on its own as well ("Meera" in a note
+  about Meera Sharma), except inside a company name on the same page ("Sharma
+  Traders" stays readable);
 - patterns in any text: email addresses, Indian and international phone numbers,
   an individual's PAN (4th letter P), a GSTIN built on an individual's PAN, and
   Aadhaar numbers (12 digits that pass the Aadhaar check digit).
@@ -36,6 +39,11 @@ LABELS: dict[str, str] = {
     **dict.fromkeys(PHONE_KEYS, "phone"), **dict.fromkeys(ADDRESS_KEYS, "address"),
     **OTHER_KEYS,
 }
+
+# Company names: never hidden, even when they contain a person's name part.
+ORG_KEYS = {"account_name", "legal_name", "company_name", "trading_name"}
+# Titles that are not part of anyone's name.
+_TITLES = {"mr", "mrs", "ms", "miss", "dr", "shri", "smt", "kumari", "sri", "prof"}
 
 # Keys whose values are ids, fingerprints or counters: never personal, never touched.
 _SKIP = re.compile(r"(^|_)(id|ids|hash|seq|digest)$|^_nonce$")
@@ -75,28 +83,52 @@ def hidden(label: str) -> str:
 @dataclass
 class Redactor:
     terms: set[str] = field(default_factory=set)
+    parts: set[str] = field(default_factory=set)
+    orgs: set[str] = field(default_factory=set)
     hidden: int = 0
-    _terms_re: re.Pattern[str] | None = None
+    _res: tuple[Any, Any, Any] | None = None
 
     def collect(self, value: Any, key: str | None = None) -> None:
-        """Remember personal values found under known keys, to hide them elsewhere."""
+        """Remember personal values found under known keys, to hide them elsewhere,
+        and company names, to leave them readable."""
         if isinstance(value, dict):
             for k, v in value.items():
                 self.collect(v, str(k))
         elif isinstance(value, list):
             for v in value:
                 self.collect(v, key)
-        elif isinstance(value, str) and key and key.lower() in LABELS:
-            v = value.strip()
-            if len(v) >= 3:
+        elif isinstance(value, str) and key:
+            k, v = key.lower(), value.strip()
+            if k in ORG_KEYS:
+                self.keep(v)
+            elif k in LABELS and len(v) >= 3:
                 self.terms.add(v)
-                self._terms_re = None
+                if k in NAME_KEYS:
+                    words = [w for w in re.findall(r"[^\W\d_][\w'-]*", v)
+                             if w.lower().rstrip(".") not in _TITLES]
+                    if len(words) > 1:
+                        self.terms.add(" ".join(words))  # "Dr Meera Sharma" → "Meera Sharma"
+                    self.parts.update(w for w in words if len(w) >= 3)
+                self._res = None
 
-    def _pattern(self) -> re.Pattern[str] | None:
-        if self._terms_re is None and self.terms:
-            alts = "|".join(re.escape(t) for t in sorted(self.terms, key=len, reverse=True))
-            self._terms_re = re.compile(r"(?<!\w)(?:" + alts + r")(?!\w)", re.IGNORECASE)
-        return self._terms_re
+    def keep(self, org_name: str | None) -> None:
+        """A company name to leave readable, even if it contains part of a person's name."""
+        if org_name and len(org_name.strip()) >= 3:
+            self.orgs.add(org_name.strip())
+            self._res = None
+
+    def _patterns(self) -> tuple[Any, Any, Any]:
+        def alt(words: set[str], flags: int = 0) -> re.Pattern[str] | None:
+            if not words:
+                return None
+            body = "|".join(re.escape(t) for t in sorted(words, key=len, reverse=True))
+            return re.compile(r"(?<!\w)(?:" + body + r")(?!\w)", flags)
+        if self._res is None:
+            # Name parts are matched with their capital letter, so "Rose" hides a name
+            # but not "rose" in a sentence; whole values match in any case.
+            self._res = (alt(self.terms, re.IGNORECASE), alt(self.parts - self.terms),
+                         alt(self.orgs, re.IGNORECASE))
+        return self._res
 
     def text(self, s: str) -> str:
         n = 0
@@ -112,8 +144,22 @@ class Redactor:
                 return hidden(label)
             return pattern.sub(repl, s)
 
-        if p := self._pattern():
-            s = sub(p, "personal data", s)
+        terms, parts, orgs = self._patterns()
+        if terms or parts:
+            # Company names are set aside first so a person's name part inside one
+            # ("Sharma Traders") stays readable; they are put back after.
+            kept: list[str] = []
+            if orgs:
+                def park(m: re.Match[str]) -> str:
+                    kept.append(m.group(0))
+                    return f"\x00{len(kept) - 1}\x00"
+                s = orgs.sub(park, s)
+            if terms:
+                s = sub(terms, "personal data", s)
+            if parts:
+                s = sub(parts, "name", s)
+            if kept:
+                s = re.sub(r"\x00(\d+)\x00", lambda m: kept[int(m.group(1))], s)
         s = sub(EMAIL, "email", s)
         s = sub(GSTIN_INDIVIDUAL, "GSTIN", s)
         s = sub(PAN_INDIVIDUAL, "PAN", s)

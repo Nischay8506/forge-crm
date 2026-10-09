@@ -9,6 +9,7 @@ const TABS = [
   { to: "/agents/stops", label: "Stops", permission: "agents.read" },
   { to: "/agents/runs", label: "Runs", permission: "audit.read" },
   { to: "/agents/audit", label: "Audit log", permission: "audit.read" },
+  { to: "/agents/retention", label: "Retention", permission: "audit.read" },
 ]
 
 export function AgentsLayout() {

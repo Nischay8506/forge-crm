@@ -345,9 +345,11 @@ async def _provenance(db: AsyncSession, message_id: uuid.UUID, reveal: bool) -> 
     rows = (run["steps"] if run else []) + trail
     extra = [msg] + (run["decisions"] if run else [])
     names = [contact] if contact else []
+    orgs = [account] if account else []
     if run:
         names += [r["name"] for r in run["records"] if r["record_type"] == "contact" and r["name"]]
-    personal = replay.shown(rows, extra=extra, names=names, reveal=reveal)
+        orgs += [r["name"] for r in run["records"] if r["record_type"] == "account" and r["name"]]
+    personal = replay.shown(rows, extra=extra, names=names, orgs=orgs, reveal=reveal)
     if run and not reveal:
         for r in run["records"]:
             if r["record_type"] == "contact" and r["name"]:

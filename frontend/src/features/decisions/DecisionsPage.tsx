@@ -151,7 +151,9 @@ function DecisionCardView({ d, listKey }: { d: DecisionCard; listKey: unknown[] 
             </div>
           </div>
         ) : (
-          <p className="text-[12px] text-ink-300">Waiting for {d.approver_role?.name ?? "someone who can decide"}.</p>
+          <p className="text-[12px] text-ink-300">
+            {d.why_not ? `${d.why_not}.` : `Waiting for ${d.approver_role?.name ?? "someone who can decide"}.`}
+          </p>
         )
       )}
       {d.kind === "notice" && d.status === "open" && (

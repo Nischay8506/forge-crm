@@ -72,6 +72,15 @@ export const AUDIT_KINDS: Record<string, string> = {
   "mapping.code_added": "Added a Forge code",
   "mcp.client.created": "Made an outside AI tool token",
   "mcp.client.revoked": "Stopped an outside AI tool token",
+  "model.called": "Asked a model",
+  "model.failed": "A model call failed",
+  "audit.personal_data_revealed": "Revealed personal data in the trail",
+  "retention.changed": "Changed retention periods",
+  "retention.reviewed": "Recorded a legal review of retention",
+  "retention.run": "Ran the nightly clean-up",
+  "legal_hold.placed": "Placed a legal hold",
+  "legal_hold.lifted": "Lifted a legal hold",
+  "contact.erased": "Erased a contact's personal data",
 }
 
 export const AUDIT_FAMILIES: { value: string; label: string }[] = [
@@ -87,6 +96,11 @@ export const AUDIT_FAMILIES: { value: string; label: string }[] = [
   { value: "erp.", label: "ERP customers and writes" },
   { value: "mapping.", label: "Code mappings" },
   { value: "mcp.", label: "Outside AI tools" },
+  { value: "model.", label: "Model calls" },
+  { value: "audit.", label: "Personal data revealed" },
+  { value: "retention.", label: "Retention" },
+  { value: "legal_hold.", label: "Legal holds" },
+  { value: "contact.", label: "Erasures" },
 ]
 
 const str = (v: unknown) => (typeof v === "string" ? v : "")
@@ -99,7 +113,23 @@ export function auditLine(row: Pick<AuditRow, "kind" | "data">): string {
     case "action.proposed": {
       const outcome = str(d.outcome)
       const verdict = outcome === "act" ? "allowed" : outcome === "ask_person" ? "needs a person" : "blocked"
-      return `${str(d.summary)}: ${verdict}`
+      return `${str(d.summary) || str(d.tool)}: ${verdict}`
+    }
+    case "model.called":
+      return `${base}: ${str(d.model)} (${str(d.provider)}), ${d.input_tokens ?? 0} in, ${d.output_tokens ?? 0} out`
+    case "model.failed":
+      return `${base}: ${str(d.error)}`
+    case "audit.personal_data_revealed":
+    case "legal_hold.placed":
+      return d.reason ? `${base}: "${str(d.reason)}"` : base
+    case "retention.run": {
+      const r = (d.removed ?? {}) as Record<string, number>
+      const n = Object.values(r).reduce((a, b) => a + (Number(b) || 0), 0)
+      return n ? `${base}: removed ${n} old item${n === 1 ? "" : "s"}` : `${base}: nothing was old enough`
+    }
+    case "contact.erased": {
+      const st = (d.stores ?? {}) as Record<string, number>
+      return `${base} (${Object.values(st).reduce((a, b) => a + (Number(b) || 0), 0)} items in ${Object.values(st).filter(Boolean).length} places)`
     }
     case "action.blocked":
     case "decision.requested":
@@ -162,6 +192,9 @@ export function triggerLabel(run: Pick<RunRow, "trigger" | "trigger_ref">): stri
   const t = run.trigger
   const ref = run.trigger_ref ?? ""
   if (t === "try_it") return "Tried on the Agents screen"
+  if (t === "try_message") return "Test message asked for by a person"
+  if (t === "erasure_request") return "A person asked to erase a contact's personal data"
+  if (t === "test") return "Automated test"
   if (t.endsWith(".check")) {
     const noun = t.slice(0, -6).replace(/_/g, " ")
     return `${/^[aeiou]/.test(noun) ? "An" : "A"} ${noun} was added or changed`

@@ -24,6 +24,8 @@ import { RunsPage } from '@/features/agents/RunsPage'
 import { ReplayPage } from '@/features/agents/ReplayPage'
 import { PoliciesPage } from '@/features/agents/PoliciesPage'
 import { StopsPage } from '@/features/agents/StopsPage'
+import { MessageTracePage } from '@/features/audit/MessageTracePage'
+import { RetentionPage } from '@/features/audit/RetentionPage'
 import { DecisionsPage } from '@/features/decisions/DecisionsPage'
 import { CodesPage } from '@/features/integrations/CodesPage'
 import { ConnectionDetailPage } from '@/features/integrations/ConnectionDetailPage'
@@ -77,6 +79,8 @@ const router = createBrowserRouter([
           { path: 'runs', element: <RunsPage /> },
           { path: 'runs/:runId', element: <ReplayPage /> },
           { path: 'audit', element: <AuditPage /> },
+          { path: 'retention', element: <RetentionPage /> },
+          { path: 'messages/:messageId', element: <MessageTracePage /> },
         ],
       },
       {

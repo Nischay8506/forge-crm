@@ -94,12 +94,16 @@ async def audit_rows(session: AsyncSession, records: list[AuditRecord]) -> list[
 
 
 def shown(rows: list[dict[str, Any]], *, extra: list[dict[str, Any]] | None = None,
-          names: list[str] | None = None, reveal: bool = False) -> dict[str, Any]:
+          names: list[str] | None = None, orgs: list[str] | None = None,
+          reveal: bool = False) -> dict[str, Any]:
     """Hide personal data in rows' data (and in `extra` dicts, such as decision cards)
-    in place, unless revealing. `names` are known personal names to hide anywhere."""
+    in place, unless revealing. `names` are known personal names to hide anywhere;
+    `orgs` are company names to leave readable."""
     if reveal:
         return {"hidden": 0, "revealed": True}
     r = Redactor()
+    for o in orgs or []:
+        r.keep(o)
     for row in rows:
         r.collect(row["data"])
     for item in extra or []:
@@ -242,7 +246,8 @@ async def replay(session: AsyncSession, run_id: uuid.UUID, *,
     subject_rows = [{"record_type": t, "record_id": str(i), "name": n}
                     for (t, i), n in subjects.items()]
     people = [s["name"] for s in subject_rows if s["record_type"] == "contact" and s["name"]]
-    personal = shown(steps, extra=cards, names=people, reveal=reveal)
+    orgs = [s["name"] for s in subject_rows if s["record_type"] == "account" and s["name"]]
+    personal = shown(steps, extra=cards, names=people, orgs=orgs, reveal=reveal)
     if not reveal:
         for s in subject_rows:
             if s["record_type"] == "contact" and s["name"]:

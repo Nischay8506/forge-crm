@@ -286,6 +286,21 @@ def test_redaction_finds_personal_data_but_not_company_data():
     assert redact.verhoeff_ok("234123412346") and not redact.verhoeff_ok("234123412345")
 
 
+def test_redaction_hides_name_parts_but_keeps_company_names():
+    r = redact.Redactor()
+    r.collect({"full_name": "Dr Meera Sharma", "account_name": "Sharma Traders"})
+    out = r.apply({
+        "reason": "Meera asked to talk to a person; Sharma Traders said the same",
+        "note": "Ms Sharma called. A rose for meera? Dr is not a name.",
+        "title": "Erase Meera Sharma's data",
+    })
+    assert out["reason"] == "[name hidden] asked to talk to a person; Sharma Traders said the same"
+    # Name parts match with their capital letter; the title "Dr" is not a name part.
+    assert out["note"] == "Ms [name hidden] called. A rose for meera? Dr is not a name."
+    assert out["title"] == "Erase [personal data hidden]'s data"
+    assert r.hidden == 3
+
+
 async def test_replay_hides_personal_data_until_revealed_with_a_reason(client, ctx):
     from tests.test_agents import _user_with_role
 

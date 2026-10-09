@@ -8,7 +8,13 @@ import { Select } from "@/components/ui/Field"
 import { Empty, ErrorText, Loading } from "@/components/ui/States"
 import { Tag } from "@/components/ui/Tag"
 import { formatDateTime } from "@/lib/utils"
+import { monthLabel } from "./EvidenceTab"
 import { RUN_STATUS, offset, triggerLabel } from "./labels"
+
+const OUTCOME_WORDS: Record<string, string> = {
+  proposed: "proposed", acted_alone: "acted alone", asked: "asked a person", approved: "approved",
+  rejected: "rejected", undone: "undone later", blocked: "blocked", failed: "failed",
+}
 import type { AgentSummary, RunRow } from "./types"
 
 const PAGE = 50
@@ -36,14 +42,19 @@ export function RunsPage() {
   const [search, setSearch] = useSearchParams()
   const agent = search.get("agent") ?? ""
   const record = search.get("record") ?? ""
+  const version = search.get("version") ?? ""
+  const month = search.get("month") ?? ""
+  const outcome = search.get("outcome") ?? ""
+  const narrowed = Boolean(outcome || version || month)
   const agents = useQuery({
     queryKey: ["agents"],
     queryFn: async () => (await api.get<AgentSummary[]>("/agents")).data,
   })
   const q = useInfiniteQuery({
-    queryKey: ["audit", "runs", agent, record],
+    queryKey: ["audit", "runs", agent, record, version, month, outcome],
     queryFn: async ({ pageParam }) => (await api.get<RunRow[]>("/audit/runs", { params: {
-      agent_key: agent || undefined, record_id: record || undefined, before: pageParam, limit: PAGE } })).data,
+      agent_key: agent || undefined, record_id: record || undefined, version: version || undefined,
+      month: month || undefined, outcome: outcome || undefined, before: pageParam, limit: PAGE } })).data,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => (last.length === PAGE ? last[last.length - 1].started_at : undefined),
   })
@@ -68,6 +79,15 @@ export function RunsPage() {
         {record && (
           <button className="text-[12px] text-teal-600 hover:underline" onClick={() => setParam("record", "")}>
             Only runs about one record ✕
+          </button>
+        )}
+        {narrowed && (
+          <button className="text-[12px] text-teal-600 hover:underline" onClick={() => {
+            const next = new URLSearchParams(search)
+            for (const k of ["version", "month", "outcome"]) next.delete(k)
+            setSearch(next)
+          }}>
+            Only runs behind one number{version && ` (v${version}`}{month && `${version ? ", " : " ("}${monthLabel(month)}`}{(version || month) && ")"}: {OUTCOME_WORDS[outcome] ?? outcome} ✕
           </button>
         )}
       </div>
@@ -96,7 +116,12 @@ export function RunsPage() {
                           {formatDateTime(r.started_at)}
                         </Link>
                       </td>
-                      <td className="p-3"><AgentBadge label={r.agent_name.toUpperCase()} /></td>
+                      <td className="p-3">
+                        <span className="flex items-center gap-1.5">
+                          <AgentBadge label={r.agent_name.toUpperCase()} />
+                          {r.agent_version !== null && <span className="font-mono text-[10.5px] text-ink-300">v{r.agent_version}</span>}
+                        </span>
+                      </td>
                       <td className="p-3 text-ink-700">{triggerLabel(r)}</td>
                       <td className="p-3">
                         <span className="flex flex-wrap items-center gap-1">

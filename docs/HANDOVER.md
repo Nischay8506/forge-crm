@@ -35,7 +35,7 @@ Phase 1 steps:
 | 1 | F12.1 Golden Record & Data Steward (dedup/merge/enrich, hygiene score, adjudication screen) | **Done 2026-10-08**, with one accepted gap: ≥95% auto-resolve not met on the synthetic set (54% with S3A); re-measure on real legacy data before Phase 2 (decision S5 A) |
 | 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). U1-U4 confirmed as built |
 | 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **Built 2026-10-09**: both F12.6 "Done When" checks pass in Claude's environment on a real ERPNext 16 (section 6). Waiting for Nischay's own check in Docker Desktop (`infra/erpnext/README.md`). Defaults kept as built (X1 A) |
-| 4 | F12.4 Audit replay UI, redaction, retention | **In progress since 2026-10-09**: R1-R8 answered (all A, section 3); run replay built, the rest being built |
+| 4 | F12.4 Audit replay UI, redaction, retention | **Built 2026-10-09**: both F12.4 acceptance checks pass in Claude's environment (section 6), built to R1-R8 (all A) and Nischay's Step 4 safeguards. Retention periods need legal validation before production (section 7) |
 | 5 | F12.3 Human Approval Inbox (Design File frame 05) | Not started |
 | 6 | F12.5 Multilingual & Channel Fabric (email, WhatsApp, SMS, caps) | Not started |
 
@@ -138,6 +138,21 @@ To rotate: run it again, put the new key **first** (`CREDENTIAL_KEYS=knew:...,ko
 backend and worker, run `uv run python -m app.cli rotate-credentials`, then remove the old key. Losing
 every key means re-entering each ERP's API key and secret. Keep the key out of git and backups of the code.
 
+The audit trail (Step 4) needs two more keys in `backend/.env`:
+```bash
+uv run python -m app.cli new-evidence-key   # prints e<date>:<key>; put it in EVIDENCE_KEYS (REQUIRED)
+uv run python -m app.cli new-seal-key       # prints s<date>:<key>; put it in AUDIT_SEAL_KEYS
+```
+- `EVIDENCE_KEYS` encrypts the details behind each audit record (inputs, prompts, message text, personal
+  data). **Required**: without it, anything that writes to the audit trail refuses to run, on purpose.
+  **Back it up somewhere other than this server**: losing it makes the stored details unreadable (the
+  chain still checks, but replays show "details unreadable"). Rotate: new key first
+  (`EVIDENCE_KEYS=enew:...,eold:...`), restart, `uv run python -m app.cli rotate-evidence`, then remove the old key.
+- `AUDIT_SEAL_KEYS` signs the hourly seal of each company's chain (R3). Without it the app runs but the
+  Audit log says seals are off. Rotate: new key first and **keep the old one after it** so old seals can
+  still be checked. Back it up off the server too.
+- The worker (`--beat`) seals every hour and runs the retention clean-up at 03:00 IST.
+
 To try the ERP connection end to end, start a local ERPNext with `infra/erpnext/README.md`.
 Outside AI tools (MCP, E9) connect to `http://localhost:8000/mcp/` with a token made on Integrations >
 Outside AI tools; set `PUBLIC_BASE_URL` in `backend/.env` when the backend runs at another address.
@@ -194,17 +209,21 @@ backend/
     config.py          settings from env / backend/.env
     db.py              engine, sessions, set_tenant(), tenant_session(), system_session()
     rls.py             enable_tenant_rls() helper for migrations
-    cli.py             create-tenant (admin bootstrap), new-credential-key, rotate-credentials
+    cli.py             create-tenant (admin bootstrap), new-credential-key, rotate-credentials,
+                       new-evidence-key, rotate-evidence, new-seal-key
     core/              security (JWT, bcrypt), permissions catalogue, deps (auth + RBAC), errors,
-                       secrets.py (AES-256-GCM for stored ERP logins, key ring, rotation, E8)
+                       secrets.py (AES-256-GCM for stored ERP logins, key ring, rotation, E8),
+                       keyring.py (parses "kid:key,kid:key" settings; first key is current)
     models/            SQLAlchemy models (tenancy, outbox, llm, golden = accounts/contacts/steward tables)
     api/v1/            routers: auth, users (+roles), accounts (+contacts), steward,
                        agents (+policies, kill-switches, sandbox), decisions, audit (+takeovers),
                        integrations (connections, wizard test, dead letters, mapping studio,
-                       account ERP data, create-in-ERP, webhooks, MCP tokens)
+                       account ERP data, create-in-ERP, webhooks, MCP tokens),
+                       audit (+retention, legal holds, messages, reveal), privacy (erasure requests)
     events/outbox.py   publish() + dispatch_batch() (transactional outbox)
     worker/            Celery app + tasks (outbox delivery every 2 s, CSV import, ERP tick every
-                       60 s and the sync / reconcile runs it hands out)
+                       60 s and the sync / reconcile runs it hands out, audit seal hourly,
+                       retention clean-up 21:30 UTC = 03:00 IST)
     llm/               gateway.py (complete() and embed(); only way to call a model),
                        routing.py (tiers -> models), providers.py
     steward/           F12.1 Data Steward:
@@ -226,9 +245,22 @@ backend/
       runtime.py         call_tool() (the only way an agent acts), decide(), supersede()
       policy.py          rule matching, validation, rules as sentences
       controls.py        levels and overrides, kill-switches, takeovers, account tiers
-      sandbox.py         test-only Sandbox Agent (pretend payments with amounts)
-    audit/chain.py     append() and verify() for the per-tenant hash chain (T6)
-    audit/replay.py    run replay (F12.4): runs list, one run step by step, per-step intact check
+      sandbox.py         test-only Sandbox Agent (pretend payments; test messages, never sent, R7)
+      versions.py        agent version numbers from a fingerprint of the definition (R8)
+      scorecard.py       per agent, month and version: proposed, acted alone, asked, approved,
+                         rejected, undone, blocked, failed, override rate (R8)
+    audit/             F12.4 (start here: chain.py):
+      chain.py           append() splits each record into a skeleton (hashed, kept 8 years) and
+                         evidence (encrypted, removable), verify() checks records, evidence and seals
+      evidence.py        AES-256-GCM for evidence (EVIDENCE_KEYS), rotate_all()
+      seals.py           hourly HMAC seals chained to each other (AUDIT_SEAL_KEYS); SealAnchor and
+                         ANCHORS = the hook for R3 B (outside write-once copy)
+      redact.py          hiding personal data when shown (R4) and stripping secrets before storing
+      replay.py          runs list, one run step by step, per-step intact check, hide/reveal
+      retention.py       India profile, periods per category with their law, legal review, legal
+                         holds, the nightly clean-up (R5)
+    privacy/           erasure.py (what an erasure scrubs, R6) and agent.py (the Privacy agent:
+                       L0 only, a second person with "privacy.erase" approves)
     integrations/      F12.6 (Step 3; start here: adapter.py, then runner.py):
       contracts.py       the shared contracts (Customer, Item, Price, Order, Invoice, Receipt, Stock)
       adapter.py         the adapter interface, ConnectorError and its causes (for alerts)
@@ -249,7 +281,8 @@ backend/
       mcp_server.py      the MCP server mounted at /mcp/ and its tokens
       testing/           contract.py (the certification suite + CLI), fake_erpnext.py, seed.py
   alembic/versions/    migrations (0001 foundation, 0002 golden records, 0003 embeddings,
-                       0004 agent runtime + audit + account tier, 0005 integrations)
+                       0004 agent runtime + audit + account tier, 0005 integrations,
+                       0006 audit evidence, seals, versions, retention, holds, messages, erasure)
   evals/duplicates.py  synthetic duplicate set and quality report (S4A)
   evals/policy_gate.py chaos test: seeded over-limit calls must all be stopped and escalated
   tests/               pytest, real Postgres
@@ -264,9 +297,12 @@ frontend/
   src/features/steward Data Steward: review queue + side-by-side review, merge history + undo,
                        CSV import, hygiene dashboard
   src/features/decisions Decisions ("Waiting for you", notices, done) and the nav count
-  src/features/agents  Agents (what each can do, level, overrides, stop, sandbox "try it"),
-                       policy rules with a rule builder, stops, Runs + step-by-step replay,
-                       audit log with chain check, TakeoverPanel (used on the account page)
+  src/features/agents  Agents (what each can do, level, overrides, stop, sandbox "try it", Evidence
+                       tab = scorecard), policy rules with a rule builder, stops, Runs + step-by-step
+                       replay, audit log with chain and seal check, PersonalDataBar (hide/reveal),
+                       TakeoverPanel (used on the account page)
+  src/features/audit   Retention page, message trace (/agents/messages/<id>), and the account-page
+                       cards: Messages, Legal hold, "Erase…" on a contact
   src/features/integrations Connections, setup wizard, connection page, Customers and Code lists
                        (mapping studio), Outside AI tools (MCP tokens), AccountErpCard (account page)
 infra/                 local Postgres + Redis (Docker); erpnext/ = a local ERPNext 15/16 to test with
@@ -319,26 +355,77 @@ docs/                  this file, BUILD_LOG.md
 17. **No ERP failure is silent.** A connection problem becomes the connection's alert card
     (`alerts.sync_alert`); a record that cannot be read becomes a dead letter and a task. Anything new
     that can fail in the background must end in one of the two.
+18. **Personal data and free text go in evidence, never in the skeleton.** `chain.append()` keeps only
+    `SKELETON_KEYS` and `*_id` keys in the hashed skeleton and moves any value that looks personal to
+    evidence. Add a key to `SKELETON_KEYS` only if it can never hold personal data.
+    `tests/test_audit_trail.py` checks it.
+19. **Secrets never reach the trail.** `redact.strip_secrets()` runs before anything is stored; add new
+    secret shapes to `SECRET_PATTERNS`.
+20. **Anything shown from the trail goes through `replay.shown()`** (hidden by default); revealing needs
+    `audit.personal_data`, a reason, and appends `audit.personal_data_revealed`.
+21. **Any new store that holds a contact's personal data must be scrubbed by `privacy/erasure.py`**
+    (and registered for merges, rule 9). Customer-facing and money evidence is kept by law until its
+    retention period ends; a legal hold stops both retention and erasure.
+22. **Replay never re-runs anything.** It only reads the trail.
 
 ## 6. Current state (end of 2026-10-09)
 
-Steps 0, 1, 2 and 3 are built; Step 4 has started. Tests: 129 backend (plus 3 that run only against a
-live ERPNext; they pass on ERPNext 16.50.0 and 15.122.0), 13 frontend, all passing; every new screen
-was checked in a browser.
+Steps 0 to 4 are built. Tests: 148 backend (plus 3 that run only against a live ERPNext; they pass on
+ERPNext 16.50.0 and 15.122.0), 16 frontend, all passing; every new screen was checked in a browser.
 
-### Step 4 (F12.4 Audit replay, redaction, retention): in progress
-R1-R8 answered all A (section 3). Built so far:
-- **Agents > Runs**: every agent run, newest first, with what started it and how its steps ended
-  (done, waiting for a person, asked, blocked, failed). Filters by agent or by record
-  ("What agents did here" on an account page).
-- **Replay** (`/agents/runs/<id>`): one run step by step with timings: what the agent proposed, every
-  gate check, the facts, the decision card (who decided, when, their note), the action's result or
-  error, and model calls made under the run (`llm_calls.trace_id` = run id). It recomputes each step's
-  fingerprint and its link to the record before it, and names any step changed or removed.
-  Opened from a decision card ("How this came about"), an audit log row, an agent's page or an account.
-- API: `GET /audit/runs` and `GET /audit/runs/{id}` (`audit.read`).
-- Fix: runs started by outside AI tools (MCP) and by "create in ERPNext" now record when they finish.
-- Checked in a browser: from a decided card to the full replay of its run in 0.3 s.
+### Step 4 (F12.4 Audit replay, redaction, retention)
+Built to R1-R8 (all A) and Nischay's seven Step 4 safeguards (section 3).
+
+**F12.4 acceptance checks, both pass (Claude's environment, 2026-10-09):**
+1. *Any customer-facing message reconstructable to full provenance in under 5 minutes.* From the
+   message on an account page, one click on "Trace this message" opens everything behind it: the message
+   with its "Sent by our AI assistant" marker, which agent and version wrote it, what it was given, model
+   calls with prompt and answer, every gate check, the person's decision, the takeover trail of the
+   account and contact, and whether every step still matches its fingerprint. Browser check: 0.2 s.
+   Proved with a Sandbox test message (never sent); re-checked with real email and WhatsApp in Step 6 (R7).
+2. *Tamper attempts detectable in chain validation.* Tests change a record, change, forge or delete its
+   evidence, delete a record, delete or forge a seal in the middle (or put seals out of order), re-hash
+   the chain after a change (caught by the seal), and cut records off the end; "Check the chain" names
+   each one (`tests/test_audit_trail.py`, `tests/test_agents.py`).
+
+What a person sees:
+- **Agents > Runs / replay**: as before, plus what the agent was given (each record or passage, its
+  source and when it was read), model calls with the exact prompt and answer, the agent version, and a
+  note when details were removed by retention or erasure. Personal data is hidden; "Show personal
+  data…" needs the permission "See personal data in the audit trail" and a reason, and is recorded.
+  Name parts are hidden too ("Meera" in a note about Meera Sharma), but company names stay readable.
+- **Agents > Audit log**: "Check the chain" now also checks the seals (signed, linked, in order),
+  the evidence fingerprints, and says when seals are off, a seal key is missing, sealing has stopped
+  for over 2 hours, records were trimmed by retention, or details were removed.
+- **Agents > [agent] > Evidence tab**: per month and version, proposed / acted alone / asked / approved
+  / rejected / undone / blocked / failed and the override rate; each number opens the runs behind it.
+  The numbers never change a level (safeguard 7).
+- **Agents > Retention**: periods per category with the law each follows (editable by `audit.manage`;
+  never under 8 years for the skeleton or 12 months for anything else), a banner until someone records
+  who confirmed them (a CA or lawyer), active legal holds, and "Run clean-up now".
+- **Account page**: Messages card (with "Draft a test message" for the Sandbox Agent and "Trace this
+  message"), Legal hold card, and "Erase…" on each contact (`privacy.erase`).
+- **Erasure**: asking creates a card for the Privacy agent (L0, never higher). Only another person with
+  `privacy.erase` can approve; the asker sees "A second person must decide this: you asked for it". It
+  scrubs the contact (a stub "Erased contact" stays), contacts merged into it, field history, match
+  candidates, merge snapshots, import rows, decision cards, outbox events, takeovers, ERP sync history
+  and ERP mirror data, messages, and audit evidence, except customer-facing and money evidence (kept by
+  law until its period ends) and anything under a legal hold. The ERP sync then masks the person's email
+  and phone if they come back from the ERP (keyed fingerprints, no plain values kept). The record of the
+  erasure holds ids and counts only. There are no embeddings of contacts yet; when added, they go in
+  `privacy/erasure.py` (rule 21).
+
+**Known gaps (Step 4)**
+- Records written before Step 4 (format 1) keep their details inline, unencrypted, and cannot be erased
+  without breaking the chain. Only dev databases have them.
+- Deleting the newest seals cannot be detected until R3 B (outside copy); the chain check warns when the
+  last seal is over 2 hours old.
+- The "feeds the eval harness" part of F12.4 waits for an eval harness (not in Phase 1 yet).
+- The retention minimums (8 years skeleton, 12 months anything else) and hiding GSTINs built on an
+  individual's PAN were Claude's choices; Nischay can change them.
+- Personal data in free text is found by known names on the same page and by patterns (email, phone,
+  PAN, Aadhaar); a name the page does not know about (say, a third person mentioned in a note) is not
+  hidden.
 
 ### Step 3 (F12.6 Integration Framework + ERPNext)
 What a person sees (menu **Integrations**, visible with `integrations.read`):
@@ -512,7 +599,8 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 
 ## 7. Next step and open questions
 
-**Now: Step 4, F12.4 Audit replay UI, redaction and retention**, built to R1-R8 (all A, section 3).
+**Next: Step 5, F12.3 Human Approval Inbox** (Design File frame 05), after Nischay's go-ahead and
+questions. Step 4 is built (section 6); waiting on Nischay's answer on erasing ERP copies (below).
 **Also open: Nischay's own check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect,
 read, revoke the key, see the alert). His PC needs Forge set up first (section 4).
 
@@ -526,6 +614,9 @@ read, revoke the key, see the alert). His PC needs Forge set up first (section 4
   periods per record category and applicable law; record who confirmed it on the retention settings screen.
 
 Open questions for Nischay:
+- **R6 ERP copy** Should erasing a contact also blank their data in Forge's copy of ERP records and
+  block it from coming back? Built as "Erase and block" (the recommended option) while he decides;
+  the other options were "erase and flag the ERP" or "leave the ERP copy".
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
   rotated, never copied). Meaning match (S2A) and AI code suggestions (V3) start working once set.
 - **D4** Daily handover update time: 18:50 IST set by default; change?

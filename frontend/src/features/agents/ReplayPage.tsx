@@ -9,8 +9,9 @@ import { Tag } from "@/components/ui/Tag"
 import { cn, formatDateTime } from "@/lib/utils"
 import { Actor } from "@/features/steward/Actor"
 import { OUTCOME_LABELS, RUN_STATUS, STATUS_TONES, auditLine, offset, shortHash, triggerLabel } from "./labels"
+import { PersonalDataBar } from "./PersonalDataBar"
 import { RunTally } from "./RunsPage"
-import type { AuditRow, Check, ModelCall, Replay, ReplayDecision } from "./types"
+import type { AuditRow, Check, Input, ModelCall, Replay, ReplayDecision } from "./types"
 
 type Item = { at: string; step?: AuditRow; call?: ModelCall }
 
@@ -24,7 +25,53 @@ const VERDICT: Record<string, string> = { act: "allowed", ask_person: "needs a p
 const STEP_TONE: Record<string, string> = {
   "action.executed": "bg-green-500", "decision.approved": "bg-green-500",
   "decision.requested": "bg-gold-500", "action.blocked": "bg-red-500", "action.failed": "bg-red-500",
-  "decision.rejected": "bg-red-500",
+  "decision.rejected": "bg-red-500", "model.failed": "bg-red-500", "contact.erased": "bg-ink-500",
+}
+
+function inputLabel(i: Input, names: Map<string, string | null>): string {
+  if (i.source === "record") {
+    const name = i.record_id ? names.get(i.record_id) : null
+    return `The ${i.record_type ?? "record"}${name ? ` ${name}` : ""}, as it was then`
+  }
+  return i.source.charAt(0).toUpperCase() + i.source.slice(1)
+}
+
+/** What the agent was given before this step (R2). */
+function Inputs({ inputs, names }: { inputs: Input[]; names: Map<string, string | null> }) {
+  if (inputs.length === 0) return null
+  return (
+    <details>
+      <summary className="text-[12px] text-ink-500 cursor-pointer">What the agent was given ({inputs.length})</summary>
+      <ul className="space-y-1.5 mt-1.5">
+        {inputs.map((i, n) => (
+          <li key={n} className="space-y-0.5">
+            <p className="text-[12px] text-ink-700">
+              {inputLabel(i, names)} <span className="text-ink-300">· read {formatDateTime(i.read_at)}</span>
+            </p>
+            {typeof i.content === "string"
+              ? <p className="bg-surface-2 rounded-md p-2 text-[12px] whitespace-pre-wrap">{i.content}</p>
+              : <Json value={i.content} />}
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}
+
+/** Where a step's details stand: removed by retention or erasure, or missing. */
+function EvidenceNote({ step }: { step: AuditRow }) {
+  const e = step.evidence
+  if (e.state === "removed") {
+    return (
+      <p className="text-[12px] text-ink-500 italic">
+        Details removed {e.removed_at ? `on ${formatDateTime(e.removed_at)}` : ""} ({e.reason}). What happened, and
+        the fingerprint of what was there, stay in the chain.
+      </p>
+    )
+  }
+  if (e.state === "missing") return <p className="text-[12px] text-red-500 font-semibold">This step's details are missing.</p>
+  if (e.state === "unreadable") return <p className="text-[12px] text-red-500">These details cannot be read: {e.reason}</p>
+  return null
 }
 
 function Json({ value }: { value: unknown }) {
@@ -64,8 +111,41 @@ function DecisionBox({ d }: { d: ReplayDecision }) {
 }
 
 /** What one step carried, laid out for its kind; everything else as raw data. */
-function StepDetail({ step, decisions }: { step: AuditRow; decisions: ReplayDecision[] }) {
+function StepDetail({ step, decisions, names }: {
+  step: AuditRow; decisions: ReplayDecision[]; names: Map<string, string | null>
+}) {
   const d = step.data
+  if (step.kind === "model.called" || step.kind === "model.failed") {
+    const msgs = (d.messages ?? []) as { role: string; content: string }[]
+    return (
+      <div className="space-y-2 text-[12.5px]">
+        <p>
+          {d.model ? <>Model <span className="font-mono">{String(d.model)}</span> ({String(d.provider)}) · </> : null}
+          tier {String(d.tier)} · task <span className="font-mono">{String(d.task)}</span>
+          {d.agent_version ? <> · agent v{String(d.agent_version)}</> : null}
+        </p>
+        <Inputs inputs={(d.inputs ?? []) as Input[]} names={names} />
+        {msgs.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-[12px] text-ink-500">The prompt, exactly as sent</p>
+            {msgs.map((m, i) => (
+              <div key={i} className="bg-surface-2 rounded-md p-2">
+                <span className="text-[10.5px] uppercase tracking-wide text-ink-300">{m.role}</span>
+                <p className="whitespace-pre-wrap text-[12px]">{m.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {d.answer !== undefined && (
+          <div>
+            <p className="text-[12px] text-ink-500">The model's answer</p>
+            <p className="bg-teal-100 rounded-md p-2 whitespace-pre-wrap text-[12px]">{String(d.answer)}</p>
+          </div>
+        )}
+        {d.error ? <p className="text-red-500">{String(d.error)}</p> : null}
+      </div>
+    )
+  }
   if (step.kind === "action.proposed") {
     const facts = Object.entries((d.facts ?? {}) as Record<string, unknown>)
     const out = OUTCOME_LABELS[String(d.outcome)]
@@ -89,10 +169,13 @@ function StepDetail({ step, decisions }: { step: AuditRow; decisions: ReplayDeci
             ))}
           </dl>
         )}
-        <details>
-          <summary className="text-[12px] text-ink-500 cursor-pointer">What the agent asked to do</summary>
-          <Json value={d.args} />
-        </details>
+        <Inputs inputs={(d.inputs ?? []) as Input[]} names={names} />
+        {d.args !== undefined && (
+          <details>
+            <summary className="text-[12px] text-ink-500 cursor-pointer">What the agent asked to do</summary>
+            <Json value={d.args} />
+          </details>
+        )}
       </div>
     )
   }
@@ -100,7 +183,7 @@ function StepDetail({ step, decisions }: { step: AuditRow; decisions: ReplayDeci
     const card = decisions.find((x) => x.id === d.decision_id)
     return card ? <DecisionBox d={card} /> : <Json value={d} />
   }
-  if (step.kind === "action.executed") return <Json value={d.result} />
+  if (step.kind === "action.executed") return d.result !== undefined ? <Json value={d.result} /> : null
   if (step.kind === "action.failed") return <p className="text-[12.5px] text-red-500">{String(d.error)}</p>
   if (step.kind === "action.blocked") {
     return <ul className="text-[12.5px] text-red-500 list-disc pl-4">{((d.reasons ?? []) as string[]).map((r) => <li key={r}>{r}</li>)}</ul>
@@ -108,8 +191,9 @@ function StepDetail({ step, decisions }: { step: AuditRow; decisions: ReplayDeci
   return <Json value={d} />
 }
 
-function StepItem({ item, start, decisions, broken }: {
+function StepItem({ item, start, decisions, broken, names }: {
   item: Item; start: string; decisions: ReplayDecision[]; broken: string | undefined
+  names: Map<string, string | null>
 }) {
   const [open, setOpen] = useState(item.step?.kind === "action.proposed" || item.step?.kind === "decision.requested")
   const s = item.step
@@ -135,7 +219,8 @@ function StepItem({ item, start, decisions, broken }: {
       </button>
       {open && s && (
         <div className="mt-2 ml-[76px] space-y-1.5">
-          <StepDetail step={s} decisions={decisions} />
+          <EvidenceNote step={s} />
+          <StepDetail step={s} decisions={decisions} names={names} />
           <p className="font-mono text-[10.5px] text-ink-300">
             #{s.seq} · {s.kind} · fingerprint {shortHash(s.hash)}
           </p>
@@ -148,28 +233,46 @@ function StepItem({ item, start, decisions, broken }: {
 
 export function ReplayPage() {
   const { runId } = useParams()
-  const { data, isLoading, error } = useQuery({
+  const [revealed, setRevealed] = useState<Replay | null>(null)
+  const { data: hidden, isLoading, error } = useQuery({
     queryKey: ["audit", "runs", runId],
     queryFn: async () => (await api.get<Replay>(`/audit/runs/${runId}`)).data,
   })
   if (isLoading) return <Loading />
-  if (error || !data) return <ErrorText error={error} fallback="Could not load this run" />
+  if (error || !hidden) return <ErrorText error={error} fallback="Could not load this run" />
+  return (
+    <div className="space-y-3">
+      <Link to="/agents/runs" className="text-[12.5px] text-teal-600 hover:underline">← All runs</Link>
+      <PersonalDataBar<Replay> pd={hidden.personal_data} revealed={revealed !== null}
+        revealUrl={`/audit/runs/${runId}/reveal`} onRevealed={setRevealed} />
+      <ReplayView data={revealed ?? hidden} />
+    </div>
+  )
+}
 
+/** A run step by step; also shown under a traced message. */
+export function ReplayView({ data }: { data: Replay }) {
   const { run, integrity } = data
+  const names = new Map(data.records.map((r) => [r.record_id, r.name]))
+  const modelSteps = data.steps.filter((s) => s.kind === "model.called").length
   const st = RUN_STATUS[run.status] ?? { label: run.status, tone: "neutral" as const }
   const items: Item[] = [
     ...data.steps.map((step): Item => ({ at: step.created_at, step })),
-    ...data.model_calls.map((call): Item => ({ at: call.created_at, call })),
+    // Model calls the trail already shows with their prompt (R2) are not listed twice.
+    ...data.model_calls.filter((c) => modelSteps === 0 || c.status !== "ok")
+      .map((call): Item => ({ at: call.created_at, call })),
   ].sort((a, b) => a.at.localeCompare(b.at) || (a.step ? -1 : 1))
   const problems = new Map(integrity.problems.map((p) => [p.seq, p.problem]))
 
   return (
     <div className="space-y-3">
-      <Link to="/agents/runs" className="text-[12.5px] text-teal-600 hover:underline">← All runs</Link>
       <Card>
         <CardHeader className="flex-row items-start justify-between space-y-0 gap-4">
           <div className="space-y-1">
-            <AgentBadge label={run.agent_name.toUpperCase()} />
+            <span className="flex items-center gap-1.5">
+              <AgentBadge label={run.agent_name.toUpperCase()} />
+              {run.agent_version !== null && <span className="font-mono text-[11px] text-ink-300">v{run.agent_version}</span>}
+            </span>
             <CardTitle>{triggerLabel(run)}</CardTitle>
             <p className="text-[12.5px] text-ink-500">
               Started {formatDateTime(run.started_at)}
@@ -213,7 +316,7 @@ export function ReplayPage() {
             <ol className="border-l border-line ml-1">
               {items.map((it) => (
                 <StepItem key={it.step ? `s${it.step.seq}` : `c${it.call!.id}`} item={it} start={run.started_at}
-                  decisions={data.decisions} broken={it.step ? problems.get(it.step.seq) : undefined} />
+                  decisions={data.decisions} broken={it.step ? problems.get(it.step.seq) : undefined} names={names} />
               ))}
             </ol>
           )}
