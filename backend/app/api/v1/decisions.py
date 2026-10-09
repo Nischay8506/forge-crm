@@ -6,6 +6,7 @@ still apply). The full inbox (channels, SLA, delegation) is F12.3, Step 5.
 """
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -13,10 +14,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents import runtime
+from app.agents import inbox, runtime
 from app.agents.policy import display_value
 from app.agents.registry import AGENTS, FACTS, TOOLS, load_definitions
-from app.audit.replay import record_name
+from app.audit.replay import audit_rows, record_name, shown
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import Forbidden, NotFound
 from app.core.permissions import ALL, has_permission
@@ -87,6 +88,7 @@ async def _out(db: AsyncSession, d: Decision, current: CurrentUser,
         "run_id": str(d.run_id) if d.run_id else None,
         "created_at": d.created_at, "decided_by": d.decided_by, "decided_at": d.decided_at,
         "note": d.note, "result": d.result, "can_decide": _can_decide(d, current, roles),
+        "first_shown_at": d.first_shown_at, "decision_ms": d.decision_ms,
         "why_not": why if (why := _why_not(d, current, roles)) not in (
             None, "role", "This is not waiting for a decision") else None,
     }
@@ -155,15 +157,39 @@ async def get_decision(
     d = await db.get(Decision, decision_id)
     if d is None or (d.kind in INTEGRATION_KINDS and not _sees_integrations(current)):
         raise NotFound("Decision not found")
-    return await _out(db, d, current, await _my_roles(db, current))
+    out = await _out(db, d, current, await _my_roles(db, current))
+    # What the decision led to (F12.3: every decision auditable with its effect).
+    nxt = await audit_rows(db, await inbox.what_happened_next(db, d))
+    shown(nxt)
+    out["next"] = nxt
+    return out
+
+
+@router.post("/{decision_id}/shown", status_code=204)
+async def card_shown(
+    decision_id: uuid.UUID,
+    current: CurrentUser = Depends(require_permission("decisions.decide")),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """The browser says the card is on screen. The first time someone who can decide
+    sees it is kept, for the approval analytics (waiting before anyone looked)."""
+    d = await db.get(Decision, decision_id)
+    if d is None:
+        raise NotFound("Decision not found")
+    if d.first_shown_at is None and d.status in ("pending", "open") \
+            and _can_decide(d, current, await _my_roles(db, current)):
+        d.first_shown_at = datetime.now(UTC)
 
 
 class DecideIn(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
+    # How long the card was in front of the person before they decided, measured by
+    # the browser (F12.3 "under 60 seconds"). At most a day; longer means left open.
+    shown_ms: int | None = Field(default=None, ge=0, le=86_400_000)
 
 
 async def _decide(db: AsyncSession, current: CurrentUser, decision_id: uuid.UUID,
-                  approve: bool, note: str | None) -> dict[str, Any]:
+                  approve: bool, body: DecideIn | None) -> dict[str, Any]:
     d = await db.get(Decision, decision_id)
     if d is None or d.kind != "approval":
         raise NotFound("Decision not found")
@@ -174,7 +200,9 @@ async def _decide(db: AsyncSession, current: CurrentUser, decision_id: uuid.UUID
         raise Forbidden(f"Only {role.name if role else 'the named role'} can decide this")
     if why:
         raise Forbidden(why)
-    d = await runtime.decide(db, decision_id, approve=approve, actor=_actor(current), note=note)
+    d = await runtime.decide(db, decision_id, approve=approve, actor=_actor(current),
+                             note=body.note if body else None,
+                             decision_ms=body.shown_ms if body else None)
     await db.flush()
     return await _out(db, d, current, roles)
 
@@ -185,7 +213,7 @@ async def approve(
     current: CurrentUser = Depends(require_permission("decisions.decide")),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    return await _decide(db, current, decision_id, True, body.note if body else None)
+    return await _decide(db, current, decision_id, True, body)
 
 
 @router.post("/{decision_id}/reject")
@@ -194,7 +222,7 @@ async def reject(
     current: CurrentUser = Depends(require_permission("decisions.decide")),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    return await _decide(db, current, decision_id, False, body.note if body else None)
+    return await _decide(db, current, decision_id, False, body)
 
 
 @router.post("/{decision_id}/acknowledge")

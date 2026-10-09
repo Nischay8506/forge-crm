@@ -36,7 +36,7 @@ Phase 1 steps:
 | 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). U1-U4 confirmed as built |
 | 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **Built 2026-10-09**: both F12.6 "Done When" checks pass in Claude's environment on a real ERPNext 16 (section 6). Waiting for Nischay's own check in Docker Desktop (`infra/erpnext/README.md`). Defaults kept as built (X1 A) |
 | 4 | F12.4 Audit replay UI, redaction, retention | **Built 2026-10-09**: both F12.4 acceptance checks pass in Claude's environment (section 6), built to R1-R8 (all A) and Nischay's Step 4 safeguards. Retention periods need legal validation before production (section 7) |
-| 5 | F12.3 Human Approval Inbox (Design File frame 05) | Not started |
+| 5 | F12.3 Human Approval Inbox (Design File frame 05) | **Started 2026-10-09**: questions H1-H9 sent (`plans/Step5_Approval_Inbox_Questions.md` in the project files), waiting for Nischay's answers; card timing and "What happened next" built (section 6) |
 | 6 | F12.5 Multilingual & Channel Fabric (email, WhatsApp, SMS, caps) | Not started |
 
 Phase 1 is done when: all six F12 "Done When" checks pass, ERPNext syncs customers, items, orders
@@ -249,6 +249,7 @@ backend/
       controls.py        levels and overrides, kill-switches, takeovers, account tiers
       sandbox.py         test-only Sandbox Agent (pretend payments; test messages, never sent, R7)
       versions.py        agent version numbers from a fingerprint of the definition (R8)
+      inbox.py           F12.3: what a decision led to ("What happened next")
       scorecard.py       per agent, month and version: proposed, acted alone, asked, approved,
                          rejected, undone, blocked, failed, override rate (R8)
     audit/             F12.4 (start here: chain.py):
@@ -284,7 +285,8 @@ backend/
       testing/           contract.py (the certification suite + CLI), fake_erpnext.py, seed.py
   alembic/versions/    migrations (0001 foundation, 0002 golden records, 0003 embeddings,
                        0004 agent runtime + audit + account tier, 0005 integrations,
-                       0006 audit evidence, seals, versions, retention, holds, messages, erasure)
+                       0006 audit evidence, seals, versions, retention, holds, messages, erasure,
+                       0007 approval inbox)
   evals/duplicates.py  synthetic duplicate set and quality report (S4A)
   evals/policy_gate.py chaos test: seeded over-limit calls must all be stopped and escalated
   tests/               pytest, real Postgres
@@ -372,8 +374,20 @@ docs/                  this file, BUILD_LOG.md
 
 ## 6. Current state (end of 2026-10-09)
 
-Steps 0 to 4 are built. Tests: 148 backend (plus 3 that run only against a live ERPNext; they pass on
-ERPNext 16.50.0 and 15.122.0), 16 frontend, all passing; every new screen was checked in a browser.
+Steps 0 to 4 are built; Step 5 has started. Tests: 149 backend (plus 3 that run only against a live ERPNext; they pass on
+ERPNext 16.50.0 and 15.122.0), 18 frontend, all passing; every new screen was checked in a browser.
+
+### Step 5 (F12.3 Human Approval Inbox): started
+Questions H1-H9 sent; built meanwhile (needed by every answer):
+- **Card timing**: the browser tells Forge when a card first comes on screen for someone who can decide
+  it (`POST /decisions/{id}/shown`, kept as `first_shown_at`) and sends, with the decision, how long it
+  was in front of the person (`shown_ms`, kept as `decision_ms`; counted from when the card came on
+  screen, or from that person's previous decision on the page if later). Done cards say "Decided 42 s
+  after the card came on screen". This is the measurement behind the "under 60 seconds" Done-When.
+- **What happened next**: a decided card lists what it led to (`app/agents/inbox.py`): the rules
+  checked again, the action and its result, and later records that point at what the action produced
+  (for example the merge being undone). Shown under "What happened next" on Done cards.
+- Migration 0007 (two columns on `decisions`). Test: `tests/test_inbox.py`.
 
 ### Step 4 (F12.4 Audit replay, redaction, retention)
 Built to R1-R8 (all A) and Nischay's seven Step 4 safeguards (section 3).
@@ -601,8 +615,9 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 
 ## 7. Next step and open questions
 
-**Next: Step 5, F12.3 Human Approval Inbox** (Design File frame 05), after Nischay's go-ahead and
-questions. Step 4 is built (section 6).
+**Now: Step 5, F12.3 Human Approval Inbox** (Design File frame 05). Nischay said go on 2026-10-09
+17:27Z; questions H1-H9 (approver chains, counter, delegation and out-of-office, deadlines, channels,
+the card's history, the card as shown, the 60-second test, analytics) are waiting for his answers.
 **Also open: Nischay's own check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect,
 read, revoke the key, see the alert). His PC needs Forge set up first (section 4).
 

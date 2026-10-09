@@ -5,6 +5,21 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-09 (Day 2, late evening): Step 5 started
+
+**Decisions (Nischay):** go ahead with Step 5 (17:27Z).
+
+**Done**
+- Step 5 questions H1-H9 sent (`plans/Step5_Approval_Inbox_Questions.md` in the project files): approver
+  chains, counter, delegation and out-of-office, deadlines, channels, the card's history, the card as
+  shown, the 60-second test, analytics. Answer pending (card: "Recommended" or his own letters).
+- Built meanwhile: card timing (first on screen, time to decide) and "What happened next" on decided
+  cards (migration 0007). Browser check: two cards decided in 3 s and 2 s, both recorded.
+- 149 backend + 18 frontend tests passing.
+
+**Not done / next**
+- Nischay's answers to H1-H9, then the rest of the inbox.
+
 ## 2026-10-09 (Day 2, evening): Step 4 built, both F12.4 checks pass
 
 **Decisions (Nischay):** R1-R8 all A; seven Step 4 safeguards (handover section 3); R3 B (outside

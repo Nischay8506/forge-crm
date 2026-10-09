@@ -159,6 +159,10 @@ class Decision(IdMixin, TenantMixin, Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     note: Mapped[str | None] = mapped_column(String(1000))
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # F12.3: when a person who can decide first had the card on screen, and how long
+    # the person who decided had it in front of them (measured by the browser).
+    first_shown_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision_ms: Mapped[int | None] = mapped_column(Integer)
 
 
 class AuditRecord(TenantMixin, Base):

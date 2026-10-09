@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/config/api"
@@ -10,10 +10,11 @@ import { Empty, ErrorText, Loading } from "@/components/ui/States"
 import { Tag } from "@/components/ui/Tag"
 import { cn, formatDateTime } from "@/lib/utils"
 import { Actor } from "@/features/steward/Actor"
-import { STATUS_TONES } from "@/features/agents/labels"
+import { STATUS_TONES, auditLine } from "@/features/agents/labels"
 import { hasPermission } from "@/lib/permissions"
 import { usePermissions } from "@/stores/authStore"
 import type { DecisionCard } from "@/features/agents/types"
+import { durationLabel, markAction, useCardTiming } from "./timing"
 
 type View = "waiting" | "notices" | "done"
 const VIEWS: { key: View; label: string }[] = [
@@ -73,10 +74,13 @@ function DecisionCardView({ d, listKey }: { d: DecisionCard; listKey: unknown[] 
   const qc = useQueryClient()
   const [note, setNote] = useState("")
   const [showChecks, setShowChecks] = useState(false)
+  const timing = useCardTiming(d.id, d.kind === "approval" && d.status === "pending" && d.can_decide)
   const act = useMutation({
     mutationFn: async (what: "approve" | "reject" | "acknowledge") =>
-      (await api.post<DecisionCard>(`/decisions/${d.id}/${what}`, what === "acknowledge" ? undefined : { note: note || null })).data,
+      (await api.post<DecisionCard>(`/decisions/${d.id}/${what}`, what === "acknowledge"
+        ? undefined : { note: note || null, shown_ms: timing.elapsed() })).data,
     onSuccess: (updated) => {
+      markAction()
       // Keep the decided card where it is (showing the outcome) until the list is reloaded.
       qc.setQueryData<DecisionCard[]>(listKey, (list) => list?.map((x) => (x.id === updated.id ? updated : x)))
       qc.invalidateQueries({ queryKey: ["decisions", "count"] })
@@ -94,7 +98,7 @@ function DecisionCardView({ d, listKey }: { d: DecisionCard; listKey: unknown[] 
   const style = KIND_STYLE[d.kind] ?? KIND_STYLE.notice
 
   return (
-    <Card className={cn("p-4 space-y-2 border-t-4", style.border)}>
+    <Card ref={timing.ref} className={cn("p-4 space-y-2 border-t-4", style.border)}>
       <div className="flex items-center justify-between gap-2">
         <Tag variant={style.tag}>{d.tool_title}</Tag>
         <span className="text-[11px] text-ink-300">{formatDateTime(d.created_at)}</span>
@@ -178,9 +182,13 @@ function DecisionCardView({ d, listKey }: { d: DecisionCard; listKey: unknown[] 
             <span className="text-ink-300">{formatDateTime(d.decided_at)}</span>
           </div>
           {d.note && <p className="text-ink-500">“{d.note}”</p>}
+          {d.decision_ms !== null && (
+            <p className="text-ink-300">Decided {durationLabel(d.decision_ms)} after the card came on screen</p>
+          )}
           {res && res.status !== "done" && (
             <p className="text-red-500">Not done: {res.error ?? res.reasons.join("; ")}</p>
           )}
+          {d.decided_at && <WhatHappenedNext id={d.id} />}
         </div>
       )}
       {d.kind === "notice" && d.status === "acknowledged" && <Tag variant="neutral">Read</Tag>}
@@ -196,8 +204,40 @@ function DecisionCardView({ d, listKey }: { d: DecisionCard; listKey: unknown[] 
   )
 }
 
+/** F12.3: every decision with its effect: the action carried out (or why not), and
+ * anything later that undid or built on it. */
+function WhatHappenedNext({ id }: { id: string }) {
+  const [open, setOpen] = useState(false)
+  const { data, isLoading } = useQuery({
+    queryKey: ["decisions", "detail", id],
+    queryFn: async () => (await api.get<DecisionCard>(`/decisions/${id}`)).data,
+    enabled: open,
+  })
+  if (!open) {
+    return <button className="text-teal-600 hover:underline" onClick={() => setOpen(true)}>What happened next</button>
+  }
+  if (isLoading || !data) return <p className="text-ink-300">Loading…</p>
+  const next = data.next ?? []
+  return (
+    <div className="bg-surface-2 rounded-md p-2 space-y-1">
+      <p className="font-semibold text-ink-700">What happened next</p>
+      {next.length === 0 ? <p className="text-ink-300">Nothing recorded after the decision.</p> : (
+        <ul className="space-y-1">
+          {next.map((r) => (
+            <li key={r.seq} className="flex gap-2">
+              <span className="text-ink-300 shrink-0 w-32">{formatDateTime(r.created_at)}</span>
+              <span className="text-ink-700">{auditLine(r)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export function DecisionsPage() {
   const [view, setView] = useState<View>("waiting")
+  useEffect(() => { markAction() }, [view])
   const count = useDecisionCount(true)
   const { data, isLoading, error } = useQuery({
     queryKey: ["decisions", view],

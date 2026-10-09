@@ -121,6 +121,12 @@ export interface DecisionCard {
   result: { status: string; result: Record<string, unknown>; error: string | null; reasons: string[] } | null
   can_decide: boolean
   why_not: string | null
+  /** When someone who can decide first had it on screen (F12.3). */
+  first_shown_at: string | null
+  /** How long the decider had it in front of them, measured by the browser. */
+  decision_ms: number | null
+  /** Only on GET /decisions/{id}: what the decision led to. */
+  next?: AuditRow[]
 }
 
 export interface AuditRow {

@@ -195,13 +195,14 @@ async def _notice(session: AsyncSession, ctx: AgentContext, tool_key: str, title
 # Deciding --------------------------------------------------------------------------
 
 async def decide(session: AsyncSession, decision_id: uuid.UUID, *, approve: bool, actor: str,
-                 note: str | None = None) -> Decision:
+                 note: str | None = None, decision_ms: int | None = None) -> Decision:
     d = await session.get(Decision, decision_id, with_for_update=True, populate_existing=True)
     if d is None or d.kind != "approval":
         raise NotFound("Decision not found")
     if d.status != "pending":
         raise AppError(f"This decision is already {d.status}")
     d.decided_by, d.decided_at, d.note = actor, datetime.now(UTC), (note or "").strip() or None
+    d.decision_ms = decision_ms
     tool = TOOLS.get(d.tool_key)
     kw = {"actor": actor, "agent_key": d.agent_key, "run_id": d.run_id,
           "record_type": d.record_type, "record_id": d.record_id,
@@ -211,10 +212,11 @@ async def decide(session: AsyncSession, decision_id: uuid.UUID, *, approve: bool
     if not approve:
         d.status = "rejected"
         await chain.append(session, d.tenant_id, "decision.rejected", **kw,
-                           data={"decision_id": d.id, "note": d.note})
+                           data={"decision_id": d.id, "note": d.note,
+                                 "decision_ms": decision_ms})
         return d
     await chain.append(session, d.tenant_id, "decision.approved", **kw,
-                       data={"decision_id": d.id, "note": d.note})
+                       data={"decision_id": d.id, "note": d.note, "decision_ms": decision_ms})
     run = await session.get(AgentRun, d.run_id) if d.run_id else None
     ctx = AgentContext(tenant_id=d.tenant_id, agent=AGENTS[d.agent_key], run_id=d.run_id,
                        approved_by=actor, agent_version=run.agent_version if run else None)
