@@ -33,7 +33,7 @@ Phase 1 steps:
 |---|---|---|
 | 0 | Foundations: repo, migrations, tenancy (RLS), login + RBAC, event outbox, worker, LLM gateway, UI shell | **Done 2026-10-08** (see section 6 for what is still open) |
 | 1 | F12.1 Golden Record & Data Steward (dedup/merge/enrich, hygiene score, adjudication screen) | **Done 2026-10-08**, with one accepted gap: ≥95% auto-resolve not met on the synthetic set (54% with S3A); re-measure on real legacy data before Phase 2 (decision S5 A) |
-| 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). U1-U3 confirmed as built; U4 still waits for Nischay (section 7) |
+| 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). U1-U4 confirmed as built |
 | 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **In progress**: groundwork in (shared contracts, ERPNext adapter, contract tests passing on a real ERPNext v16). Tables, sync engine and screens wait for Nischay's answers E1-E9, V1-V3 (section 7) |
 | 4 | F12.4 Audit replay UI, redaction, retention | Not started |
 | 5 | F12.3 Human Approval Inbox (Design File frame 05) | Not started |
@@ -76,8 +76,22 @@ recommendation, and record the answer here.
 | U1 A | Account tiers are Strategic, Key, Standard (blank counts as Standard) | 2026-10-08 |
 | U2 A | A site or group company with no tier of its own takes its parent's tier (a plant of a strategic customer is treated as strategic) | 2026-10-08 |
 | U3 A | When a rule routes a decision to a role (e.g. Finance), people with that role and full-access admins can decide it | 2026-10-08 |
+| U4 A | Merging an account that has a stop or an autonomy override moves it to the kept account (undo moves it back) | 2026-10-09 |
+| E1 A | A real ERPNext (official Docker image, demo data) runs in Claude's build environment for development and tests, plus a fake ERPNext in the test suite; Nischay runs the same setup in Docker Desktop for the final check (`infra/erpnext/`) | 2026-10-09 |
+| E2 A | Proper tables per contract (ERP customer links, items, prices, orders, invoices, payments, stock), each with ERP id, connection and last-synced time. Stock and credit are read-only copies with an "as of" time. The account page gets read-only Orders, Invoices and Outstanding tabs | 2026-10-09 |
+| E3 A | ERPNext → Forge for everything; the one write is "create this account as a customer in ERPNext", through the policy gate | 2026-10-09 |
+| E4 A | The Data Steward matches ERP customers to accounts: confident match links, possible match waits for a person, no possible match creates a new account marked "from ERPNext"; several ERP codes can point to one account | 2026-10-09 |
+| E5 A | ERPNext owns legal and money fields (legal name, GSTIN, PAN, billing address, credit limit, payment terms); Forge owns commercial fields. A contradiction the steward cares about goes to review | 2026-10-09 |
+| E6 A | Check for changes every 5 minutes, connection check every minute, webhooks optional, full reconciliation every night | 2026-10-09 |
+| E7 A | A broken connection raises an alert card in "Waiting for you" plus a red banner on the Integrations page naming the cause; records that keep failing become tasks (Retry, Fix mapping, Skip) | 2026-10-09 |
+| E8 A | ERP logins entered in the setup screen, stored encrypted with a key that lives only in `backend/.env`; only the last 4 characters are shown; changes audited | 2026-10-09 |
+| E9 A | A small MCP server now (find an account, its orders and outstanding invoices, plus the gated create-customer write), all through the policy gate and audit chain; GraphQL later | 2026-10-09 |
+| V1 A | Support ERPNext v15 and v16; contract tests run against both | 2026-10-09 |
+| V2 A | A company can have more than one ERP connection; the setup screen adds one at a time | 2026-10-09 |
+| V3 A | The mapping studio maps customers → accounts plus the code lists Phase 2 needs (units, customer groups, territories, payment terms, warehouses, tax templates); rule-based suggestions until the D3 keys are set, then AI-assisted | 2026-10-09 |
+| Safeguards | Nischay's conditions on E1-E9 (2026-10-09): (1) creating a customer in ERPNext passes duplicate checks, permission checks and idempotency; (2) matching puts verified identifiers first and ambiguous matches need a person's approval; (3) conflicting customer data from different ERP connections keeps its source and goes to review, never silently overwrites; (4) ERP logins use authenticated encryption, never appear in logs, and the key can be rotated; (5) monitoring catches sync delays, failed jobs and revoked logins. Full audit trail for ERP writes, mapping changes, merges and manual overrides | 2026-10-09 |
 
-Still open (section 7): D3 new LLM keys, D4 daily update time, U4 (stops and overrides on a merge), Step 3 questions E1-E9 and V1-V3.
+Still open (section 7): D3 new LLM keys, D4 daily update time.
 
 ## 4. How to run it
 
@@ -386,16 +400,11 @@ Known gaps (none block Step 3):
 
 ## 7. Next step and open questions
 
-**Next: Step 3, F12.6 Integration Framework & Connector SDK with the ERPNext adapter (decision 5A).**
-The design questions E1-E9 and small defaults V1-V3 were sent to Nischay on 2026-10-08
-(`plans/Step3_Integration_Questions.md` in the Claude project files). Parts that don't depend on
-the answers (shared contracts, adapter interface, test harness) can start; the rest waits for them.
+**Now: Step 3, F12.6 Integration Framework & Connector SDK with the ERPNext adapter (decision 5A).**
+Nischay answered E1-E9, V1-V3 and U4 (all A) on 2026-10-09 with five safeguards (section 3);
+the build is in progress (section 6 and the build log).
 
 Open questions for Nischay:
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
   rotated, never copied). Meaning match (S2A) starts working as soon as the Gemini key is set.
 - **D4** Daily handover update time: 18:50 IST set by default; change?
-- **U4** A default Claude chose while building Step 2 (U1-U3 were answered A and are in section 3).
-  It is built as option A and is a small change to switch:
-  - **U4 Merging an account that has a stop or an autonomy override.** A: the stop or override moves to
-    the kept account (undo moves it back). B: it stays on the merged record and stops applying.
