@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-08
+Last updated: 2026-10-09
 
 ---
 
@@ -183,6 +183,8 @@ backend/
       contracts.py       the shared contracts (Customer, Item, Price, Order, Invoice, Receipt, Stock)
       adapter.py         the adapter interface, ConnectorError and its causes (for alerts)
       erpnext/           client.py (Frappe REST, errors -> causes), adapter.py (ERPNext -> contracts)
+      sync.py            run_flow() (one record type, from a high-water mark, resumable, retries)
+                         and reconcile() (nightly comparison); records go to a Sink (storage: E2)
       testing/           contract.py (the certification suite + CLI), fake_erpnext.py, seed.py
   alembic/versions/    migrations (0001 foundation, 0002 golden records, 0003 embeddings,
                        0004 agent runtime + audit + account tier)
@@ -246,12 +248,23 @@ docs/                  this file, BUILD_LOG.md
 
 ## 6. Current state (end of 2026-10-08)
 
-Steps 0, 1 and 2 are done; Step 3 has its groundwork in (below). Tests: 89 backend (plus 1 that runs
+Steps 0, 1 and 2 are done; Step 3 has its groundwork in (below). Tests: 100 backend (plus 2 that run
 only when a live ERPNext is configured), 10 frontend, all passing; every new screen was checked in a
 browser.
 
 ### Step 3 groundwork (F12.6), built while E1-E9 wait for answers
-Only the parts that do not depend on the open questions: no tables, screens or sync engine yet.
+Only the parts that do not depend on the open questions: no tables, screens, schedule or alerts yet.
+- **Sync loop** (`app/integrations/sync.py`, 2026-10-09). `run_flow()` reads one record type from
+  the last high-water mark, page by page, into a Sink (the storage interface; real tables come with
+  E2). It re-reads a 2-minute overlap so records written while a run was reading are not missed,
+  saves its place after every page so a stopped or failed run resumes from the next page, retries
+  failures that may pass (unreachable, timeout, rate limited, server error) up to 4 tries with waits
+  of 2, 4, 8 s (capped at 60 s), and stops at once on a rejected key or missing permission. Records
+  that cannot be read go to the sink's problem list (the dead-letter queue) and the run carries on.
+  `reconcile()` compares every id and modified time in the ERP with what Forge holds and fetches the
+  missing and out-of-date ones (up to 500; more means a full re-read is due); records the ERP no
+  longer has are only reported, since what to do with them depends on E2. Both run end to end on the
+  real ERPNext v16 site for all seven record types.
 - **Shared contracts** for Customer, Item, Price, Order, Invoice, Receipt and Stock
   (`app/integrations/contracts.py`): ERP ids, UTC times, Decimal money, the ERP's own codes, and one
   canonical status list per contract with the ERP's own word kept beside it.

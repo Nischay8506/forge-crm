@@ -5,6 +5,30 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-09 (Day 2): Step 3 sync loop and reconciliation
+
+**Decisions (Nischay):** do not use the GitHub repos another thread looked at; continue with the
+original plan. E1-E9, V1-V3 and U4 are still open (reminded in the thread).
+
+**Done**
+- `app/integrations/sync.py`: `run_flow()` (high-water mark with a 2-minute overlap, resumable after
+  every page, retries with growing waits for failures that may pass, immediate stop on a rejected key
+  or missing permission, unreadable records to the dead-letter list) and `reconcile()` (nightly
+  comparison of ids and modified times, repairs missing and out-of-date records, reports records the
+  ERP no longer has). `MemorySink` stands in for the tables until E2 is answered.
+- 11 new tests on the fake ERPNext, plus a live test: full sync and reconciliation of all seven record
+  types pass on the real ERPNext v16 site.
+- Yesterday's doc refresh reached Nischay's folder (his computer was offline at the evening update).
+
+**Problems found and fixed**
+- Docker Hub refused the ERPNext v15 image download (429 Too Many Requests); retrying in the
+  background so the reader can be checked on v15 (V1).
+
+**Not done / next**
+- Check the ERPNext reader on v15 once the image downloads.
+- Tables, schedule, connection check every minute, alerts, setup wizard and mapping studio wait for
+  E1-E9 and V1-V3.
+
 ## 2026-10-08 (Day 1, continued): Step 3 questions and groundwork
 
 **Decisions (Nischay):** U1 A, U2 A, U3 A (built that way already). U4 still open.
