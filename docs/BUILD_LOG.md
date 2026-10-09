@@ -36,6 +36,8 @@ Pending: whether erasing a contact also blanks Forge's copy of ERP records (buil
 **Not done / next**
 - Nischay: the ERP-copy answer; D3 keys; D4 time; his Step 3 check; legal validation of the periods.
 - Step 5 (F12.3 approval inbox): questions first.
+- Copy to Nischay's PC: his PC was offline at 17:05 UTC, so the device folder is still at ba04e3f;
+  the bundle is ready and the next copy brings everything since.
 
 ## 2026-10-09 (Day 2, afternoon): Step 4 started, run replay built
 
