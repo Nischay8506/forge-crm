@@ -19,13 +19,16 @@ original plan. E1-E9, V1-V3 and U4 are still open (reminded in the thread).
 - 11 new tests on the fake ERPNext, plus a live test: full sync and reconciliation of all seven record
   types pass on the real ERPNext v16 site.
 - Yesterday's doc refresh reached Nischay's folder (his computer was offline at the evening update).
+- Ran a second real site, ERPNext v15.122.0 with demo data: the contract suite and the full sync and
+  reconciliation pass on it unchanged, so the reader works on both current versions (input for V1).
 
 **Problems found and fixed**
-- Docker Hub refused the ERPNext v15 image download (429 Too Many Requests); retrying in the
-  background so the reader can be checked on v15 (V1).
+- Docker Hub refused the ERPNext v15 image download at first (429 Too Many Requests); it went
+  through on a later retry.
+- After restarting ERPNext's backend containers, its web server answered 502 until it was restarted
+  too (it keeps the old backend address). Worth a line in the setup steps.
 
 **Not done / next**
-- Check the ERPNext reader on v15 once the image downloads.
 - Tables, schedule, connection check every minute, alerts, setup wizard and mapping studio wait for
   E1-E9 and V1-V3.
 

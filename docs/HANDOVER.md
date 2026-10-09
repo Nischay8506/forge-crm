@@ -263,8 +263,9 @@ Only the parts that do not depend on the open questions: no tables, screens, sch
   that cannot be read go to the sink's problem list (the dead-letter queue) and the run carries on.
   `reconcile()` compares every id and modified time in the ERP with what Forge holds and fetches the
   missing and out-of-date ones (up to 500; more means a full re-read is due); records the ERP no
-  longer has are only reported, since what to do with them depends on E2. Both run end to end on the
-  real ERPNext v16 site for all seven record types.
+  longer has are only reported, since what to do with them depends on E2. Both run end to end on
+  real ERPNext v16.50.0 and v15.122.0 sites for all seven record types, and the contract suite passes
+  on both versions with the same code (no version-specific handling was needed).
 - **Shared contracts** for Customer, Item, Price, Order, Invoice, Receipt and Stock
   (`app/integrations/contracts.py`): ERP ids, UTC times, Decimal money, the ERP's own codes, and one
   canonical status list per contract with the ERP's own word kept beside it.
