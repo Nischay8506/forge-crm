@@ -37,8 +37,9 @@ disabled ERP customers skipped, create-in-ERPNext sends name, type and GSTIN onl
   takes ERPNext's when readable.
 
 **Not done / next**
-- Nischay's own run of `infra/erpnext/README.md` in Docker Desktop.
-- Then Step 4, F12.4 (audit replay, redaction, retention).
+- Nischay's own run of `infra/erpnext/README.md` in Docker Desktop (his PC needs Forge set up first).
+- Step 4, F12.4 (audit replay, redaction, retention): Nischay chose to start it before his Step 3
+  check. Questions R1-R8 sent (`plans/Step4_Audit_Replay_Questions.md`); building starts on his answers.
 
 ## 2026-10-09 (Day 2): Step 3 sync loop and reconciliation
 

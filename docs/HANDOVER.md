@@ -35,7 +35,7 @@ Phase 1 steps:
 | 1 | F12.1 Golden Record & Data Steward (dedup/merge/enrich, hygiene score, adjudication screen) | **Done 2026-10-08**, with one accepted gap: ≥95% auto-resolve not met on the synthetic set (54% with S3A); re-measure on real legacy data before Phase 2 (decision S5 A) |
 | 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). U1-U4 confirmed as built |
 | 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **Built 2026-10-09**: both F12.6 "Done When" checks pass in Claude's environment on a real ERPNext 16 (section 6). Waiting for Nischay's own check in Docker Desktop (`infra/erpnext/README.md`). Defaults kept as built (X1 A) |
-| 4 | F12.4 Audit replay UI, redaction, retention | Not started |
+| 4 | F12.4 Audit replay UI, redaction, retention | **Started 2026-10-09**: questions R1-R8 sent (`plans/Step4_Audit_Replay_Questions.md` in the project files), waiting for Nischay's answers |
 | 5 | F12.3 Human Approval Inbox (Design File frame 05) | Not started |
 | 6 | F12.5 Multilingual & Channel Fabric (email, WhatsApp, SMS, caps) | Not started |
 
@@ -91,6 +91,7 @@ recommendation, and record the answer here.
 | V3 A | The mapping studio maps customers → accounts plus the code lists Phase 2 needs (units, customer groups, territories, payment terms, warehouses, tax templates); rule-based suggestions until the D3 keys are set, then AI-assisted | 2026-10-09 |
 | W1 A | Forge's own code lists for ERP mapping: units use the GST unit codes (UQC) and tax uses the GST rate slabs; customer groups, territories, payment terms and warehouses start as a copy of the first ERP's lists, and later ERPs map onto them | 2026-10-09 |
 | X1 A | Integration defaults kept as built: ERP Connector agent at L2, Outside AI tools agent at L0; alerts after 3 minutes unreachable, 3 failed reads in a row, 15 minutes without a read, or a run stuck 30 minutes (a rejected key alerts at once); nightly comparison after 02:00 IST; ERP customers disabled in the ERP are not made into accounts; "create in ERPNext" sends name, type and GSTIN only | 2026-10-09 |
+| Order | Step 4 starts before Nischay's own Step 3 check; he runs that check whenever he can and anything it finds is fixed alongside | 2026-10-09 |
 | Safeguards | Nischay's conditions on E1-E9 (2026-10-09): (1) creating a customer in ERPNext passes duplicate checks, permission checks and idempotency; (2) matching puts verified identifiers first and ambiguous matches need a person's approval; (3) conflicting customer data from different ERP connections keeps its source and goes to review, never silently overwrites; (4) ERP logins use authenticated encryption, never appear in logs, and the key can be rotated; (5) monitoring catches sync delays, failed jobs and revoked logins. Full audit trail for ERP writes, mapping changes, merges and manual overrides | 2026-10-09 |
 
 Still open (section 7): D3 new LLM keys, D4 daily update time.
@@ -486,10 +487,13 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 
 ## 7. Next step and open questions
 
-**Now: Nischay's check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect, read,
-revoke the key, see the alert). **Next: Step 4, F12.4 Audit replay UI, redaction and retention.**
+**Now: Step 4, F12.4 Audit replay UI, redaction and retention.** Questions R1-R8 are in
+`plans/Step4_Audit_Replay_Questions.md` (project files); building starts once Nischay answers.
+**Also open: Nischay's own check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect,
+read, revoke the key, see the alert). His PC needs Forge set up first (section 4).
 
 Open questions for Nischay:
+- **R1-R8** Step 4 design questions (`plans/Step4_Audit_Replay_Questions.md`).
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
   rotated, never copied). Meaning match (S2A) and AI code suggestions (V3) start working once set.
 - **D4** Daily handover update time: 18:50 IST set by default; change?
