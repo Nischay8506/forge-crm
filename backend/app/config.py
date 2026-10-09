@@ -73,8 +73,6 @@ class Settings(BaseSettings):
     vapid_public_key: str | None = None
     vapid_private_key: str | None = None
     vapid_subject: str = "mailto:admin@example.com"
-    # Where people open Forge (links in push notifications).
-    public_web_url: str = "http://localhost:5173"
 
     outbox_batch_size: int = 100
     outbox_max_attempts: int = 8

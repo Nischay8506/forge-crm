@@ -36,7 +36,7 @@ Phase 1 steps:
 | 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). U1-U4 confirmed as built |
 | 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **Built 2026-10-09**: both F12.6 "Done When" checks pass in Claude's environment on a real ERPNext 16 (section 6). Waiting for Nischay's own check in Docker Desktop (`infra/erpnext/README.md`). Defaults kept as built (X1 A) |
 | 4 | F12.4 Audit replay UI, redaction, retention | **Built 2026-10-09**: both F12.4 acceptance checks pass in Claude's environment (section 6), built to R1-R8 (all A) and Nischay's Step 4 safeguards. Retention periods need legal validation before production (section 7) |
-| 5 | F12.3 Human Approval Inbox (Design File frame 05) | **Started 2026-10-09**: questions H1-H9 sent (`plans/Step5_Approval_Inbox_Questions.md` in the project files), waiting for Nischay's answers; card timing and "What happened next" built (section 6) |
+| 5 | F12.3 Human Approval Inbox (Design File frame 05) | **Built 2026-10-09** to H1-H9 and Nischay's Step 5 safeguards; Claude's automated browser check passes (median decision 3 s, section 6). The Done-When stays **waiting for Nischay's usability run** with real people (H8 C, `docs/USABILITY_TEST.md`) |
 | 6 | F12.5 Multilingual & Channel Fabric (email, WhatsApp, SMS, caps) | Not started |
 
 Phase 1 is done when: all six F12 "Done When" checks pass, ERPNext syncs customers, items, orders
@@ -165,6 +165,16 @@ uv run python -m app.cli new-seal-key       # prints s<date>:<key>; put it in AU
   still be checked. Back it up off the server too.
 - The worker (`--beat`) seals every hour and runs the retention clean-up at 03:00 IST.
 
+Approval-inbox notifications (Step 5, H5) are optional. Step 5 added the `pywebpush` package, so run
+`uv sync` once after copying. Then:
+```bash
+uv run python -m app.cli new-push-keys      # prints VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY lines
+```
+Put both lines (and `VAPID_SUBJECT=mailto:<your address>`) in `backend/.env`, restart the API and the
+worker, and press "Turn on alerts on this device" on the Decisions page. Push needs HTTPS or
+`localhost`: it works in the PC's own browser now, and on phones once Forge runs at an `https://` address.
+Keep the private key out of git; new keys mean everyone turns alerts on again.
+
 To try the ERP connection end to end, start a local ERPNext with `infra/erpnext/README.md`.
 Outside AI tools (MCP, E9) connect to `http://localhost:8000/mcp/` with a token made on Integrations >
 Outside AI tools; set `PUBLIC_BASE_URL` in `backend/.env` when the backend runs at another address.
@@ -172,15 +182,20 @@ Outside AI tools; set `PUBLIC_BASE_URL` in `backend/.env` when the backend runs 
 The worker must be running for the Data Steward to act: new and edited records reach it through the
 outbox, and CSV imports run in the worker. Without it records save fine but no duplicates are found.
 It also runs the ERP schedule (`--beat`): every minute it checks each connection's login and starts the
-reads that are due. Without it no ERP data arrives and no ERP alert is raised.
+reads that are due. Without it no ERP data arrives and no ERP alert is raised. And every minute it
+checks approval deadlines (reminders, past-deadline marks, escalation, bottleneck alerts) and sends the
+inbox notifications; without it cards still wait and can be decided, but nobody is reminded.
 
 Meaning match (S2A) switches itself on when `GEMINI_API_KEY` is set in `backend/.env`; nothing else
 to configure. `STEWARD_EMBEDDINGS=false` turns it off.
 
 A new company starts with one role, Admin (full access). To try approvals by role, create a role on
-the Users screen (e.g. Finance with "See what agents are waiting on, and approve or reject it"), add a
-user with it, and pick that role under "Who decides" in a policy rule. The Sandbox Agent's "Try it"
-box (Agents → Sandbox Agent) shows what your rules do with a given amount.
+the Users screen (e.g. Finance with "decisions.decide"), add a user with it, and pick that role under
+"Who decides, in order" in a policy rule (add a second step for a chain, and a deadline in working
+hours). The Sandbox Agent's "Try it" box (Agents → Sandbox Agent) shows what your rules do with a given
+amount. Remember four-eyes: whoever presses "Try it" asked for the payment, so someone else decides it.
+The quickest way to see the whole inbox is the usability company: `uv run python -m app.cli
+seed-usability --slug ut-demo` (logins are printed; see `docs/USABILITY_TEST.md`).
 
 ### Frontend
 ```bash
@@ -222,7 +237,8 @@ backend/
     db.py              engine, sessions, set_tenant(), tenant_session(), system_session()
     rls.py             enable_tenant_rls() helper for migrations
     cli.py             create-tenant (admin bootstrap), new-credential-key, rotate-credentials,
-                       new-evidence-key, rotate-evidence, new-seal-key
+                       new-evidence-key, rotate-evidence, new-seal-key, new-push-keys,
+                       seed-usability (prepared cards for docs/USABILITY_TEST.md)
     core/              security (JWT, bcrypt), permissions catalogue, deps (auth + RBAC), errors,
                        secrets.py (AES-256-GCM for stored ERP logins, key ring, rotation, E8),
                        keyring.py (parses "kid:key,kid:key" settings; first key is current)
@@ -262,6 +278,19 @@ backend/
       inbox.py           F12.3: what a decision led to ("What happened next")
       scorecard.py       per agent, month and version: proposed, acted alone, asked, approved,
                          rejected, undone, blocked, failed, override rate (R8)
+    approvals/         F12.3 approval inbox (start here: chain.py):
+      chain.py           a card's steps (H1), who may decide the current step: four-eyes, role,
+                         stand-ins (H3); deciders and escalation targets
+      calendar.py        each company's working calendar; deadlines in working hours (H4)
+      card.py            the card as shown, its history and ERP figures (H6), its fingerprint (H7)
+      counter.py         counter = approve a changed version through the gate again (H2)
+      delegation.py      hand one card on, out-of-office with card types and a maximum (H3)
+      sla.py             the minute job: reminders, past-deadline marks and escalation,
+                         bottleneck alerts (H4, H9); it never decides anything
+      notify.py          who hears about a card, via the outbox event "inbox.notify"
+      push.py            browser push (VAPID keys), drops dead subscriptions (H5)
+      analytics.py       Approval numbers and the inbox header's own numbers (H9)
+      usability.py       the company and 11 cards behind `cli seed-usability` (H8 C)
     audit/             F12.4 (start here: chain.py):
       chain.py           append() splits each record into a skeleton (hashed, kept 8 years) and
                          evidence (encrypted, removable), verify() checks records, evidence and seals
@@ -296,7 +325,8 @@ backend/
   alembic/versions/    migrations (0001 foundation, 0002 golden records, 0003 embeddings,
                        0004 agent runtime + audit + account tier, 0005 integrations,
                        0006 audit evidence, seals, versions, retention, holds, messages, erasure,
-                       0007 approval inbox)
+                       0007 approval inbox, 0008 approval chains, steps, delegations,
+                       inbox settings, push subscriptions)
   evals/duplicates.py  synthetic duplicate set and quality report (S4A)
   evals/policy_gate.py chaos test: seeded over-limit calls must all be stopped and escalated
   tests/               pytest, real Postgres
@@ -310,7 +340,10 @@ frontend/
                        Contacts
   src/features/steward Data Steward: review queue + side-by-side review, merge history + undo,
                        CSV import, hygiene dashboard
-  src/features/decisions Decisions ("Waiting for you", notices, done) and the nav count
+  src/features/decisions Decisions: Inbox (DecisionCard: chain, deadline, history with ERP figures,
+                       approve / counter / reject / hand on, "What happened next"), Away and
+                       hand-overs, Approval numbers, Deadlines (calendar settings); push.ts +
+                       public/sw.js (notifications), public/manifest.webmanifest (add to home screen)
   src/features/agents  Agents (what each can do, level, overrides, stop, sandbox "try it", Evidence
                        tab = scorecard), policy rules with a rule builder, stops, Runs + step-by-step
                        replay, audit log with chain and seal check, PersonalDataBar (hide/reveal),
@@ -381,23 +414,78 @@ docs/                  this file, BUILD_LOG.md
     (and registered for merges, rule 9). Customer-facing and money evidence is kept by law until its
     retention period ends; a legal hold stops both retention and erasure.
 22. **Replay never re-runs anything.** It only reads the trail.
+23. **Nobody decides a card they asked for, and nobody decides two steps of one card** (Step 5
+    safeguards 1 and 3), not even as someone's stand-in. A full-access admin is no exception.
+    `app/approvals/chain.py` (`conflict()`) is the one place this is checked.
+24. **A missed deadline only tells people.** Escalation shows the card to the next role and notifies
+    them; it never lets them decide a step that is not theirs and never approves anything (safeguard 4).
+25. **A stand-in has at most the authority of the person they stand in for**, within the card types
+    and maximum amount that person chose. `chain.Inbox.authority()` checks the delegator's own right
+    to decide the step every time.
+26. **Every decision is sent with the fingerprint of the card as shown** (`card.build()`); a mismatch
+    is refused (409 `card_changed`). Anything new shown on a card that matters to the decision goes into
+    the fingerprinted content; the ERP figures' read time is shown but not fingerprinted, so a routine
+    sync does not refuse decisions, while figures turning stale (or fresh) do change it.
+27. **When several rules ask for people, every role they name must approve** (`policy.chain_for`): the
+    longest chain sets the order and roles from other rules follow it, each once.
 
 ## 6. Current state (end of 2026-10-09)
 
-Steps 0 to 4 are built; Step 5 has started. Tests: 149 backend (plus 3 that run only against a live ERPNext; they pass on
-ERPNext 16.50.0 and 15.122.0), 18 frontend, all passing; every new screen was checked in a browser.
+Steps 0 to 5 are built; Step 5's Done-When waits for Nischay's usability run. Tests: 161 backend (plus 3 that run only
+against a live ERPNext; they pass on ERPNext 16.50.0 and 15.122.0), 21 frontend, all passing; every new screen was
+checked in a browser, on a desktop and at phone width (390 px).
 
-### Step 5 (F12.3 Human Approval Inbox): started
-Questions H1-H9 sent; built meanwhile (needed by every answer):
-- **Card timing**: the browser tells Forge when a card first comes on screen for someone who can decide
-  it (`POST /decisions/{id}/shown`, kept as `first_shown_at`) and sends, with the decision, how long it
-  was in front of the person (`shown_ms`, kept as `decision_ms`; counted from when the card came on
-  screen, or from that person's previous decision on the page if later). Done cards say "Decided 42 s
-  after the card came on screen". This is the measurement behind the "under 60 seconds" Done-When.
-- **What happened next**: a decided card lists what it led to (`app/agents/inbox.py`): the rules
-  checked again, the action and its result, and later records that point at what the action produced
-  (for example the merge being undone). Shown under "What happened next" on Done cards.
-- Migration 0007 (two columns on `decisions`). Test: `tests/test_inbox.py`.
+### Step 5 (F12.3 Human Approval Inbox): built, waiting for the usability run
+Built to H1-H9 and Nischay's eight Step 5 safeguards (section 3). What a person sees:
+- **Decisions → Inbox**: cards they can decide first, then the most urgent. Each card shows its
+  deadline ("Due in 2 h 10 min", amber under an hour, red once past), the chain ("● Sales Manager →
+  ○ Finance"), the facts, why it is asking, the customer's history (tier, earlier cards this year) and,
+  for ERP-linked accounts, outstanding, overdue and invoiced figures with when they were read. Figures
+  older than 15 minutes say so in amber and are not presented as current (safeguard 5). Then the
+  agent's recommendation (approve, reject or counter, with its reason) and the buttons: Approve,
+  Counter…, Reject, Hand to…. Banners say when you stand in for someone, when a card past its deadline
+  was escalated to you, and when you handed a card on. "For you" / "Everyone's" switch; `?card=<id>`
+  opens one card (push notifications link there).
+- **Chains (H1)**: the policy rule editor has "Who decides, in order" (up to 5 roles) and a deadline in
+  working hours. A card moves to the next step only after approval; a rejection ends it; the action
+  runs after the last approval. A different person decides each step, and the person who asked never
+  decides (safeguard 1). When several rules match, every role they name must approve (rule 27).
+- **Counter (H2)**: change the allowed values (the amount, for payments); the changed version goes
+  through the gate again, may need more approvals, and the original card ends as "countered" with both
+  values in the audit trail. The counter is also the counterer's approval of the changed card's first
+  step they may decide, and is counted once in the numbers. The changed card carries the agent's
+  reasoning but no recommended option of its own.
+- **Away and hand-overs (H3)**: hand one card to a colleague, or set an out-of-office with a stand-in,
+  dates (at most 90 days), card types and, for cards with an amount, a maximum. The stand-in decides
+  "for" you, only cards you could decide yourself; four-eyes still holds. End it at any time.
+- **Deadlines (H4)**: the working calendar (time zone, days, hours, holidays), default deadline,
+  reminder point, who hears about missed deadlines, bottleneck limits. Changing them needs the new
+  permission `decisions.manage` and is audited; running deadlines keep theirs. The worker's minute job
+  reminds, marks past-deadline steps and tells the next role up; it never decides (safeguard 4).
+- **The card as shown (H7)**: each decision carries the fingerprint of the card the person saw; if
+  anything decision-relevant changed (figures, history, steps), it is refused with "This card changed
+  while you were looking" and reloaded. Deciding a card reloads the other waiting cards for the same
+  account, because their history just changed. The content and fingerprint go into the audit evidence;
+  the resulting action and audit record numbers are kept with the decision (safeguard 6).
+- **Push and phone (H5)**: the inbox fits a phone (checked at 390 px); "Turn on alerts on this
+  device" subscribes the browser (needs the VAPID keys, section 4). New cards, next steps, reminders,
+  past deadlines and hand-overs are notified to the people who may decide (and their stand-ins).
+  Forge can be added to a phone's home screen (manifest and icon).
+- **Approval numbers (H9)**, for `decisions.manage`: per card type and per approver, decisions, median
+  wait (working hours), median decision time, overrides (only where the agent recorded a
+  recommendation, safeguard 8), missed deadlines, cards decided as a stand-in, and what waits now per
+  role. A bottleneck alert card appears when a role has more than 5 cards past deadline or a card
+  type's median wait doubles week on week, and clears itself. The inbox header shows your own median
+  decision time and override rate.
+- **Automated check (H8, safeguard 7)**: a browser script decided all 11 prepared cards as two people
+  (desk and phone): stale ERP figures refusing a decision and reloading, both counters, the two-step
+  chain, a hand-over decided by the stand-in on a phone, the participant's own card refused. Median
+  decision time 3 s, no page errors. **The Done-When stays pending** until real people do
+  `docs/USABILITY_TEST.md` (`cli seed-usability` makes a fresh company with the 11 cards per person).
+- Card timing (`first_shown_at`, `decision_ms`) and "What happened next" from earlier today are part of
+  it; done cards now also list who decided each step, for whom, and how long they took.
+- Migration 0008. Tests: `tests/test_approvals.py` (12), `tests/test_inbox.py`, and the updated agent,
+  audit and integration tests; frontend `features/decisions/labels.test.ts`, `push.test.ts`.
 
 ### Step 4 (F12.4 Audit replay, redaction, retention)
 Built to R1-R8 (all A) and Nischay's seven Step 4 safeguards (section 3).
@@ -613,8 +701,10 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 - A stop takes effect at the next action; it does not interrupt an action already running.
 - A pair whose merge was blocked or stopped stays in the review queue; it is tried again only when a
   record changes or someone presses "Check all records again".
-- Audit replay screen, PII redaction and retention rules are Step 4 (F12.4). The full approval inbox
-  (WhatsApp, mobile, SLA, delegation, counter-offers) is Step 5 (F12.3).
+- Approval inbox (Step 5) gaps: decision buttons in WhatsApp and email come with Step 6 (H5); push on a
+  phone needs Forge at an `https://` address; the inbox list does not refresh by itself (the menu
+  count does, every 30 s), so a card changed by someone else is caught by the fingerprint check
+  when deciding, not shown live; the calendar has one time zone per company.
 - Meaning match is built and tested with a stand-in model, but is **off until a Gemini key is set (D3)**.
   The vector column has no fixed size, so there is no ANN index yet; fine for thousands of accounts.
   The duplicate check on the create form uses the rules only, not meaning match.
@@ -625,9 +715,12 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 
 ## 7. Next step and open questions
 
-**Now: Step 5, F12.3 Human Approval Inbox** (Design File frame 05). Nischay said go on 2026-10-09
-17:27Z; questions H1-H9 (approver chains, counter, delegation and out-of-office, deadlines, channels,
-the card's history, the card as shown, the 60-second test, analytics) are waiting for his answers.
+**Now: Nischay's usability run for Step 5** (`docs/USABILITY_TEST.md`): two or three colleagues, 15
+minutes each, on a fresh test company each (`uv run python -m app.cli seed-usability --slug ut-<name>`).
+Send Claude each person's median decision time, overrides and notes; F12.3 is done when the overall
+median is under 60 seconds and nobody got stuck on a card. **Next build: Step 6, F12.5 Multilingual &
+Channel Fabric** (email, WhatsApp, SMS, caps), which also brings decision buttons in WhatsApp and email
+(H5) and repeats the 60-second check there.
 **Also open: Nischay's own check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect,
 read, revoke the key, see the alert). His PC needs Forge set up first (section 4).
 

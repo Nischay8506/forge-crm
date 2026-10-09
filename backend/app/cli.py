@@ -20,6 +20,11 @@ Key that encrypts the audit trail's evidence (app/audit/evidence.py):
 Browser push notifications for the approval inbox (app/approvals/push.py):
 
     uv run python -m app.cli new-push-keys           # prints VAPID_PUBLIC_KEY/PRIVATE_KEY
+
+Prepared cards for the approval-inbox usability test (docs/USABILITY_TEST.md):
+
+    uv run python -m app.cli seed-usability --slug ut-anita [--password '...']
+    uv run python -m app.cli seed-usability --slug ut-anita --refresh
 """
 
 import argparse
@@ -77,6 +82,23 @@ async def rotate_evidence() -> None:
           f"{counts['current']}; {counts['already']} were already on it.")
 
 
+async def seed_usability(slug: str, password: str, refresh_only: bool) -> None:
+    from app.approvals import usability
+    from app.db import dispose_engine
+
+    if refresh_only:
+        await usability.refresh(slug)
+        await dispose_engine()
+        print(f"ERP figures for '{slug}' now read as current (for the next 15 minutes).")
+        return
+    done = await usability.seed(slug, password)
+    await dispose_engine()
+    print(f"Company '{done.slug}' is ready with {done.cards} waiting cards.")
+    print(f"Log in with company '{done.slug}' and password '{done.password}':")
+    for email, role in done.people.items():
+        print(f"  {email}  {role}")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="app.cli")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -95,6 +117,12 @@ def main() -> None:
     ek.add_argument("--id", help="key id (default e<today>)")
     sub.add_parser("rotate-evidence")
     sub.add_parser("new-push-keys")
+    su = sub.add_parser("seed-usability")
+    su.add_argument("--slug", required=True, help="a new company slug for this session")
+    su.add_argument("--password", default="Usability-2026",
+                    help="password for every test login (default Usability-2026)")
+    su.add_argument("--refresh", action="store_true",
+                    help="only bring the session's fresh ERP figures up to date")
     a = p.parse_args()
     if a.cmd == "create-tenant":
         asyncio.run(create_tenant(a.name, a.slug, a.admin_email, a.admin_name, a.admin_password))
@@ -129,6 +157,8 @@ def main() -> None:
         print(f"VAPID_PUBLIC_KEY={public}")
         print(f"VAPID_PRIVATE_KEY={private}")
         print("VAPID_SUBJECT=mailto:<an address the push services can reach you at>")
+    elif a.cmd == "seed-usability":
+        asyncio.run(seed_usability(a.slug, a.password, a.refresh))
 
 
 if __name__ == "__main__":

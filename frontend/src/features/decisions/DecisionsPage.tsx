@@ -91,7 +91,7 @@ export function DecisionsPage() {
             options={[{ key: "mine", label: "For you" }, { key: "all", label: "Everyone's" }]} />
         )}
       </div>
-      <p className="text-[12.5px] text-ink-500">
+      <p className="hidden sm:block text-[12.5px] text-ink-500">
         {view === "waiting" && scope === "mine" && "Cards you can decide (yours first, the most urgent first), cards past their deadline that were escalated to you, cards you asked for or handed on, and integration alerts and tasks. Approving runs the action as proposed, after the policy rules and stops are checked again."}
         {view === "waiting" && scope === "all" && "Every card still waiting, including ones only other people can decide."}
         {view === "notices" && "What agents did on their own at level L1, and what policy rules stopped."}

@@ -46,10 +46,14 @@ def _actor_id(actor: str | None) -> uuid.UUID | None:
 
 
 async def step_rows(session: AsyncSession, since: datetime) -> list[tuple[Decision, DecisionStep]]:
+    """Every step decided since then, each person's decision once: the approval a
+    counter gives the changed card is the same decision as the counter itself."""
     rows = (await session.execute(
         select(Decision, DecisionStep).join(DecisionStep, DecisionStep.decision_id == Decision.id)
         .where(DecisionStep.decided_at >= since, DecisionStep.status.in_(DECIDED_STEP)))).all()
-    return [(d, s) for d, s in rows]
+    counterer = {d.id: s.decided_by for d, s in rows if s.status == "countered"}
+    return [(d, s) for d, s in rows
+            if not (d.counter_of and counterer.get(d.counter_of) == s.decided_by)]
 
 
 async def report(session: AsyncSession, tenant_id: uuid.UUID, days: int = 30) -> dict[str, Any]:

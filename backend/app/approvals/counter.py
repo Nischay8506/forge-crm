@@ -107,10 +107,13 @@ async def counter(session, d_id: uuid.UUID, *, me: Person, acting_as: Person,
                                  "card_hash": card_hash, "card": card,
                                  "recommended": d.recommended_option})
 
-    # 3. The changed action as a new proposal, with its own chain.
+    # 3. The changed action as a new proposal, with its own chain. It keeps the agent's
+    #    reasoning as context, but no recommended option: the agent recommended for the
+    #    card as asked, not for the changed one (safeguard 8 counts overrides only
+    #    against a recommendation the agent actually made).
     outcome = await runtime.call_tool(
         session, ctx, d.tool_key, new_args, recommendation=d.recommendation,
-        recommend=d.recommended_option, requested_by=d.requested_by, counter_of=d.id)
+        recommend=None, requested_by=d.requested_by, counter_of=d.id)
     d.result = {"status": "countered", "result": {"countered_by_decision": str(
         outcome.decision_id) if outcome.decision_id else None}, "error": None,
         "reasons": [], "audit": {"decision": rec.seq, **outcome.audit}}
@@ -120,13 +123,14 @@ async def counter(session, d_id: uuid.UUID, *, me: Person, acting_as: Person,
 
     # 4. The counter is this person's approval on the first new step they could decide.
     #    The chain keeps its order: an earlier step still decides first (safeguard 1).
+    #    Its decision time stays on the countered card only, so it is counted once.
     new = await session.get(Decision, outcome.decision_id, populate_existing=True)
     for s in new.steps:
         if _can(new, s, me, acting_as, delegation):
             if s.position == new.step_index:
                 await runtime.decide(session, new.id, approve=True, actor=me.actor,
                                      note=note or "Approved as countered",
-                                     decision_ms=decision_ms, on_behalf_of=on_behalf_of,
+                                     decision_ms=None, on_behalf_of=on_behalf_of,
                                      card=card, card_hash=card_hash)
             else:
                 await runtime.approve_ahead(session, new, s, actor=me.actor,

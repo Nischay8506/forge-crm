@@ -5,6 +5,36 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-09 (Day 2, night): Step 5 built, automated check passes, usability run pending
+
+**Decisions (Nischay):** H1-H8 A, H8 C, H9 A with eight safeguards (17:57Z, handover section 3);
+the stand-in's scope is set by the person handing over ("Delegator sets scope", 18:11Z).
+
+**Done** (commits 78b249b, 7892ffa and today's last commit)
+- Approver chains in policy rules, a different person per step, the asker never decides; counter
+  through the gate again; hand-over and out-of-office with card types and a maximum; working
+  calendar, deadlines, reminders, escalation that only notifies; card fingerprint checked on every
+  decision; ERP figures with their read time and a stale warning; push notifications and a phone
+  layout; Approval numbers and bottleneck alerts (migration 0008, `app/approvals/`).
+- Screens: the new card, Away and hand-overs, Approval numbers, Deadlines, and the chain and deadline
+  in the rule editor. App icon and "add to home screen".
+- `cli seed-usability` and `docs/USABILITY_TEST.md` for Nischay's 15-minute test.
+- Browser check of all 11 prepared cards as two people (desk and phone): median decision 3 s.
+- 161 backend + 21 frontend tests passing.
+
+**Problems found and fixed**
+- Deciding one card changed the history shown on the next card for the same account, so that card's
+  fingerprint no longer matched and the next decision was refused. The inbox now reloads the other
+  waiting cards for that account after each decision.
+- A counter was counted twice in the numbers (the counter and its approval of the changed card), and
+  the changed card inherited the "counter" recommendation, so it showed as an override. Now counted
+  once, and the changed card has no recommended option of its own.
+
+**Not done / next**
+- Nischay: the usability run with real people (F12.3 Done-When stays pending until then); optional
+  push keys (`new-push-keys`); his Step 3 Docker check; D3 and D4.
+- Claude: Step 6, F12.5 Multilingual & Channel Fabric, when Nischay says go.
+
 ## 2026-10-09 (Day 2, late evening): Step 5 started
 
 **Decisions (Nischay):** go ahead with Step 5 (17:27Z).

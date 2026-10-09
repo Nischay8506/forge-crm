@@ -154,7 +154,7 @@ function CounterForm({ d, busy, onSubmit, onCancel }: {
       <p className="text-[12px] text-ink-700">Approve a changed version. The change is checked by the policy rules again, and may need more approvals.</p>
       {d.counter_fields.map((f) => (
         <label key={f.key} className="block text-[12px]">
-          <span className="text-ink-500">{f.label} (asked: {String(f.value ?? "–")})</span>
+          <span className="text-ink-500">{f.label} (asked: {d.facts.find((x) => x.key === f.key)?.value ?? String(f.value ?? "–")})</span>
           <Input inputMode={f.type === "money" || f.type === "number" ? "decimal" : undefined} value={values[f.key]}
             onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))} />
         </label>
@@ -192,6 +192,21 @@ function HandForm({ d, onDone, onCancel }: { d: DecisionCard; onDone: (dl: Deleg
   )
 }
 
+/** A decision adds to the account's history, which the other waiting cards for that
+ * account show (and their fingerprint covers): load those cards again so the person
+ * decides what is now true. */
+async function refreshSameAccount(qc: ReturnType<typeof useQueryClient>, listKey: unknown[], d: DecisionCard) {
+  const acc = d.history?.account?.id
+  if (!acc) return
+  const others = (qc.getQueryData<DecisionCard[]>(listKey) ?? [])
+    .filter((x) => x.id !== d.id && x.status === "pending" && x.history?.account?.id === acc)
+  if (!others.length) return
+  const fresh = await Promise.all(others.map((x) =>
+    api.get<DecisionCard>(`/decisions/${x.id}`).then((r) => r.data).catch(() => null)))
+  qc.setQueryData<DecisionCard[]>(listKey, (list) =>
+    list?.map((x) => fresh.find((f) => f?.id === x.id) ?? x))
+}
+
 function isCardChanged(err: unknown) {
   return axios.isAxiosError(err) && err.response?.data?.error?.code === "card_changed"
 }
@@ -213,15 +228,20 @@ export function DecisionCardView({ d, listKey, handedTo, highlight }: {
     if (highlight) timing.ref.current?.scrollIntoView({ behavior: "smooth", block: "center" })
   }, [highlight, timing.ref])
 
+  // Everything a decision can change, except this list (reloading it would drop the
+  // decided card, which stays in place showing its outcome until the page is reloaded).
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["decisions"] })
+    for (const k of ["count", "me", "done", "delegations", "detail", "analytics"]) {
+      qc.invalidateQueries({ queryKey: ["decisions", k] })
+    }
     qc.invalidateQueries({ queryKey: ["candidates"] })
     qc.invalidateQueries({ queryKey: ["accounts"] })
     qc.invalidateQueries({ queryKey: ["integrations"] })
   }
-  // Keep the decided card where it is (showing the outcome) until the list is reloaded.
-  const keep = (updated: DecisionCard) =>
-    qc.setQueryData<DecisionCard[]>(listKey, (list) => list?.map((x) => (x.id === updated.id ? updated : x)))
+  // The decided card stays where it was; a changed card from a counter goes after it.
+  const keep = (updated: DecisionCard, added?: DecisionCard) =>
+    qc.setQueryData<DecisionCard[]>(listKey, (list) => list?.flatMap((x) => (x.id !== updated.id ? [x]
+      : added && added.status === "pending" ? [updated, added] : [updated])))
   const onError = (err: unknown) => {
     // H7: the card changed since it was shown; load the current one and ask again.
     if (isCardChanged(err)) qc.invalidateQueries({ queryKey: ["decisions"] })
@@ -234,12 +254,8 @@ export function DecisionCardView({ d, listKey, handedTo, highlight }: {
     onSuccess: (updated) => {
       markAction()
       keep(updated)
-      qc.invalidateQueries({ queryKey: ["decisions", "count"] })
-      qc.invalidateQueries({ queryKey: ["decisions", "me"] })
-      qc.invalidateQueries({ queryKey: ["decisions", "done"] })
-      qc.invalidateQueries({ queryKey: ["candidates"] })
-      qc.invalidateQueries({ queryKey: ["accounts"] })
-      qc.invalidateQueries({ queryKey: ["integrations"] })
+      refreshSameAccount(qc, listKey, d)
+      refresh()
     },
     onError,
   })
@@ -255,7 +271,8 @@ export function DecisionCardView({ d, listKey, handedTo, highlight }: {
         : next.status === "pending" ? `The changed card now goes to ${next.steps.find((s) => s.status === "pending")?.role ?? "the next approver"}, because the new value needs it.`
           : next.status === "approved" ? "The changed version was approved and carried out."
             : `The changed card ended as ${next.status}: ${r.counter_result.error ?? r.counter_result.reasons.join("; ")}`)
-      keep(r)
+      keep(r, next)
+      refreshSameAccount(qc, listKey, d)
       refresh()
     },
     onError,
@@ -302,10 +319,13 @@ export function DecisionCardView({ d, listKey, handedTo, highlight }: {
 
       <div>
         {d.facts.map((f) => <Row key={f.key} k={f.label}>{f.value}</Row>)}
-        {d.reasons.length > 0 && (d.kind === "alert" || d.kind === "task" ? (
-          <ul className="text-[12.5px] text-ink-700 space-y-1 py-1">
-            {d.reasons.map((r) => <li key={r}>{r}</li>)}
-          </ul>
+        {d.reasons.length > 0 && (d.kind === "alert" || d.kind === "task" || d.reasons.length > 1 ? (
+          <div className="py-1 border-b border-dashed border-line text-[12.5px]">
+            {approval && <p className="text-ink-500">Why it is asking</p>}
+            <ul className={cn("text-ink-700 space-y-1", approval && "list-disc pl-4")}>
+              {d.reasons.map((r) => <li key={r}>{r}</li>)}
+            </ul>
+          </div>
         ) : (
           <Row k={approval ? "Why it is asking" : "Why"}>{d.reasons.join("; ")}</Row>
         ))}

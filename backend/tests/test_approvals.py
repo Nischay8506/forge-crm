@@ -524,6 +524,22 @@ async def test_analytics_count_overrides_only_where_recommended(client, ctx):  #
     assert who["name"] == "Chetan Checker" and who["median_decision_seconds"] == 30.0
     assert rep["overall"]["under_60s"] == round(2 / 3, 3)
 
+    # A counter is one decision, though it also approves the changed card, and the
+    # changed card has no recommendation of its own to be overridden.
+    y = await _try(client, h, "40")
+    async with tenant_session(tid) as s:
+        await s.execute(update(Decision).where(Decision.id == uuid.UUID(y["decision_id"]))
+                        .values(recommended_option="counter"))
+    card = (await client.get(f"{API}/decisions/{y['decision_id']}", headers=c)).json()
+    r = await client.post(f"{API}/decisions/{y['decision_id']}/counter", headers=c, json={
+        "card_hash": card["card_hash"], "values": {"amount": "35"}, "shown_ms": 20_000})
+    assert r.status_code == 200, r.text
+    assert r.json()["new_card"]["status"] == "approved"
+    assert r.json()["new_card"]["recommended_option"] is None
+    me = (await client.get(f"{API}/decisions/me", headers=c)).json()
+    assert me["decided"] == 4 and me["with_recommendation"] == 3 and me["overrides"] == 1
+    assert me["median_decision_seconds"] == 25.0
+
 
 async def test_bottleneck_alert_goes_to_admins_and_clears_itself(client, ctx):  # noqa: F811
     h, tid = ctx["h"], ctx["tid"]
