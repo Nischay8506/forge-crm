@@ -24,6 +24,8 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 **Not done / next**
 - Nischay's answers to R1-R8, then the evidence store, redaction, retention and message provenance.
 - Nischay's own Step 3 check in Docker Desktop (his PC needs Forge set up first).
+- Copy to Nischay's PC: his PC was offline at 12:40 and 13:22 UTC, so the device folder is still at
+  a32ba4a; the next run copies everything since.
 
 ## 2026-10-09 (Day 2, continued): Step 3 built, both F12.6 checks pass
 
