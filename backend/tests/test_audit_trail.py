@@ -423,7 +423,7 @@ async def test_verify_warns_when_sealing_has_stopped(ctx, monkeypatch):
 
 
 async def test_evidence_tab_counts_by_month_and_version_with_links(client, ctx):
-    from tests.test_agents import _rule
+    from tests.test_agents import _rule, checker, decide
 
     h = ctx["h"]
     await _rule(client, h, conditions=[{"fact": "amount", "op": "gt", "value": 1000}],
@@ -433,10 +433,10 @@ async def test_evidence_tab_counts_by_month_and_version_with_links(client, ctx):
     assert (await _try(client, h, "10"))["status"] == "done"
     yes, no = await _try(client, h, "2000"), await _try(client, h, "3000")
     assert (await _try(client, h, "9000"))["status"] == "blocked"
-    assert (await client.post(f"{API}/decisions/{yes['decision_id']}/approve",
-                              headers=h)).status_code == 200
-    assert (await client.post(f"{API}/decisions/{no['decision_id']}/reject", headers=h,
-                              json={"note": "Too much for a test"})).status_code == 200
+    other = await checker(client, ctx)
+    assert (await decide(client, other, yes["decision_id"])).status_code == 200
+    assert (await decide(client, other, no["decision_id"], "reject",
+                         note="Too much for a test")).status_code == 200
     card = (await client.get(f"{API}/agents/sandbox/scorecard", headers=h)).json()
     [row] = card["rows"]
     assert row["month"] == datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m")
@@ -540,7 +540,7 @@ async def test_nightly_retention_removes_old_details_but_respects_legal_holds(cl
 
 async def test_contact_erasure_needs_a_second_person_and_keeps_what_the_law_needs(client, ctx):
     from app.privacy import erasure
-    from tests.test_agents import _user_with_role
+    from tests.test_agents import _user_with_role, decide
 
     h, tid = ctx["h"], ctx["tid"]
     acc = (await client.post(f"{API}/accounts", headers=h, json={"name": "Raman Stores"})).json()
@@ -565,14 +565,13 @@ async def test_contact_erasure_needs_a_second_person_and_keeps_what_the_law_need
     card = (await client.get(f"{API}/decisions/{did}", headers=h)).json()
     assert "Priya" not in card["title"] and "Raman Stores" in card["title"]
     assert not card["can_decide"] and card["why_not"].startswith("A second person")
-    own = await client.post(f"{API}/decisions/{did}/approve", headers=h)
+    own = await decide(client, h, did)
     assert own.status_code == 403 and "you asked for it" in own.text
     _, clerk = await _user_with_role(client, ctx, "Clerk", ["decisions.decide"])
-    assert (await client.post(f"{API}/decisions/{did}/approve",
-                              headers=clerk)).status_code == 403
+    assert (await decide(client, clerk, did)).status_code == 403
     _, dpo = await _user_with_role(client, ctx, "Privacy Officer",
                                    ["decisions.decide", "privacy.erase"])
-    ok = await client.post(f"{API}/decisions/{did}/approve", headers=dpo)
+    ok = await decide(client, dpo, did)
     assert ok.status_code == 200 and ok.json()["status"] == "approved", ok.text
     result = ok.json()["result"]["result"]
     assert result["stores"]["contacts"] == 1 and result["stores"]["audit_details"] >= 2

@@ -56,6 +56,20 @@ async def _user_with_role(client, ctx, name: str, permissions: list[str]):
     return role, await login(client, ctx["slug"], email, "Passw0rd!x")
 
 
+async def decide(client, h, decision_id, what="approve", **body):
+    """Decide a card the way the browser does: with the fingerprint of the card shown."""
+    card = (await client.get(f"{API}/decisions/{decision_id}", headers=h)).json()
+    return await client.post(f"{API}/decisions/{decision_id}/{what}", headers=h,
+                             json={"card_hash": card.get("card_hash"), **body})
+
+
+async def checker(client, ctx, name="Checker"):
+    """A second person who may decide cards (the asker never decides their own)."""
+    _, h = await _user_with_role(client, ctx, name, ["decisions.decide", "agents.read",
+                                                     "audit.read", "accounts.read"])
+    return h
+
+
 async def _rule(client, h, **body):
     body = {"agent_key": "sandbox", "tool_key": "sandbox.record_payment", **body}
     r = await client.post(f"{API}/policies", headers=h, json=body)
@@ -127,16 +141,18 @@ async def test_rules_ask_then_block_and_approval_resumes(client, ctx):
     # Finance sees it as theirs; Sales sees it but cannot decide it.
     assert (await client.get(f"{API}/decisions/count", headers=fin_h)).json()["waiting"] == 1
     assert (await client.get(f"{API}/decisions/count", headers=sales_h)).json()["waiting"] == 0
-    card = (await client.get(f"{API}/decisions", headers=sales_h)).json()[0]
+    assert (await client.get(f"{API}/decisions", headers=sales_h)).json() == []
+    card = (await client.get(f"{API}/decisions?scope=all", headers=sales_h)).json()[0]
     assert card["approver_role"]["name"] == "Finance" and card["can_decide"] is False
+    assert card["why_not"] == "Waiting for Finance"
     assert {"label": "Amount (INR)", "value": "₹1,50,000", "key": "amount"} in card["facts"]
-    no = await client.post(f"{API}/decisions/{waiting['decision_id']}/approve", headers=sales_h)
+    no = await decide(client, sales_h, waiting["decision_id"])
     assert no.status_code == 403
 
-    ok = await client.post(f"{API}/decisions/{waiting['decision_id']}/approve", headers=fin_h,
-                           json={"note": "PO checked"})
+    ok = await decide(client, fin_h, waiting["decision_id"], note="PO checked")
     assert ok.status_code == 200 and ok.json()["status"] == "approved", ok.text
-    again = await client.post(f"{API}/decisions/{waiting['decision_id']}/approve", headers=h)
+    again = await client.post(f"{API}/decisions/{waiting['decision_id']}/approve", headers=h,
+                              json={"card_hash": "0" * 64})
     assert again.status_code == 400  # decided once only
 
     notices = (await client.get(f"{API}/decisions?view=notices", headers=h)).json()
@@ -150,8 +166,10 @@ async def test_reject_writes_nothing(client, ctx):
     await client.put(f"{API}/agents/sandbox/level", headers=ctx["h"], json={"level": 0})
     w = await _try(client, ctx["h"], "10")
     assert w["status"] == "waiting"
-    r = await client.post(f"{API}/decisions/{w['decision_id']}/reject", headers=ctx["h"],
-                          json={"note": "not needed"})
+    own = await decide(client, ctx["h"], w["decision_id"], "reject", note="not needed")
+    assert own.status_code == 403  # the person who asked never decides it
+    r = await decide(client, await checker(client, ctx), w["decision_id"], "reject",
+                     note="not needed")
     assert r.json()["status"] == "rejected"
     async with tenant_session(ctx["tid"]) as s:
         assert (await s.scalars(select(SandboxAction))).all() == []
@@ -224,7 +242,7 @@ async def test_approval_rechecks_kill_switch(client, ctx):
     w = await _try(client, h, "10")
     await client.post(f"{API}/kill-switches", headers=h,
                       json={"scope": "tenant", "reason": "freeze"})
-    d = (await client.post(f"{API}/decisions/{w['decision_id']}/approve", headers=h)).json()
+    d = (await decide(client, await checker(client, ctx), w["decision_id"])).json()
     assert d["status"] == "failed" and d["result"]["status"] == "blocked"
 
 
@@ -247,7 +265,7 @@ async def test_steward_merge_waits_for_approval_at_l0(client, ctx):
     assert card["tool_key"] == "steward.merge_records" and card["recommendation"]
     facts = {f["key"]: f["value"] for f in card["facts"]}
     assert facts["account_tier"] == "strategic" and float(facts["match_score"]) >= 80
-    ok = await client.post(f"{API}/decisions/{card['id']}/approve", headers=h)
+    ok = await decide(client, h, card["id"])
     assert ok.json()["status"] == "approved", ok.text
     assert len((await client.get(f"{API}/accounts", headers=h)).json()) == 1
     merges = (await client.get(f"{API}/steward/merges", headers=h)).json()
@@ -344,8 +362,9 @@ async def test_replay_shows_a_run_step_by_step(client, ctx):
                 outcome="ask_person")
     await _try(client, h, "10")
     waiting = await _try(client, h, "250000", acc)
-    await client.post(f"{API}/decisions/{waiting['decision_id']}/approve", headers=h,
-                      json={"note": "PO 4411 seen"})
+    ok = await decide(client, await checker(client, ctx), waiting["decision_id"],
+                      note="PO 4411 seen")
+    assert ok.status_code == 200, ok.text
 
     runs = (await client.get(f"{API}/audit/runs?agent_key=sandbox", headers=h)).json()
     assert len(runs) == 2
@@ -375,7 +394,7 @@ async def test_replay_names_changed_and_missing_steps(client, ctx):
     h = ctx["h"]
     await client.put(f"{API}/agents/sandbox/level", headers=h, json={"level": 0})
     w = await _try(client, h, "75")
-    await client.post(f"{API}/decisions/{w['decision_id']}/approve", headers=h, json={})
+    assert (await decide(client, await checker(client, ctx), w["decision_id"])).status_code == 200
     run_id = (await client.get(f"{API}/audit/runs", headers=h)).json()[0]["id"]
     steps = (await client.get(f"{API}/audit/runs/{run_id}", headers=h)).json()["steps"]
     first, approved = steps[0]["seq"], steps[2]["seq"]

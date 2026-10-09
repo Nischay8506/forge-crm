@@ -26,7 +26,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 
@@ -91,11 +91,22 @@ class PolicyRule(IdMixin, TenantMixin, TimestampMixin, Base):
     # [{"fact": "amount", "op": "gt", "value": 100000}, ...] from app.agents.registry.FACTS
     conditions: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     outcome: Mapped[str] = mapped_column(String(15), nullable=False)  # allow|ask_person|block
+    # The first role that decides; approval_steps holds the whole chain in order (H1).
     approver_role_id: Mapped[uuid.UUID | None] = mapped_column(UUIDCol, ForeignKey("roles.id"))
+    approval_steps: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    # Deadline in working hours for cards from this rule (H4); empty = company default.
+    sla_hours: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     note: Mapped[str | None] = mapped_column(String(300))
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     updated_by: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    @property
+    def steps(self) -> list[uuid.UUID]:
+        """The roles that decide, in order (empty: anyone who can decide)."""
+        if self.approval_steps:
+            return [uuid.UUID(str(r)) for r in self.approval_steps]
+        return [self.approver_role_id] if self.approver_role_id else []
 
 
 class RecordTakeover(IdMixin, TenantMixin, Base):
@@ -136,7 +147,7 @@ class Decision(IdMixin, TenantMixin, Base):
     __tablename__ = "decisions"
 
     kind: Mapped[str] = mapped_column(String(10), nullable=False)  # approval|notice|alert|task
-    # approval: pending -> approved | rejected | superseded | failed
+    # approval: pending -> approved | rejected | countered | superseded | failed
     # notice:   open -> acknowledged
     # alert:    open -> acknowledged -> resolved (by itself when the problem is gone)
     # task:     open -> done (by itself when nothing is left to do)
@@ -163,6 +174,116 @@ class Decision(IdMixin, TenantMixin, Base):
     # the person who decided had it in front of them (measured by the browser).
     first_shown_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     decision_ms: Mapped[int | None] = mapped_column(Integer)
+    # Step 5 (F12.3). The person who asked for this (never allowed to decide it), the
+    # option the agent recommends (H6), the card this one counters (H2), the deadline
+    # in working hours (H4) and which step of the chain is deciding now (H1).
+    requested_by: Mapped[str | None] = mapped_column(String(100))
+    recommended_option: Mapped[str | None] = mapped_column(String(10))
+    counter_of: Mapped[uuid.UUID | None] = mapped_column(UUIDCol, ForeignKey("decisions.id"))
+    sla_hours: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    step_index: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    steps: Mapped[list["DecisionStep"]] = relationship(
+        lazy="selectin", order_by="DecisionStep.position", cascade="all, delete-orphan")
+
+    @property
+    def current_step(self) -> "DecisionStep | None":
+        return self.steps[self.step_index] if self.step_index < len(self.steps) else None
+
+
+class DecisionStep(IdMixin, TenantMixin, Base):
+    """One step of an approval card's chain (H1): the role that decides it, its
+    deadline (H4), and who decided it, on whose behalf (H3), how fast, and the
+    fingerprint of the card as they saw it (H7).
+    status: waiting (a later step) -> pending (deciding now) -> approved | rejected |
+    countered; cancelled when an earlier step rejected; superseded with its card."""
+
+    __tablename__ = "decision_steps"
+    __table_args__ = (UniqueConstraint("decision_id", "position"),)
+
+    decision_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDCol, ForeignKey("decisions.id", ondelete="CASCADE"), nullable=False, index=True)
+    position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    role_id: Mapped[uuid.UUID | None] = mapped_column(UUIDCol, ForeignKey("roles.id"))
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    remind_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    overdue_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    first_shown_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decided_by: Mapped[str | None] = mapped_column(String(100))
+    on_behalf_of: Mapped[str | None] = mapped_column(String(100))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str | None] = mapped_column(String(1000))
+    decision_ms: Mapped[int | None] = mapped_column(Integer)
+    card_hash: Mapped[str | None] = mapped_column(String(64))
+
+
+class Delegation(IdMixin, TenantMixin, Base):
+    """A person lends their authority (H3, safeguard 3): one card handed to a
+    colleague, or out of office with a stand-in between two dates. An out-of-office
+    names the card types it covers and, for cards with an amount, the most it covers;
+    the stand-in never decides a card the absent person could not, nor one either of
+    them asked for."""
+
+    __tablename__ = "delegations"
+
+    kind: Mapped[str] = mapped_column(String(5), nullable=False)  # card | away
+    from_user_id: Mapped[uuid.UUID] = mapped_column(UUIDCol, ForeignKey("users.id"),
+                                                    nullable=False, index=True)
+    to_user_id: Mapped[uuid.UUID] = mapped_column(UUIDCol, ForeignKey("users.id"),
+                                                  nullable=False, index=True)
+    decision_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDCol, ForeignKey("decisions.id", ondelete="CASCADE"))
+    starts_at: Mapped[datetime] = _now_col()
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tool_keys: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    max_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    note: Mapped[str | None] = mapped_column(String(300))
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = _now_col()
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_by: Mapped[str | None] = mapped_column(String(100))
+
+
+class ApprovalSettings(Base):
+    """A company's working calendar and inbox settings (H4, H9). Without a row the
+    defaults in app/approvals/calendar.py apply."""
+
+    __tablename__ = "approval_settings"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUIDCol, ForeignKey("tenants.id"),
+                                                 primary_key=True)
+    time_zone: Mapped[str] = mapped_column(String(60), nullable=False)
+    work_days: Mapped[list[int]] = mapped_column(JSONB, nullable=False)  # 0 = Monday
+    day_start: Mapped[str] = mapped_column(String(5), nullable=False)  # "09:30"
+    day_end: Mapped[str] = mapped_column(String(5), nullable=False)
+    holidays: Mapped[list[dict[str, str]]] = mapped_column(JSONB, nullable=False)
+    default_sla_hours: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    reminder_pct: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    escalation_role_id: Mapped[uuid.UUID | None] = mapped_column(UUIDCol,
+                                                                 ForeignKey("roles.id"))
+    bottleneck_overdue: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    bottleneck_wait_ratio: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False)
+    updated_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    updated_at: Mapped[datetime] = _now_col()
+
+
+class PushSubscription(IdMixin, TenantMixin, Base):
+    """A browser that asked for push notifications (H5)."""
+
+    __tablename__ = "push_subscriptions"
+    __table_args__ = (UniqueConstraint("tenant_id", "endpoint"),)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDCol, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint: Mapped[str] = mapped_column(String(1000), nullable=False)
+    p256dh: Mapped[str] = mapped_column(String(200), nullable=False)
+    auth: Mapped[str] = mapped_column(String(100), nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = _now_col()
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failures: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
 
 
 class AuditRecord(TenantMixin, Base):

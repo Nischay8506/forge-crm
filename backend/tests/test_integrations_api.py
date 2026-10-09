@@ -20,6 +20,7 @@ from app.integrations.testing.seed import seed_demo
 from app.models import ErpConnection, SyncFlow, Tenant
 from app.steward.identifiers import gstin_check_digit
 from tests.conftest import login
+from tests.test_agents import decide
 
 API = "/api/v1"
 
@@ -284,7 +285,7 @@ async def test_mcp_tools_go_through_the_gate_and_writes_wait_for_a_person(client
     waiting = (await client.get(f"{API}/decisions?view=waiting", headers=s["h"])).json()
     card = [d for d in waiting if d["tool_key"] == "erp.create_customer"][0]
     assert card["agent_name"] == "Outside AI tools (MCP)"
-    r = await client.post(f"{API}/decisions/{card['id']}/approve", headers=s["h"], json={})
+    r = await decide(client, s["h"], card["id"])
     assert r.json()["status"] == "approved", r.text
     assert [d for d in s["fake"].docs["Customer"].values()
             if d["customer_name"] == "Kolhapur Alloys"]

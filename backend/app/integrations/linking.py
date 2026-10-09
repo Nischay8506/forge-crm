@@ -30,6 +30,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.registry import AGENTS, AgentContext
 from app.agents.runtime import call_tool, finish_run, start_run, supersede
+from app.approvals.chain import open_chain
+from app.approvals.notify import notify
 from app.audit import chain
 from app.core.errors import AppError, NotFound
 from app.integrations.alerts import sync_task
@@ -221,8 +223,10 @@ async def _review_card(session: AsyncSession, ctx: AgentContext, conn: ErpConnec
                  reasons=[why], args=args, facts={},
                  checks=[{"check": "review", "ok": False, "detail": why}],
                  record_type="account", record_id=acc.id, dedupe_key=key)
+    await open_chain(session, d)
     session.add(d)
     await session.flush()
+    await notify(session, d, "new")
     await chain.append(session, acc.tenant_id, "decision.requested", actor=ctx.actor,
                        agent_key=AGENT_KEY, run_id=ctx.run_id, record_type="account",
                        record_id=acc.id, data={"decision_id": d.id, "tool": UPDATE_TOOL,
@@ -244,7 +248,9 @@ async def bring_fields_over(session: AsyncSession, ctx: AgentContext | None, con
         if gated:
             assert ctx is not None
             outcome = await call_tool(session, ctx, UPDATE_TOOL, {
-                "erp_customer_id": ec.id, "account_id": acc.id, "changes": ch.apply})
+                "erp_customer_id": ec.id, "account_id": acc.id, "changes": ch.apply},
+                recommendation="Bring over the fields the ERP owns; nothing in Forge "
+                               "contradicts them", recommend="approve")
             if outcome.status == "done":
                 applied = sorted(ch.apply)
         else:
@@ -297,7 +303,7 @@ async def process_changed(session: AsyncSession, conn: ErpConnection,
             outcome = await call_tool(session, ctx, LINK_TOOL, {
                 "erp_customer_id": ec.id, "account_id": p.account_id, "method": p.method,
                 "score": p.score, "reasons": p.reasons},
-                recommendation="Link: they share a verified tax ID",
+                recommendation="Link: they share a verified tax ID", recommend="approve",
                 dedupe_key=f"erp.link:{ec.id}")
             counts["linked" if outcome.status == "done" else "waiting"] += 1
             if outcome.status not in ("done", "waiting"):
@@ -305,7 +311,9 @@ async def process_changed(session: AsyncSession, conn: ErpConnection,
                 ec.candidates = p.candidates
         elif p.kind == "new":
             outcome = await call_tool(session, ctx, NEW_ACCOUNT_TOOL, {"erp_customer_id": ec.id},
-                                      dedupe_key=f"erp.new:{ec.id}")
+                                      recommendation="Create a new account: no account in "
+                                                     "Forge could be this customer",
+                                      recommend="approve", dedupe_key=f"erp.new:{ec.id}")
             counts["new_accounts" if outcome.status == "done" else "waiting"] += 1
         elif p.kind == "review":
             ec.link_status, ec.link_method = "review", None

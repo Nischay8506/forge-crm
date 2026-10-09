@@ -17,7 +17,11 @@ PERMISSIONS: dict[str, str] = {
     # F12.2 Agent runtime, policy gate, autonomy; F12.4 audit chain (minimal)
     "agents.read": "View agents, what they can do, their levels, policy rules and stops",
     "agents.manage": "Change autonomy levels, policy rules and kill-switches",
-    "decisions.decide": "See what agents are waiting on, and approve or reject it",
+    "decisions.decide": "See what agents are waiting on, and approve, reject, counter or hand "
+                        "it on",
+    # F12.3 Human approval inbox (Step 5)
+    "decisions.manage": "Change the working calendar, deadlines and alert limits of the "
+                        "approval inbox, and see everyone's approval analytics",
     "audit.read": "View and verify the audit log",
     # F12.4 audit replay, redaction and retention (decisions R4-R6)
     "audit.personal_data": "See personal data in the audit trail (one replay at a time, "

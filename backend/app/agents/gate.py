@@ -13,6 +13,7 @@ and block rules still apply; "ask a person" is satisfied by the approval.
 
 import uuid
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +30,8 @@ class GateResult:
     checks: list[dict[str, Any]] = field(default_factory=list)
     reasons: list[str] = field(default_factory=list)  # why a person or a block
     approver_role_id: uuid.UUID | None = None
+    approval_steps: list[uuid.UUID] = field(default_factory=list)  # H1: roles, in order
+    sla_hours: Decimal | None = None  # H4: the rules' deadline, if they set one
     rule_ids: list[str] = field(default_factory=list)
     hard_block: bool = False  # charter, kill-switch or takeover: no one can approve it
 
@@ -94,7 +97,9 @@ async def evaluate(session: AsyncSession, ctx: AgentContext, tool: ToolDef,
     if ask_rules and not approved:
         g.check("policy", False, "; ".join(ask_rules))
         g.outcome, g.reasons = "ask_person", list(ask_rules)
-        g.approver_role_id = policy.role_for(rules)
+        g.approval_steps = policy.chain_for(rules)
+        g.approver_role_id = g.approval_steps[0] if g.approval_steps else None
+        g.sla_hours = policy.sla_for(rules)
     else:
         g.check("policy", True, "; ".join(sentences) if sentences else "No rule applies")
 

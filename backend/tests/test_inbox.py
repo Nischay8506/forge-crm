@@ -2,7 +2,7 @@
 
 from app.db import tenant_session
 from app.models import Decision
-from tests.test_agents import API, ctx, drain, gstin, steward_handlers  # noqa: F401
+from tests.test_agents import API, ctx, decide, drain, gstin, steward_handlers  # noqa: F401
 
 
 async def test_card_timing_and_what_happened_next(client, ctx):  # noqa: F811
@@ -26,11 +26,9 @@ async def test_card_timing_and_what_happened_next(client, ctx):  # noqa: F811
         "first_shown_at"] == first
 
     # A time that can't be right is refused; a real one is kept with the decision.
-    bad = await client.post(f"{API}/decisions/{card['id']}/approve", headers=h,
-                            json={"shown_ms": -5})
+    bad = await decide(client, h, card["id"], shown_ms=-5)
     assert bad.status_code == 422
-    ok = await client.post(f"{API}/decisions/{card['id']}/approve", headers=h,
-                           json={"shown_ms": 42_000, "note": "same GSTIN"})
+    ok = await decide(client, h, card["id"], shown_ms=42_000, note="same GSTIN")
     assert ok.json()["status"] == "approved" and ok.json()["decision_ms"] == 42_000
     async with tenant_session(ctx["tid"]) as s:
         assert (await s.get(Decision, ok.json()["id"])).decision_ms == 42_000

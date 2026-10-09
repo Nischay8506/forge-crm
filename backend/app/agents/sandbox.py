@@ -74,7 +74,7 @@ register_tool(ToolDef(
     description="Writes a pretend payment to the sandbox table. Nothing real changes.",
     args=PaymentArgs, run=_run, facts=("amount", "account_tier"),
     compute_facts=_facts, touches=_touches, describe=_describe,
-    evidence_class="customer_money",
+    evidence_class="customer_money", counter_fields=("amount",),
 ))
 
 

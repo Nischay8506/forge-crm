@@ -88,6 +88,8 @@ async def _rule(db: AsyncSession, r: PolicyRule) -> dict[str, Any]:
     return {"id": str(r.id), "agent_key": r.agent_key, "tool_key": r.tool_key,
             "conditions": r.conditions, "outcome": r.outcome,
             "approver_role_id": str(r.approver_role_id) if r.approver_role_id else None,
+            "approval_steps": [str(x) for x in r.steps],
+            "sla_hours": str(r.sla_hours) if r.sla_hours is not None else None,
             "note": r.note, "enabled": r.enabled, "sentence": await policy.sentence(db, r),
             "created_by": r.created_by, "updated_by": r.updated_by,
             "updated_at": r.updated_at}
@@ -233,7 +235,8 @@ async def draft_test_message(
     ctx = await runtime.start_run(db, current.tenant_id, "sandbox", "try_message",
                                   _actor(current))
     out = await runtime.call_tool(db, ctx, "sandbox.draft_message", body.model_dump(),
-                                  recommendation="Test message asked for by a person")
+                                  recommendation="Test message asked for by a person",
+                                  recommend="approve", requested_by=_actor(current))
     await runtime.finish_run(db, ctx, summary={"status": out.status})
     return {"status": out.status, "summary": out.summary, "reasons": out.reasons,
             "decision_id": str(out.decision_id) if out.decision_id else None,
@@ -250,7 +253,8 @@ async def try_sandbox(
     gate does with it (done, waiting for a person, or blocked, and why)."""
     ctx = await runtime.start_run(db, current.tenant_id, "sandbox", "try_it", _actor(current))
     out = await runtime.call_tool(db, ctx, "sandbox.record_payment", body.model_dump(),
-                                  recommendation="Test payment asked for on the Agents screen")
+                                  recommendation="Test payment asked for on the Agents screen",
+                                  recommend="approve", requested_by=_actor(current))
     await runtime.finish_run(db, ctx, summary={"status": out.status})
     return {"status": out.status, "summary": out.summary, "reasons": out.reasons,
             "decision_id": str(out.decision_id) if out.decision_id else None,
@@ -313,25 +317,46 @@ class RuleIn(BaseModel):
     conditions: list[Condition] = []
     outcome: Literal["allow", "ask_person", "block"]
     approver_role_id: uuid.UUID | None = None
+    # H1: the roles that decide, in order. Empty with approver_role_id set = one step.
+    approval_steps: list[uuid.UUID] = []
+    # H4: deadline in working hours for cards from this rule; empty = company default.
+    sla_hours: Decimal | None = Field(default=None, max_digits=6, decimal_places=2)
     note: str | None = Field(default=None, max_length=300)
     enabled: bool = True
 
+    def chain(self) -> list[uuid.UUID]:
+        if self.approval_steps:
+            return list(self.approval_steps)
+        return [self.approver_role_id] if self.approver_role_id else []
+
+
+def _rule_data(body: RuleIn) -> dict[str, Any]:
+    data = body.model_dump(mode="json")
+    data["approval_steps"] = [str(r) for r in body.chain()]
+    return data
+
 
 async def _checked(db: AsyncSession, body: RuleIn) -> dict[str, Any]:
-    data = body.model_dump(mode="json")
+    data = _rule_data(body)
     problems = policy.validate(data)
-    if body.approver_role_id and await db.get(Role, body.approver_role_id) is None:
-        problems.append("That role does not exist")
+    for rid in body.chain():
+        if await db.get(Role, rid) is None:
+            problems.append("That role does not exist")
+            break
     if problems:
         raise ValidationFailed(problems)
-    data["approver_role_id"] = body.approver_role_id
+    chain_ = body.chain()
+    data["approver_role_id"] = chain_[0] if chain_ else None
+    data["sla_hours"] = body.sla_hours
     return data
 
 
 def _snapshot(r: PolicyRule) -> dict[str, Any]:
     return {"agent_key": r.agent_key, "tool_key": r.tool_key, "conditions": r.conditions,
-            "outcome": r.outcome, "approver_role_id": r.approver_role_id, "note": r.note,
-            "enabled": r.enabled}
+            "outcome": r.outcome, "approver_role_id": r.approver_role_id,
+            "approval_steps": [str(x) for x in r.steps],
+            "sla_hours": str(r.sla_hours) if r.sla_hours is not None else None,
+            "note": r.note, "enabled": r.enabled}
 
 
 @router.get("/policies/catalog")
@@ -373,11 +398,13 @@ async def preview_policy(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """The sentence a draft rule would read as, and anything wrong with it."""
-    data = body.model_dump(mode="json")
+    data = _rule_data(body)
     problems = policy.validate(data)
     sentence = None
     if not problems:
-        draft = PolicyRule(**{**data, "approver_role_id": body.approver_role_id})
+        chain_ = body.chain()
+        draft = PolicyRule(**{**data, "approver_role_id": chain_[0] if chain_ else None,
+                              "sla_hours": body.sla_hours})
         sentence = await policy.sentence(db, draft)
     return {"sentence": sentence, "problems": problems}
 

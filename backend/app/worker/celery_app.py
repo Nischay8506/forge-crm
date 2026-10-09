@@ -24,6 +24,9 @@ celery_app.conf.update(
         "audit-seal": {"task": "forge.audit_seal", "schedule": crontab(minute=0)},
         "audit-retention": {"task": "forge.audit_retention",
                             "schedule": crontab(hour=21, minute=30)},
+        # F12.3: approval reminders, deadlines and escalation every minute; bottleneck
+        # alerts every 15 minutes (H4, H9).
+        "inbox-tick": {"task": "forge.inbox_tick", "schedule": crontab()},
     },
 )
 celery_app.autodiscover_tasks(["app.worker"], related_name="tasks")

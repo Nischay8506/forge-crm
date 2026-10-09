@@ -26,6 +26,11 @@ class NotFound(AppError):
     code = "not_found"
 
 
+class Conflict(AppError):
+    status_code = 409
+    code = "conflict"
+
+
 class ValidationFailed(AppError):
     """One or more problems with submitted data, listed for the form."""
 

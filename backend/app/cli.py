@@ -16,6 +16,10 @@ Key that encrypts the audit trail's evidence (app/audit/evidence.py):
 
     uv run python -m app.cli new-evidence-key        # prints a key for EVIDENCE_KEYS
     uv run python -m app.cli rotate-evidence         # re-encrypts under the first key
+
+Browser push notifications for the approval inbox (app/approvals/push.py):
+
+    uv run python -m app.cli new-push-keys           # prints VAPID_PUBLIC_KEY/PRIVATE_KEY
 """
 
 import argparse
@@ -90,6 +94,7 @@ def main() -> None:
     ek = sub.add_parser("new-evidence-key")
     ek.add_argument("--id", help="key id (default e<today>)")
     sub.add_parser("rotate-evidence")
+    sub.add_parser("new-push-keys")
     a = p.parse_args()
     if a.cmd == "create-tenant":
         asyncio.run(create_tenant(a.name, a.slug, a.admin_email, a.admin_name, a.admin_password))
@@ -115,6 +120,15 @@ def main() -> None:
         print(new_evidence_key(a.id))
     elif a.cmd == "rotate-evidence":
         asyncio.run(rotate_evidence())
+    elif a.cmd == "new-push-keys":
+        from app.approvals.push import new_keys
+
+        public, private = new_keys()
+        print("Add these to backend/.env and restart the API and the worker. Changing them "
+              "later means everyone turns notifications on again:")
+        print(f"VAPID_PUBLIC_KEY={public}")
+        print(f"VAPID_PRIVATE_KEY={private}")
+        print("VAPID_SUBJECT=mailto:<an address the push services can reach you at>")
 
 
 if __name__ == "__main__":

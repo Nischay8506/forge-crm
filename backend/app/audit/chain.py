@@ -54,6 +54,9 @@ SKELETON_KEYS = frozenset({
     "model", "provider", "tier", "task", "input_tokens", "output_tokens", "removed",
     "classes", "periods", "profile", "channel", "ai_generated", "stores", "kept",
     "requested_by", "direction",
+    # Step 5 (F12.3): a decision's place in its chain, timing and card fingerprint.
+    "approval_steps", "sla_hours", "recommended", "counter_of", "step", "steps",
+    "on_behalf_of", "card_hash", "decision_ms", "fields", "option",
 })
 NOT_SKELETON = frozenset({"external_id", "erp_customer", "idempotency_key"})
 

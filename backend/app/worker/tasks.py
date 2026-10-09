@@ -1,6 +1,7 @@
 import asyncio
 
 from app.agents.registry import load_definitions
+from app.approvals import notify as inbox_notify
 from app.db import dispose_engine
 from app.events.outbox import dispatch_batch
 from app.steward import handlers as steward_handlers
@@ -9,6 +10,7 @@ from app.worker.celery_app import celery_app
 # Outbox handlers and agent definitions must be registered in the worker process
 # before delivery starts.
 steward_handlers.register()
+inbox_notify.register()
 load_definitions()
 
 
@@ -110,3 +112,17 @@ async def _audit_retention() -> dict:
 @celery_app.task(name="forge.audit_retention")
 def audit_retention() -> dict:
     return asyncio.run(_audit_retention())
+
+
+async def _inbox_tick() -> dict:
+    from app.approvals.sla import tick_all
+
+    try:
+        return await tick_all()
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.inbox_tick")
+def inbox_tick() -> dict:
+    return asyncio.run(_inbox_tick())

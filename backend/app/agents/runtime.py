@@ -29,9 +29,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.gate import GateResult, evaluate
 from app.agents.registry import AGENTS, LEVELS, TOOLS, AgentContext, Touches
 from app.agents.versions import current_version
+from app.approvals.calendar import calendar
+from app.approvals.chain import close_steps, open_steps, start_step
+from app.approvals.notify import notify
 from app.audit import chain
 from app.core.errors import AppError, NotFound
-from app.models import AgentRun, Decision
+from app.models import AgentRun, Decision, DecisionStep
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +47,12 @@ class ToolOutcome:
     decision_id: uuid.UUID | None = None
     reasons: list[str] = field(default_factory=list)
     error: str | None = None
+    # The audit records this call wrote: the proposal, and how it ended (executed,
+    # failed, blocked or a person asked), for the decision's references (safeguard 6).
+    audit: dict[str, int] = field(default_factory=dict)
+
+
+RECOMMENDED_OPTIONS = ("approve", "reject", "counter")
 
 
 async def start_run(session: AsyncSession, tenant_id: uuid.UUID, agent_key: str, trigger: str,
@@ -101,7 +110,15 @@ def _result_ids(result: dict[str, Any]) -> dict[str, Any]:
 
 async def call_tool(session: AsyncSession, ctx: AgentContext, tool_key: str,
                     args: dict[str, Any] | BaseModel, *, recommendation: str | None = None,
-                    dedupe_key: str | None = None, approved: bool = False) -> ToolOutcome:
+                    recommend: str | None = None, requested_by: str | None = None,
+                    counter_of: uuid.UUID | None = None, dedupe_key: str | None = None,
+                    approved: bool = False) -> ToolOutcome:
+    """Run one tool call through the gate. When a person must decide, the card gets
+    `recommend` (the option the agent recommends: approve, reject or counter, H6) with
+    `recommendation` as its reason, and `requested_by` (the person who asked for the
+    action, who may never decide it)."""
+    if recommend is not None and recommend not in RECOMMENDED_OPTIONS:
+        raise ValueError(f"Unknown recommended option {recommend}")
     tool = TOOLS[tool_key]
     try:
         parsed = args if isinstance(args, tool.args) else tool.args.model_validate(
@@ -115,19 +132,20 @@ async def call_tool(session: AsyncSession, ctx: AgentContext, tool_key: str,
     kw = _audit_kw(ctx, touches, tool.evidence_class)
     stored_args = parsed.model_dump(mode="json")
     inputs = await _inputs(session, touches) + ctx.take_seen()
-    await chain.append(session, ctx.tenant_id, "action.proposed", **kw, data={
+    proposed = await chain.append(session, ctx.tenant_id, "action.proposed", **kw, data={
         "tool": tool.key, "version": tool.version, "agent_version": ctx.agent_version,
         "summary": summary, "args": stored_args, "facts": facts, "inputs": inputs,
         "outcome": gate.outcome, "level": gate.level, "checks": gate.checks,
         "rule_ids": gate.rule_ids, "approved_by": ctx.approved_by})
 
     if gate.outcome == "block":
-        await chain.append(session, ctx.tenant_id, "action.blocked", **kw,
-                           data={"tool": tool.key, "reasons": gate.reasons})
+        blocked = await chain.append(session, ctx.tenant_id, "action.blocked", **kw,
+                                     data={"tool": tool.key, "reasons": gate.reasons})
         if not gate.hard_block and not approved:
             await _notice(session, ctx, tool.key, f"Blocked: {summary}", gate, stored_args,
                           facts, touches, dedupe_key)
-        return ToolOutcome("blocked", summary, reasons=gate.reasons)
+        return ToolOutcome("blocked", summary, reasons=gate.reasons,
+                           audit={"proposed": proposed.seq, "outcome": blocked.seq})
 
     if gate.outcome == "ask_person":
         if dedupe_key:
@@ -136,18 +154,29 @@ async def call_tool(session: AsyncSession, ctx: AgentContext, tool_key: str,
             if existing is not None:
                 return ToolOutcome("waiting", summary, decision_id=existing.id,
                                    reasons=gate.reasons)
+        asker = requested_by or (stored_args.get("requested_by")
+                                 if isinstance(stored_args.get("requested_by"), str) else None)
         d = Decision(tenant_id=ctx.tenant_id, kind="approval", status="pending",
                      agent_key=ctx.agent.key, tool_key=tool.key, run_id=ctx.run_id,
-                     title=summary, recommendation=recommendation, reasons=gate.reasons,
+                     title=summary, recommendation=recommendation,
+                     recommended_option=recommend, reasons=gate.reasons,
                      args=stored_args, facts=facts, checks=gate.checks,
                      approver_role_id=gate.approver_role_id, dedupe_key=dedupe_key,
-                     **_subject(touches))
+                     requested_by=asker, counter_of=counter_of, **_subject(touches))
+        cal, cfg = await calendar(session, ctx.tenant_id)
+        open_steps(d, gate.approval_steps, gate.sla_hours or cfg["default_sla_hours"], cal,
+                   cfg["reminder_pct"])
         session.add(d)
         await session.flush()
-        await chain.append(session, ctx.tenant_id, "decision.requested", **kw,
-                           data={"decision_id": d.id, "tool": tool.key, "reasons": gate.reasons,
-                                 "approver_role_id": gate.approver_role_id})
-        return ToolOutcome("waiting", summary, decision_id=d.id, reasons=gate.reasons)
+        asked = await chain.append(session, ctx.tenant_id, "decision.requested", **kw, data={
+            "decision_id": d.id, "tool": tool.key, "reasons": gate.reasons,
+            "approver_role_id": gate.approver_role_id,
+            "approval_steps": [str(r) for r in gate.approval_steps],
+            "sla_hours": str(d.sla_hours), "recommended": recommend,
+            "requested_by": asker, "counter_of": counter_of})
+        await notify(session, d, "new")
+        return ToolOutcome("waiting", summary, decision_id=d.id, reasons=gate.reasons,
+                           audit={"proposed": proposed.seq, "outcome": asked.seq})
 
     try:
         async with session.begin_nested():
@@ -156,17 +185,19 @@ async def call_tool(session: AsyncSession, ctx: AgentContext, tool_key: str,
         msg = exc.message if isinstance(exc, AppError) else f"{type(exc).__name__}: {exc}"
         if not isinstance(exc, AppError):
             log.exception("tool %s failed", tool.key)
-        await chain.append(session, ctx.tenant_id, "action.failed", **kw,
-                           data={"tool": tool.key, "error": msg[:1000]})
-        return ToolOutcome("failed", summary, error=msg)
-    await chain.append(session, ctx.tenant_id, "action.executed", **kw,
-                       data={"tool": tool.key, "result": result,
-                             "result_ids": _result_ids(result)})
+        failed = await chain.append(session, ctx.tenant_id, "action.failed", **kw,
+                                    data={"tool": tool.key, "error": msg[:1000]})
+        return ToolOutcome("failed", summary, error=msg,
+                           audit={"proposed": proposed.seq, "outcome": failed.seq})
+    executed = await chain.append(session, ctx.tenant_id, "action.executed", **kw,
+                                  data={"tool": tool.key, "result": result,
+                                        "result_ids": _result_ids(result)})
     if gate.notify:
         await _notice(session, ctx, tool.key, summary, gate, stored_args, facts, touches, None,
                       reasons=[f"Done by {ctx.agent.name} at {LEVELS[1].split(':')[0]}: "
                                "it acts, then tells a person"], result=result)
-    return ToolOutcome("done", summary, result=result)
+    return ToolOutcome("done", summary, result=result,
+                       audit={"proposed": proposed.seq, "outcome": executed.seq})
 
 
 def _subject(touches: Touches) -> dict[str, Any]:
@@ -194,36 +225,93 @@ async def _notice(session: AsyncSession, ctx: AgentContext, tool_key: str, title
 
 # Deciding --------------------------------------------------------------------------
 
+def _decision_kw(d: Decision, actor: str) -> dict[str, Any]:
+    tool = TOOLS.get(d.tool_key)
+    return {"actor": actor, "agent_key": d.agent_key, "run_id": d.run_id,
+            "record_type": d.record_type, "record_id": d.record_id,
+            "evidence_class": tool.evidence_class if tool else None,
+            "account_id": d.record_id if d.record_type == "account" else None,
+            "contact_id": d.record_id if d.record_type == "contact" else None}
+
+
 async def decide(session: AsyncSession, decision_id: uuid.UUID, *, approve: bool, actor: str,
-                 note: str | None = None, decision_ms: int | None = None) -> Decision:
+                 note: str | None = None, decision_ms: int | None = None,
+                 on_behalf_of: str | None = None, card: dict[str, Any] | None = None,
+                 card_hash: str | None = None) -> Decision:
+    """Record one person's decision on the card's current step (the caller has checked
+    they may decide it, and that the card is the one they saw). A rejection ends the
+    card. An approval starts the next step of the chain, or, after the last one, runs
+    the action through the gate again (H1, safeguard 1). The audit record keeps the
+    card as shown and its fingerprint (H7, safeguard 6)."""
     d = await session.get(Decision, decision_id, with_for_update=True, populate_existing=True)
     if d is None or d.kind != "approval":
         raise NotFound("Decision not found")
     if d.status != "pending":
         raise AppError(f"This decision is already {d.status}")
-    d.decided_by, d.decided_at, d.note = actor, datetime.now(UTC), (note or "").strip() or None
-    d.decision_ms = decision_ms
-    tool = TOOLS.get(d.tool_key)
-    kw = {"actor": actor, "agent_key": d.agent_key, "run_id": d.run_id,
-          "record_type": d.record_type, "record_id": d.record_id,
-          "evidence_class": tool.evidence_class if tool else None,
-          "account_id": d.record_id if d.record_type == "account" else None,
-          "contact_id": d.record_id if d.record_type == "contact" else None}
+    now = datetime.now(UTC)
+    note = (note or "").strip() or None
+    step = d.current_step
+    if step is not None:
+        step.decided_by, step.on_behalf_of, step.decided_at = actor, on_behalf_of, now
+        step.note, step.decision_ms, step.card_hash = note, decision_ms, card_hash
+    kw = _decision_kw(d, actor)
+    data = {"decision_id": d.id, "note": note, "decision_ms": decision_ms,
+            "on_behalf_of": on_behalf_of, "step": d.step_index + 1, "steps": len(d.steps),
+            "role_id": step.role_id if step else None, "card_hash": card_hash, "card": card,
+            "recommended": d.recommended_option}
     if not approve:
+        if step is not None:
+            step.status = "rejected"
+        close_steps(d, "cancelled")
         d.status = "rejected"
-        await chain.append(session, d.tenant_id, "decision.rejected", **kw,
-                           data={"decision_id": d.id, "note": d.note,
-                                 "decision_ms": decision_ms})
+        d.decided_by, d.decided_at, d.note, d.decision_ms = actor, now, note, decision_ms
+        rec = await chain.append(session, d.tenant_id, "decision.rejected", **kw, data=data)
+        d.result = {"status": "rejected", "result": {}, "error": None, "reasons": [],
+                    "audit": {"decision": rec.seq}}
         return d
-    await chain.append(session, d.tenant_id, "decision.approved", **kw,
-                       data={"decision_id": d.id, "note": d.note, "decision_ms": decision_ms})
+    if step is not None:
+        step.status = "approved"
+    rec = await chain.append(session, d.tenant_id, "decision.approved", **kw, data=data)
+    # The next step not yet approved (a counter can approve a later step ahead).
+    nxt = next((s for s in d.steps if s.position > d.step_index and s.status != "approved"),
+               None)
+    if nxt is not None:
+        d.step_index = nxt.position
+        cal, cfg = await calendar(session, d.tenant_id)
+        start_step(nxt, d.sla_hours or cfg["default_sla_hours"], cal, cfg["reminder_pct"], now)
+        d.approver_role_id = nxt.role_id
+        await notify(session, d, "step")
+        return d
+    d.decided_by, d.decided_at, d.note, d.decision_ms = actor, now, note, decision_ms
+    return await _carry_out(session, d, actor, rec.seq)
+
+
+async def approve_ahead(session: AsyncSession, d: Decision, step: DecisionStep, *, actor: str,
+                        on_behalf_of: str | None, note: str | None,
+                        card: dict[str, Any] | None, card_hash: str | None) -> None:
+    """Record an approval for a later step before its turn (a counter, H2): the
+    earlier steps still decide first, and this step is then passed over."""
+    now = datetime.now(UTC)
+    step.status, step.decided_by, step.on_behalf_of, step.decided_at = (
+        "approved", actor, on_behalf_of, now)
+    step.note, step.card_hash = note, card_hash
+    await chain.append(session, d.tenant_id, "decision.approved", **_decision_kw(d, actor),
+                       data={"decision_id": d.id, "note": note, "on_behalf_of": on_behalf_of,
+                             "step": step.position + 1, "steps": len(d.steps),
+                             "role_id": step.role_id, "card_hash": card_hash, "card": card,
+                             "recommended": d.recommended_option, "ahead": True})
+
+
+async def _carry_out(session: AsyncSession, d: Decision, actor: str,
+                     decision_seq: int) -> Decision:
+    """Every step approved: run the action as proposed, through the gate again."""
     run = await session.get(AgentRun, d.run_id) if d.run_id else None
     ctx = AgentContext(tenant_id=d.tenant_id, agent=AGENTS[d.agent_key], run_id=d.run_id,
                        approved_by=actor, agent_version=run.agent_version if run else None)
     outcome = await call_tool(session, ctx, d.tool_key, d.args, approved=True)
     d.status = "approved" if outcome.status == "done" else "failed"
     d.result = {"status": outcome.status, "result": outcome.result, "error": outcome.error,
-                "reasons": outcome.reasons}
+                "reasons": outcome.reasons, "audit": {"decision": decision_seq, **outcome.audit}}
     return d
 
 
@@ -242,6 +330,11 @@ async def supersede(session: AsyncSession, dedupe_key: str, actor: str, why: str
         update(Decision).where(Decision.dedupe_key == dedupe_key, Decision.status == "pending")
         .values(status="superseded", decided_by=actor, decided_at=datetime.now(UTC), note=why)
         .returning(Decision.id).execution_options(synchronize_session="fetch"))).all()
+    if rows:
+        await session.execute(
+            update(DecisionStep).where(DecisionStep.decision_id.in_([r[0] for r in rows]),
+                                       DecisionStep.status.in_(("waiting", "pending")))
+            .values(status="superseded").execution_options(synchronize_session="fetch"))
     return len(rows)
 
 

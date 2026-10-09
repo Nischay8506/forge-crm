@@ -57,7 +57,7 @@ async def process_record(session: AsyncSession, record_type: str,
                 session, ctx, "steward.merge_records",
                 {"record_type": record_type, "survivor_id": survivor.id,
                  "merged_id": loser.id, "candidate_id": cand.id},
-                recommendation=_recommendation(record_type, f.result),
+                recommendation=_recommendation(record_type, f.result), recommend="approve",
                 dedupe_key=merge_dedupe_key(cand.id))
             if out.status == "done":
                 summary["auto_merged"] += 1

@@ -186,7 +186,8 @@ async def request_create(session: AsyncSession, tenant_id: uuid.UUID, *, connect
                           str(w.id))
     outcome: ToolOutcome = await call_tool(
         session, ctx, linking.CREATE_TOOL, {"write_id": w.id, "requested_by": actor},
-        recommendation=f"Create {acc.name} as a customer in {conn.name}",
+        recommendation=f"Create {acc.name} as a customer in {conn.name}", recommend="approve",
+        requested_by=actor if actor.startswith("user:") else None,
         dedupe_key=f"erp.create:{w.id}")
     await finish_run(session, ctx, summary={"status": outcome.status})
     if outcome.status == "waiting":

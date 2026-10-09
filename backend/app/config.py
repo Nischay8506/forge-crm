@@ -68,6 +68,14 @@ class Settings(BaseSettings):
     # Required: without it nothing that writes to the audit trail can run.
     evidence_keys: str | None = None
 
+    # Browser push notifications for the approval inbox (decision H5). Make a key pair
+    # with `uv run python -m app.cli new-push-keys`; unset = push is off.
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
+    vapid_subject: str = "mailto:admin@example.com"
+    # Where people open Forge (links in push notifications).
+    public_web_url: str = "http://localhost:5173"
+
     outbox_batch_size: int = 100
     outbox_max_attempts: int = 8
 

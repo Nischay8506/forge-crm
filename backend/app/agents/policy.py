@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.registry import AGENTS, FACTS, OPS, TOOLS
+from app.approvals.calendar import hours_label
 from app.core.format import inr
 from app.models import PolicyRule, Role
 
@@ -75,8 +76,19 @@ def validate(data: dict[str, Any]) -> list[str]:
         problems.append(f"{AGENTS[agent].name} cannot use '{tool}'")
     if data.get("outcome") not in OUTCOMES:
         problems.append("Outcome must be allow, ask_person or block")
-    if data.get("approver_role_id") and data.get("outcome") != "ask_person":
+    steps = data.get("approval_steps") or []
+    if (data.get("approver_role_id") or steps) and data.get("outcome") != "ask_person":
         problems.append("Only an 'ask a person' rule can name who decides")
+    if len(steps) > 5:
+        problems.append("A chain has at most 5 steps")
+    if len({str(s) for s in steps}) != len(steps):
+        problems.append("A role can appear only once in a chain")
+    if data.get("sla_hours") is not None:
+        if data.get("outcome") != "ask_person":
+            problems.append("Only an 'ask a person' rule has a deadline")
+        n = _num(data["sla_hours"])
+        if n is None or not Decimal("0.25") <= n <= Decimal("240"):
+            problems.append("The deadline must be between 0.25 and 240 working hours")
     for c in data.get("conditions") or []:
         fact = FACTS.get(c.get("fact", ""))
         if fact is None:
@@ -121,10 +133,16 @@ async def sentence(session: AsyncSession, rule: PolicyRule) -> str:
             parts.append(f"{label[0].lower()}{label[1:]} {OPS.get(c['op'], c['op'])} "
                          f"{display_value(c['fact'], c.get('value'))}")
     text = " and ".join(parts) + ", " + OUTCOMES.get(rule.outcome, rule.outcome)
-    if rule.approver_role_id:
-        role = await session.get(Role, rule.approver_role_id)
-        if role is not None:
-            text += f" ({role.name} decides)"
+    names = [r.name for rid in rule.steps if (r := await session.get(Role, rid)) is not None]
+    extra = []
+    if len(names) == 1:
+        extra.append(f"{names[0]} decides")
+    elif names:
+        extra.append(", then ".join(names) + " decide in turn")
+    if rule.sla_hours is not None and rule.outcome == "ask_person":
+        extra.append(f"within {hours_label(rule.sla_hours)}")
+    if extra:
+        text += f" ({', '.join(extra)})"
     return text + "."
 
 
@@ -132,7 +150,26 @@ def strongest(rules: list[PolicyRule]) -> PolicyRule | None:
     return max(rules, key=lambda r: STRENGTH.get(r.outcome, 0), default=None)
 
 
+def chain_for(rules: list[PolicyRule]) -> list[uuid.UUID]:
+    """The roles that must approve, in order, when several 'ask a person' rules match
+    (H1, safeguard 1: no required stage can be skipped). The longest chain sets the
+    order; roles only other rules require follow it, each once. Empty: anyone who can
+    decide."""
+    chains = sorted((r.steps for r in rules if r.outcome == "ask_person"), key=len,
+                    reverse=True)
+    out: list[uuid.UUID] = []
+    for c in chains:
+        out += [role for role in c if role not in out]
+    return out
+
+
 def role_for(rules: list[PolicyRule]) -> uuid.UUID | None:
-    """The person to ask: the first 'ask a person' rule that names a role."""
-    return next((r.approver_role_id for r in rules
-                 if r.outcome == "ask_person" and r.approver_role_id), None)
+    """The first role to ask."""
+    chain = chain_for(rules)
+    return chain[0] if chain else None
+
+
+def sla_for(rules: list[PolicyRule]) -> Decimal | None:
+    """The tightest deadline the matching 'ask a person' rules set, if any (H4)."""
+    hours = [r.sla_hours for r in rules if r.outcome == "ask_person" and r.sla_hours]
+    return min(hours) if hours else None

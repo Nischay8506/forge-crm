@@ -50,7 +50,7 @@ async def request_erasure(
         db, ctx, ERASE_TOOL, {"contact_id": body.contact_id, "reason": body.reason,
                               "requested_by": actor},
         recommendation="Erase, unless the law or an open dispute needs this person's data",
-        dedupe_key=f"privacy.erase:{body.contact_id}")
+        recommend="approve", requested_by=actor, dedupe_key=f"privacy.erase:{body.contact_id}")
     await runtime.finish_run(db, ctx, summary={"status": out.status})
     return {"status": out.status, "decision_id": str(out.decision_id) if out.decision_id
             else None, "reasons": out.reasons, "error": out.error}

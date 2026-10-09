@@ -85,6 +85,9 @@ class ToolDef:
     # with four_eyes, never the person who asked (args["requested_by"]).
     decider_permission: str | None = None
     four_eyes: bool = False
+    # Arguments a person may change when they counter (decision H2), e.g. ("amount",).
+    # The changed action goes through the gate again before anything runs.
+    counter_fields: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
