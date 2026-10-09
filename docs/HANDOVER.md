@@ -218,6 +218,7 @@ backend/
       controls.py        levels and overrides, kill-switches, takeovers, account tiers
       sandbox.py         test-only Sandbox Agent (pretend payments with amounts)
     audit/chain.py     append() and verify() for the per-tenant hash chain (T6)
+    audit/replay.py    run replay (F12.4): runs list, one run step by step, per-step intact check
     integrations/      F12.6 (Step 3; start here: adapter.py, then runner.py):
       contracts.py       the shared contracts (Customer, Item, Price, Order, Invoice, Receipt, Stock)
       adapter.py         the adapter interface, ConnectorError and its causes (for alerts)
@@ -254,8 +255,8 @@ frontend/
                        CSV import, hygiene dashboard
   src/features/decisions Decisions ("Waiting for you", notices, done) and the nav count
   src/features/agents  Agents (what each can do, level, overrides, stop, sandbox "try it"),
-                       policy rules with a rule builder, stops, audit log with chain check,
-                       TakeoverPanel (used on the account page)
+                       policy rules with a rule builder, stops, Runs + step-by-step replay,
+                       audit log with chain check, TakeoverPanel (used on the account page)
   src/features/integrations Connections, setup wizard, connection page, Customers and Code lists
                        (mapping studio), Outside AI tools (MCP tokens), AccountErpCard (account page)
 infra/                 local Postgres + Redis (Docker); erpnext/ = a local ERPNext 15/16 to test with
@@ -311,9 +312,24 @@ docs/                  this file, BUILD_LOG.md
 
 ## 6. Current state (end of 2026-10-09)
 
-Steps 0, 1, 2 and 3 are built. Tests: 127 backend (plus 3 that run only against a live ERPNext; they
-pass on ERPNext 16.50.0 and 15.122.0), 11 frontend, all passing; every new screen was checked in a
-browser.
+Steps 0, 1, 2 and 3 are built; Step 4 has started. Tests: 129 backend (plus 3 that run only against a
+live ERPNext; they pass on ERPNext 16.50.0 and 15.122.0), 13 frontend, all passing; every new screen
+was checked in a browser.
+
+### Step 4 (F12.4 Audit replay, redaction, retention): in progress
+Waiting for Nischay's answers to R1-R8 (`plans/Step4_Audit_Replay_Questions.md`). Built so far, because
+every option needs it:
+- **Agents > Runs**: every agent run, newest first, with what started it and how its steps ended
+  (done, waiting for a person, asked, blocked, failed). Filters by agent or by record
+  ("What agents did here" on an account page).
+- **Replay** (`/agents/runs/<id>`): one run step by step with timings: what the agent proposed, every
+  gate check, the facts, the decision card (who decided, when, their note), the action's result or
+  error, and model calls made under the run (`llm_calls.trace_id` = run id). It recomputes each step's
+  fingerprint and its link to the record before it, and names any step changed or removed.
+  Opened from a decision card ("How this came about"), an audit log row, an agent's page or an account.
+- API: `GET /audit/runs` and `GET /audit/runs/{id}` (`audit.read`).
+- Fix: runs started by outside AI tools (MCP) and by "create in ERPNext" now record when they finish.
+- Checked in a browser: from a decided card to the full replay of its run in 0.3 s.
 
 ### Step 3 (F12.6 Integration Framework + ERPNext)
 What a person sees (menu **Integrations**, visible with `integrations.read`):

@@ -155,3 +155,61 @@ export interface TryResult {
   decision_id: string | null
   error: string | null
 }
+
+export interface RunTally { done: number; asked: number; blocked: number; failed: number }
+
+export interface RunRow {
+  id: string
+  agent_key: string
+  agent_name: string
+  trigger: string
+  trigger_ref: string | null
+  status: string
+  started_at: string
+  finished_at: string | null
+  summary: Record<string, unknown> | null
+  tally: RunTally
+  waiting: number
+}
+
+export interface ReplayDecision {
+  id: string
+  kind: DecisionCard["kind"]
+  status: string
+  title: string
+  tool_title: string
+  reasons: string[]
+  recommendation: string | null
+  approver_role_id: string | null
+  created_at: string
+  decided_by: string | null
+  decided_at: string | null
+  note: string | null
+  result: DecisionCard["result"]
+}
+
+export interface ModelCall {
+  id: string
+  created_at: string
+  task: string
+  tier: string
+  provider: string
+  model: string
+  input_tokens: number
+  output_tokens: number
+  cost_usd: string
+  latency_ms: number
+  status: string
+  error: string | null
+}
+
+export interface StepCheck { ok: boolean; checked: number; problems: { seq: number; problem: string }[] }
+
+export interface Replay {
+  run: RunRow
+  steps: AuditRow[]
+  decisions: ReplayDecision[]
+  model_calls: ModelCall[]
+  records: { record_type: string; record_id: string; name: string | null }[]
+  integrity: StepCheck
+}

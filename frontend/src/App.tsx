@@ -20,6 +20,8 @@ import { AgentDetailPage } from '@/features/agents/AgentDetailPage'
 import { AgentsLayout } from '@/features/agents/AgentsLayout'
 import { AgentsPage } from '@/features/agents/AgentsPage'
 import { AuditPage } from '@/features/agents/AuditPage'
+import { RunsPage } from '@/features/agents/RunsPage'
+import { ReplayPage } from '@/features/agents/ReplayPage'
 import { PoliciesPage } from '@/features/agents/PoliciesPage'
 import { StopsPage } from '@/features/agents/StopsPage'
 import { DecisionsPage } from '@/features/decisions/DecisionsPage'
@@ -72,6 +74,8 @@ const router = createBrowserRouter([
           { path: 'list/:key', element: <AgentDetailPage /> },
           { path: 'policies', element: <PoliciesPage /> },
           { path: 'stops', element: <StopsPage /> },
+          { path: 'runs', element: <RunsPage /> },
+          { path: 'runs/:runId', element: <ReplayPage /> },
           { path: 'audit', element: <AuditPage /> },
         ],
       },

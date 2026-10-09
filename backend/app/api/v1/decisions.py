@@ -16,12 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents import runtime
 from app.agents.policy import display_value
 from app.agents.registry import AGENTS, FACTS, TOOLS, load_definitions
+from app.audit.replay import record_name
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import Forbidden, NotFound
 from app.core.permissions import ALL, has_permission
 from app.db import get_db
 from app.integrations.alerts import CARD_TITLES, acknowledge_alert
-from app.models import Account, Contact, Decision, ErpConnection, Role, UserRole
+from app.models import Decision, Role, UserRole
 
 router = APIRouter(prefix="/decisions", tags=["decisions"])
 load_definitions()
@@ -43,16 +44,6 @@ def _can_decide(d: Decision, current: CurrentUser, roles: set[uuid.UUID]) -> boo
         return False
     return (d.approver_role_id is None or ALL in current.permissions
             or d.approver_role_id in roles)
-
-
-async def _record_name(db: AsyncSession, d: Decision) -> str | None:
-    if d.record_type == "account" and d.record_id:
-        return await db.scalar(select(Account.name).where(Account.id == d.record_id))
-    if d.record_type == "contact" and d.record_id:
-        return await db.scalar(select(Contact.full_name).where(Contact.id == d.record_id))
-    if d.record_type == "erp_connection" and d.record_id:
-        return await db.scalar(select(ErpConnection.name).where(ErpConnection.id == d.record_id))
-    return None
 
 
 INTEGRATION_KINDS = ("alert", "task")
@@ -78,7 +69,8 @@ async def _out(db: AsyncSession, d: Decision, current: CurrentUser,
         "checks": d.checks,
         "approver_role": {"id": str(role.id), "name": role.name} if role else None,
         "record_type": d.record_type, "record_id": str(d.record_id) if d.record_id else None,
-        "record_name": await _record_name(db, d), "run_id": str(d.run_id) if d.run_id else None,
+        "record_name": await record_name(db, d.record_type, d.record_id),
+        "run_id": str(d.run_id) if d.run_id else None,
         "created_at": d.created_at, "decided_by": d.decided_by, "decided_at": d.decided_at,
         "note": d.note, "result": d.result, "can_decide": _can_decide(d, current, roles),
     }

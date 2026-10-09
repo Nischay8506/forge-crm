@@ -5,6 +5,26 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-09 (Day 2, afternoon): Step 4 started, run replay built
+
+**Decisions (Nischay):** X1 A (integration defaults kept); start Step 4 before his own Step 3 check.
+
+**Done**
+- Step 4 questions R1-R8 sent (`plans/Step4_Audit_Replay_Questions.md` in the project files). The main
+  finding: Step 2's chain hashes personal data inside each record, so retention and erasure can't remove
+  it without breaking the chain (R1); model prompts aren't kept (R2); a database owner could rewrite and
+  re-hash (R3).
+- Agents > Runs and the step-by-step replay of a run, with a per-step intact check, linked from decision
+  cards, the audit log, agent pages and accounts. Two tests (a full ask-approve-act run, and a changed
+  plus a removed record named in the replay); 129 backend + 13 frontend tests passing.
+
+**Problems found and fixed**
+- Runs started by outside AI tools and by "create in ERPNext" never recorded that they finished.
+
+**Not done / next**
+- Nischay's answers to R1-R8, then the evidence store, redaction, retention and message provenance.
+- Nischay's own Step 3 check in Docker Desktop (his PC needs Forge set up first).
+
 ## 2026-10-09 (Day 2, continued): Step 3 built, both F12.6 checks pass
 
 **Decisions (Nischay):** E1-E9, V1-V3 and U4 all A, with five safeguards (handover section 3);

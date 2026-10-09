@@ -287,7 +287,12 @@ export function AgentDetailPage() {
                 ))}
               </ul>
             )}
-            {canAudit && <Link to={`/agents/audit?agent=${a.key}`} className="text-[12.5px] text-teal-600 hover:underline">Full audit log</Link>}
+            {canAudit && (
+              <div className="flex gap-4">
+                <Link to={`/agents/runs?agent=${a.key}`} className="text-[12.5px] text-teal-600 hover:underline">Replay its runs</Link>
+                <Link to={`/agents/audit?agent=${a.key}`} className="text-[12.5px] text-teal-600 hover:underline">Full audit log</Link>
+              </div>
+            )}
           </CardContent>
         </Card>
 

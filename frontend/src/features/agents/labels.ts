@@ -1,4 +1,4 @@
-import type { AuditRow, Condition, FactInfo } from "./types"
+import type { AuditRow, Condition, FactInfo, RunRow } from "./types"
 
 type Tone = "teal" | "gold" | "green" | "red" | "amber" | "neutral"
 
@@ -156,3 +156,35 @@ export function conditionProblem(c: Condition, fact: FactInfo | undefined): stri
 export const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
 
 export const shortHash = (h: string) => `${h.slice(0, 8)}…${h.slice(-4)}`
+
+/** What started an agent run, in words. */
+export function triggerLabel(run: Pick<RunRow, "trigger" | "trigger_ref">): string {
+  const t = run.trigger
+  const ref = run.trigger_ref ?? ""
+  if (t === "try_it") return "Tried on the Agents screen"
+  if (t.endsWith(".check")) {
+    const noun = t.slice(0, -6).replace(/_/g, " ")
+    return `${/^[aeiou]/.test(noun) ? "An" : "A"} ${noun} was added or changed`
+  }
+  if (t.startsWith("mcp:")) return `Asked by ${t.slice(4)} (outside AI tool)`
+  if (t.startsWith("erp write requested by")) return "Someone asked to create a customer in the ERP"
+  if (t === "sync:sync") return ref ? `New customers read from ${ref}` : "New customers read from the ERP"
+  if (t === "sync:reconcile") return ref ? `Nightly comparison with ${ref}` : "Nightly comparison with the ERP"
+  if (t === "retry") return ref ? `A failed ERP record was retried (${ref})` : "A failed ERP record was retried"
+  return t
+}
+
+export const RUN_STATUS: Record<string, { label: string; tone: Tone }> = {
+  running: { label: "running", tone: "teal" },
+  succeeded: { label: "finished", tone: "neutral" },
+  failed: { label: "stopped by an error", tone: "red" },
+}
+
+/** "+1.4 s" after the run started. */
+export function offset(from: string, to: string): string {
+  const ms = new Date(to).getTime() - new Date(from).getTime()
+  if (ms < 1000) return `+${Math.max(ms, 0)} ms`
+  if (ms < 60_000) return `+${(ms / 1000).toFixed(1)} s`
+  if (ms < 3_600_000) return `+${Math.round(ms / 60_000)} min`
+  return `+${(ms / 3_600_000).toFixed(1)} h`
+}

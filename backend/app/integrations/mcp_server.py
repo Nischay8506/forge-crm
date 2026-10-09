@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.registry import load_definitions
-from app.agents.runtime import call_tool, start_run
+from app.agents.runtime import call_tool, finish_run, start_run
 from app.audit import chain
 from app.config import get_settings
 from app.core.errors import AppError
@@ -69,6 +69,7 @@ async def run_tool(client: McpClient, tool_key: str, args: dict[str, Any]) -> di
         ctx = await start_run(s, client.tenant_id, mcp_tools.AGENT_KEY, f"mcp:{client.name}",
                               str(client.id))
         outcome = await call_tool(s, ctx, tool_key, args)
+        await finish_run(s, ctx, summary={"status": outcome.status})
     if outcome.status == "done":
         return outcome.result
     raise AppError(outcome.error or "; ".join(outcome.reasons) or f"Not allowed ({outcome.status})")

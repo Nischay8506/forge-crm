@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useSearchParams } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query"
 import { api } from "@/config/api"
 import { Button } from "@/components/ui/Button"
@@ -30,8 +30,12 @@ function AuditItem({ row }: { row: AuditRow }) {
         <div className="mt-2 ml-12 space-y-1">
           <div className="font-mono text-[11px] text-ink-500">
             {row.kind} · hash {shortHash(row.hash)} · previous {shortHash(row.prev_hash)}
-            {row.run_id && <> · run {row.run_id.slice(0, 8)}</>}
           </div>
+          {row.run_id && (
+            <Link to={`/agents/runs/${row.run_id}`} className="text-[12px] text-teal-600 hover:underline">
+              Replay this run step by step
+            </Link>
+          )}
           <pre className="bg-surface-2 rounded-md p-2 text-[11px] overflow-x-auto max-h-80">{JSON.stringify(row.data, null, 2)}</pre>
         </div>
       )}

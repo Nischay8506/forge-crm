@@ -27,7 +27,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.registry import AGENTS, AgentContext
-from app.agents.runtime import ToolOutcome, call_tool, start_run
+from app.agents.runtime import ToolOutcome, call_tool, finish_run, start_run
 from app.audit import chain
 from app.core.errors import AppError, NotFound
 from app.db import tenant_session
@@ -188,6 +188,7 @@ async def request_create(session: AsyncSession, tenant_id: uuid.UUID, *, connect
         session, ctx, linking.CREATE_TOOL, {"write_id": w.id, "requested_by": actor},
         recommendation=f"Create {acc.name} as a customer in {conn.name}",
         dedupe_key=f"erp.create:{w.id}")
+    await finish_run(session, ctx, summary={"status": outcome.status})
     if outcome.status == "waiting":
         w = await _mark(tenant_id, w.id, status="pending",
                         request={**w.request, "decision_id": str(outcome.decision_id)})

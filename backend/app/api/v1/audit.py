@@ -1,6 +1,7 @@
-"""Audit log (minimal F12.4) and record takeovers (decision T8)."""
+"""Audit log, run replay (F12.4) and record takeovers (decision T8)."""
 
 import uuid
+from datetime import datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -9,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents import controls
-from app.audit import chain
+from app.audit import chain, replay
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import Forbidden, NotFound
 from app.core.permissions import has_permission
@@ -21,14 +22,6 @@ router = APIRouter(tags=["audit"])
 
 def _actor(u: CurrentUser) -> str:
     return f"user:{u.user.id}"
-
-
-def _row(a: AuditRecord) -> dict[str, Any]:
-    return {"seq": a.seq, "created_at": a.created_at, "actor": a.actor, "kind": a.kind,
-            "agent_key": a.agent_key, "run_id": str(a.run_id) if a.run_id else None,
-            "record_type": a.record_type,
-            "record_id": str(a.record_id) if a.record_id else None, "data": a.data,
-            "prev_hash": a.prev_hash, "hash": a.hash}
 
 
 @router.get("/audit")
@@ -55,7 +48,7 @@ async def list_audit(
     if before_seq:
         stmt = stmt.where(AuditRecord.seq < before_seq)
     rows = await db.scalars(stmt.order_by(AuditRecord.seq.desc()).limit(limit))
-    return [_row(a) for a in rows]
+    return [replay.audit_row(a) for a in rows]
 
 
 @router.get("/audit/verify")
@@ -67,6 +60,30 @@ async def verify_audit(
     res = await chain.verify(db, current.tenant_id)
     return {"ok": res.ok, "checked": res.checked, "first_bad_seq": res.first_bad_seq,
             "problem": res.problem}
+
+
+# Replay ------------------------------------------------------------------------------
+
+@router.get("/audit/runs")
+async def list_runs(
+    agent_key: str | None = None, record_id: uuid.UUID | None = None,
+    before: datetime | None = None, limit: int = Query(50, le=200),
+    _: CurrentUser = Depends(require_permission("audit.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """Agent runs, newest first, each with how its steps ended."""
+    return await replay.list_runs(db, agent_key=agent_key, record_id=record_id, before=before,
+                                  limit=limit)
+
+
+@router.get("/audit/runs/{run_id}")
+async def replay_run(
+    run_id: uuid.UUID, _: CurrentUser = Depends(require_permission("audit.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """One run step by step: its audit records, decision cards and model calls, and
+    whether those records are intact."""
+    return await replay.replay(db, run_id)
 
 
 # Takeovers ---------------------------------------------------------------------------

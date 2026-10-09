@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { auditLine, conditionProblem } from "./labels"
+import { auditLine, conditionProblem, offset, triggerLabel } from "./labels"
 import type { FactInfo } from "./types"
 
 const amount: FactInfo = { key: "amount", label: "Amount (INR)", type: "money", choices: [],
@@ -36,5 +36,21 @@ describe("conditionProblem", () => {
     expect(conditionProblem({ fact: "account_tier", op: "gt", value: "key" }, tier)).toBe("Pick a comparison")
     expect(conditionProblem({ fact: "account_tier", op: "in", value: [] }, tier)).toBe("Pick account tier")
     expect(conditionProblem({ fact: "account_tier", op: "eq", value: "strategic" }, tier)).toBeNull()
+  })
+})
+
+describe("run labels", () => {
+  it("says what started a run", () => {
+    expect(triggerLabel({ trigger: "try_it", trigger_ref: "user:1" })).toBe("Tried on the Agents screen")
+    expect(triggerLabel({ trigger: "account.check", trigger_ref: "x" })).toBe("An account was added or changed")
+    expect(triggerLabel({ trigger: "contact.check", trigger_ref: "x" })).toBe("A contact was added or changed")
+    expect(triggerLabel({ trigger: "mcp:Claude Desktop", trigger_ref: null })).toBe("Asked by Claude Desktop (outside AI tool)")
+    expect(triggerLabel({ trigger: "sync:reconcile", trigger_ref: "Main ERP" })).toBe("Nightly comparison with Main ERP")
+  })
+  it("shows time since the run started", () => {
+    const t0 = "2026-10-09T10:00:00.000Z"
+    expect(offset(t0, "2026-10-09T10:00:00.250Z")).toBe("+250 ms")
+    expect(offset(t0, "2026-10-09T10:00:01.400Z")).toBe("+1.4 s")
+    expect(offset(t0, "2026-10-09T10:05:00.000Z")).toBe("+5 min")
   })
 })

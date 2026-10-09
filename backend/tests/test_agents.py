@@ -334,6 +334,72 @@ async def test_audit_chain_is_per_tenant_and_gap_free(client, ctx, make_tenant):
         assert (await chain.verify(s, ctx["tid"])).ok
 
 
+# Replay (F12.4) ----------------------------------------------------------------------
+
+async def test_replay_shows_a_run_step_by_step(client, ctx):
+    h = ctx["h"]
+    acc = await _account(client, h, "Kirloskar Pumps")
+    await _rule(client, h, conditions=[{"fact": "amount", "op": "gt", "value": 100000}],
+                outcome="ask_person")
+    await _try(client, h, "10")
+    waiting = await _try(client, h, "250000", acc)
+    await client.post(f"{API}/decisions/{waiting['decision_id']}/approve", headers=h,
+                      json={"note": "PO 4411 seen"})
+
+    runs = (await client.get(f"{API}/audit/runs?agent_key=sandbox", headers=h)).json()
+    assert len(runs) == 2
+    assert runs[0]["tally"] == {"done": 1, "asked": 1, "blocked": 0, "failed": 0}
+    assert runs[0]["waiting"] == 0 and runs[0]["status"] == "succeeded"
+    assert runs[0]["trigger"] == "try_it" and runs[0]["finished_at"]
+    mine = (await client.get(f"{API}/audit/runs?record_id={acc}", headers=h)).json()
+    assert [r["id"] for r in mine] == [runs[0]["id"]]
+
+    r = (await client.get(f"{API}/audit/runs/{runs[0]['id']}", headers=h)).json()
+    assert [s["kind"] for s in r["steps"]] == [
+        "action.proposed", "decision.requested", "decision.approved", "action.proposed",
+        "action.executed"]
+    assert r["steps"][0]["data"]["outcome"] == "ask_person"
+    assert r["steps"][2]["data"]["note"] == "PO 4411 seen"
+    assert [(d["status"], d["note"]) for d in r["decisions"]] == [("approved", "PO 4411 seen")]
+    assert r["records"] == [{"record_type": "account", "record_id": acc,
+                             "name": "Kirloskar Pumps"}]
+    assert r["integrity"] == {"ok": True, "checked": 5, "problems": []}
+    assert (await client.get(f"{API}/audit/runs/{uuid.uuid4()}", headers=h)).status_code == 404
+
+    _, sales_h = await _user_with_role(client, ctx, "Sales", ["accounts.read"])
+    assert (await client.get(f"{API}/audit/runs", headers=sales_h)).status_code == 403
+
+
+async def test_replay_names_changed_and_missing_steps(client, ctx):
+    h = ctx["h"]
+    await client.put(f"{API}/agents/sandbox/level", headers=h, json={"level": 0})
+    w = await _try(client, h, "75")
+    await client.post(f"{API}/decisions/{w['decision_id']}/approve", headers=h, json={})
+    run_id = (await client.get(f"{API}/audit/runs", headers=h)).json()[0]["id"]
+    steps = (await client.get(f"{API}/audit/runs/{run_id}", headers=h)).json()["steps"]
+    first, approved = steps[0]["seq"], steps[2]["seq"]
+
+    owner = create_async_engine(OWNER_URL)
+    async with owner.begin() as conn:
+        await conn.execute(text("SELECT set_config('app.tenant_id', :t, true)"),
+                           {"t": str(ctx["tid"])})
+        await conn.execute(text("ALTER TABLE audit_records DISABLE TRIGGER "
+                                "audit_records_no_update"))
+        await conn.execute(text("UPDATE audit_records SET data = data || '{\"note\": \"x\"}' "
+                                "WHERE tenant_id = :t AND seq = :s"),
+                           {"t": ctx["tid"], "s": approved})
+        await conn.execute(text("DELETE FROM audit_records WHERE tenant_id = :t AND seq = :s"),
+                           {"t": ctx["tid"], "s": first - 1})
+        await conn.execute(text("ALTER TABLE audit_records ENABLE TRIGGER "
+                                "audit_records_no_update"))
+    await owner.dispose()
+    r = (await client.get(f"{API}/audit/runs/{run_id}", headers=h)).json()
+    assert r["integrity"]["ok"] is False
+    assert r["integrity"]["problems"] == [
+        {"seq": first, "problem": f"record {first - 1}, just before record {first}, is missing"},
+        {"seq": approved, "problem": f"record {approved} was changed after it was written"}]
+
+
 # Chaos test (F12.2 acceptance) -------------------------------------------------------
 
 async def test_chaos_every_over_limit_call_is_stopped(ctx):

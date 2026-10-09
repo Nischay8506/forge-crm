@@ -30,6 +30,7 @@ export function AccountDetailPage() {
   const canWrite = hasPermission(perms, "accounts.write")
   const canReview = hasPermission(perms, "steward.review")
   const canSteward = hasPermission(perms, "steward.read")
+  const canAudit = hasPermission(perms, "audit.read")
   const qc = useQueryClient()
   const { data, isLoading, error } = useQuery({
     queryKey: ["account", id],
@@ -61,6 +62,7 @@ export function AccountDetailPage() {
             {!active && <Tag variant="amber">{a.status}</Tag>}
             {a.gstin && <Nameplate id={a.gstin} />}
             {a.parent_id && <Link to={`/accounts/${a.parent_id}`} className="text-[12px] text-teal-600 hover:underline">Parent record</Link>}
+            {canAudit && <Link to={`/agents/runs?record=${a.id}`} className="text-[12px] text-teal-600 hover:underline">What agents did here</Link>}
           </div>
         </div>
         {canWrite && active && (

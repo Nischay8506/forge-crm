@@ -7,6 +7,7 @@ const TABS = [
   { to: "/agents/list", label: "Agents", permission: "agents.read" },
   { to: "/agents/policies", label: "Policy rules", permission: "agents.read" },
   { to: "/agents/stops", label: "Stops", permission: "agents.read" },
+  { to: "/agents/runs", label: "Runs", permission: "audit.read" },
   { to: "/agents/audit", label: "Audit log", permission: "audit.read" },
 ]
 

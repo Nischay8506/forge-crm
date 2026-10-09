@@ -11,6 +11,8 @@ import { Tag } from "@/components/ui/Tag"
 import { cn, formatDateTime } from "@/lib/utils"
 import { Actor } from "@/features/steward/Actor"
 import { STATUS_TONES } from "@/features/agents/labels"
+import { hasPermission } from "@/lib/permissions"
+import { usePermissions } from "@/stores/authStore"
 import type { DecisionCard } from "@/features/agents/types"
 
 type View = "waiting" | "notices" | "done"
@@ -85,6 +87,7 @@ function DecisionCardView({ d, listKey }: { d: DecisionCard; listKey: unknown[] 
     },
   })
   const link = recordLink(d)
+  const canAudit = hasPermission(usePermissions(), "audit.read")
   const approval = d.kind === "approval"
   const pending = d.status === "pending"
   const res = d.result
@@ -117,7 +120,10 @@ function DecisionCardView({ d, listKey }: { d: DecisionCard; listKey: unknown[] 
         </p>
       )}
       <div className="flex items-center justify-between text-[12px]">
-        {link ? <Link to={link.to} className="text-teal-600 hover:underline">{link.label}</Link> : <span />}
+        <span className="flex gap-3">
+          {link && <Link to={link.to} className="text-teal-600 hover:underline">{link.label}</Link>}
+          {d.run_id && canAudit && <Link to={`/agents/runs/${d.run_id}`} className="text-teal-600 hover:underline">How this came about</Link>}
+        </span>
         {d.checks.length > 0 && (
           <button onClick={() => setShowChecks((s) => !s)} className="text-ink-500 hover:text-ink-900">
             {showChecks ? "Hide checks" : "Show checks"}
