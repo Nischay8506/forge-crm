@@ -4,6 +4,7 @@ All background work (outbox delivery now; pollers, SLA timers and cadences later
 lives here, never inside the web process."""
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config import get_settings
 
@@ -18,6 +19,11 @@ celery_app.conf.update(
         "dispatch-outbox": {"task": "forge.dispatch_outbox", "schedule": 2.0},
         # F12.6: connection checks every minute, due syncs, the nightly reconciliation.
         "integrations-tick": {"task": "forge.integrations_tick", "schedule": 60.0},
+        # F12.4: seal every tenant's audit chain hourly (R3); retention runs nightly at
+        # 03:00 IST (R5).
+        "audit-seal": {"task": "forge.audit_seal", "schedule": crontab(minute=0)},
+        "audit-retention": {"task": "forge.audit_retention",
+                            "schedule": crontab(hour=21, minute=30)},
     },
 )
 celery_app.autodiscover_tasks(["app.worker"], related_name="tasks")

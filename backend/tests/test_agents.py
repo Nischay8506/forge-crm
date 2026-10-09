@@ -320,8 +320,9 @@ async def test_audit_chain_verifies_and_detects_tampering(client, ctx):
                                 "audit_records_no_update"))
     await owner.dispose()
     v = (await client.get(f"{API}/audit/verify", headers=h)).json()
-    assert v == {"ok": False, "checked": 1, "first_bad_seq": 2,
-                 "problem": "record 2 was changed after it was written"}
+    assert {k: v[k] for k in ("ok", "checked", "first_bad_seq", "problem")} == {
+        "ok": False, "checked": 1, "first_bad_seq": 2,
+        "problem": "record 2 was changed after it was written"}
 
 
 async def test_audit_chain_is_per_tenant_and_gap_free(client, ctx, make_tenant):

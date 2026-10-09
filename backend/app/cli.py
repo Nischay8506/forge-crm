@@ -7,6 +7,15 @@ Keys for stored ERP credentials (app/core/secrets.py):
 
     uv run python -m app.cli new-credential-key      # prints a key for CREDENTIAL_KEYS
     uv run python -m app.cli rotate-credentials      # re-encrypts under the first key
+
+Key that signs the audit chain's hourly seals (app/audit/seals.py):
+
+    uv run python -m app.cli new-seal-key            # prints a key for AUDIT_SEAL_KEYS
+
+Key that encrypts the audit trail's evidence (app/audit/evidence.py):
+
+    uv run python -m app.cli new-evidence-key        # prints a key for EVIDENCE_KEYS
+    uv run python -m app.cli rotate-evidence         # re-encrypts under the first key
 """
 
 import argparse
@@ -54,6 +63,16 @@ async def rotate_credentials() -> None:
           f"{counts['current']}; {counts['already']} were already on it.")
 
 
+async def rotate_evidence() -> None:
+    from app.audit.evidence import rotate_all
+    from app.db import dispose_engine
+
+    counts = await rotate_all()
+    await dispose_engine()
+    print(f"Re-encrypted {counts['rotated']} audit evidence row(s) under key "
+          f"{counts['current']}; {counts['already']} were already on it.")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="app.cli")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -66,6 +85,11 @@ def main() -> None:
     nk = sub.add_parser("new-credential-key")
     nk.add_argument("--id", help="key id (default k<today>)")
     sub.add_parser("rotate-credentials")
+    sk = sub.add_parser("new-seal-key")
+    sk.add_argument("--id", help="key id (default s<today>)")
+    ek = sub.add_parser("new-evidence-key")
+    ek.add_argument("--id", help="key id (default e<today>)")
+    sub.add_parser("rotate-evidence")
     a = p.parse_args()
     if a.cmd == "create-tenant":
         asyncio.run(create_tenant(a.name, a.slug, a.admin_email, a.admin_name, a.admin_password))
@@ -77,6 +101,20 @@ def main() -> None:
         print(new_key_spec(a.id))
     elif a.cmd == "rotate-credentials":
         asyncio.run(rotate_credentials())
+    elif a.cmd == "new-seal-key":
+        from app.audit.seals import new_seal_key
+
+        print("Add this FIRST in AUDIT_SEAL_KEYS in backend/.env (keep older keys after it "
+              "so their seals can still be checked):")
+        print(new_seal_key(a.id))
+    elif a.cmd == "new-evidence-key":
+        from app.audit.evidence import new_evidence_key
+
+        print("Add this FIRST in EVIDENCE_KEYS in backend/.env (keep older keys after it "
+              "until rotate-evidence has run), and keep a copy off this server:")
+        print(new_evidence_key(a.id))
+    elif a.cmd == "rotate-evidence":
+        asyncio.run(rotate_evidence())
 
 
 if __name__ == "__main__":

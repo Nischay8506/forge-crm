@@ -19,6 +19,12 @@ PERMISSIONS: dict[str, str] = {
     "agents.manage": "Change autonomy levels, policy rules and kill-switches",
     "decisions.decide": "See what agents are waiting on, and approve or reject it",
     "audit.read": "View and verify the audit log",
+    # F12.4 audit replay, redaction and retention (decisions R4-R6)
+    "audit.personal_data": "See personal data in the audit trail (one replay at a time, "
+                           "after typing a reason; each reveal is recorded)",
+    "audit.manage": "Change retention periods and place or lift legal holds",
+    "privacy.erase": "Ask for a contact's personal data to be erased (a second person "
+                     "approves)",
     "records.takeover": "Take a record over from agents and hand it back",
     # F12.6 Integration framework and ERP adapters
     "integrations.read": "View ERP connections, sync health, alerts and synced ERP data",

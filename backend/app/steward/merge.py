@@ -28,8 +28,10 @@ from app.models import (
     ErpWrite,
     FieldProvenance,
     KillSwitch,
+    LegalHold,
     MatchCandidate,
     MergeEvent,
+    Message,
     SandboxAction,
 )
 from app.steward.candidates import decide, ordered
@@ -55,8 +57,10 @@ REFERENCES: dict[str, list[tuple[type, str]]] = {
         (SandboxAction, "account_id"),
         # ERP customers linked to the account, and writes made for it (F12.6).
         (ErpCustomer, "account_id"), (ErpWrite, "account_id"),
+        # A legal hold keeps protecting the surviving account; messages follow it (F12.4).
+        (LegalHold, "account_id"), (Message, "account_id"),
     ],
-    "contact": [],
+    "contact": [(Message, "contact_id")],
 }
 UUID_FIELDS = frozenset({"parent_id", "account_id", "merged_into_id"})
 LOCATION_FIELDS = ("address_line1", "address_line2", "city", "state", "pincode")

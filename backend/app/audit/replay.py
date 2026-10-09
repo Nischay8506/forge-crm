@@ -2,8 +2,13 @@
 
 A run's steps are its audit records (same run_id), shown with the run itself, the
 decision cards it raised and the model calls made under it. Each step's hash is
-recomputed and its link to the record before it checked, so the replay says
-whether these steps are intact; /audit/verify still checks the whole chain.
+recomputed, its details checked against their fingerprint and its link to the
+record before it checked, so the replay says whether these steps are intact;
+/audit/verify still checks the whole chain. A replay only reads what was stored:
+nothing is re-run (Step 4 safeguard 6).
+
+Each step's data is its skeleton plus its decrypted details ("evidence", R1).
+Personal data is hidden unless the caller asked to reveal it (R4): see shown().
 """
 
 import uuid
@@ -15,11 +20,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.registry import AGENTS, TOOLS
-from app.audit.chain import GENESIS, compute_hash
+from app.audit import evidence as ev_crypto
+from app.audit.chain import GENESIS, compute_hash, evidence_for, evidence_problem
+from app.audit.redact import Redactor
 from app.core.errors import NotFound
 from app.models import (
     Account,
     AgentRun,
+    AuditEvidence,
     AuditRecord,
     Contact,
     Decision,
@@ -46,12 +54,63 @@ async def record_name(session: AsyncSession, record_type: str | None,
     return None
 
 
-def audit_row(a: AuditRecord) -> dict[str, Any]:
+def _evidence(a: AuditRecord, ev: AuditEvidence | None
+              ) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(details, what state they are in) for one record."""
+    if (a.format or 1) < 2:
+        return {}, {"state": "inline"}  # Step 2 records: everything is in data
+    if a.evidence_digest is None:
+        return {}, {"state": "none"}
+    if ev is None:
+        return {}, {"state": "missing"}
+    if ev.data_enc is None:
+        return {}, {"state": "removed", "removed_at": ev.removed_at,
+                    "reason": ev.removed_reason}
+    try:
+        data = ev_crypto.read(ev) or {}
+    except ev_crypto.EvidenceKeyError as e:
+        return {}, {"state": "unreadable", "reason": str(e)}
+    data.pop("_nonce", None)
+    return data, {"state": "present", "class": ev.retention_class}
+
+
+def audit_row(a: AuditRecord, ev: AuditEvidence | None = None) -> dict[str, Any]:
+    details, info = _evidence(a, ev)
     return {"seq": a.seq, "created_at": a.created_at, "actor": a.actor, "kind": a.kind,
             "agent_key": a.agent_key, "run_id": str(a.run_id) if a.run_id else None,
             "record_type": a.record_type,
-            "record_id": str(a.record_id) if a.record_id else None, "data": a.data,
+            "record_id": str(a.record_id) if a.record_id else None,
+            "data": {**a.data, **details}, "evidence": info, "format": a.format or 1,
             "prev_hash": a.prev_hash, "hash": a.hash}
+
+
+async def audit_rows(session: AsyncSession, records: list[AuditRecord]) -> list[dict[str, Any]]:
+    """Rows with their details, for records of one tenant."""
+    if not records:
+        return []
+    evs = await evidence_for(session, records[0].tenant_id,
+                             [r.seq for r in records if r.evidence_digest])
+    return [audit_row(r, evs.get(r.seq)) for r in records]
+
+
+def shown(rows: list[dict[str, Any]], *, extra: list[dict[str, Any]] | None = None,
+          names: list[str] | None = None, reveal: bool = False) -> dict[str, Any]:
+    """Hide personal data in rows' data (and in `extra` dicts, such as decision cards)
+    in place, unless revealing. `names` are known personal names to hide anywhere."""
+    if reveal:
+        return {"hidden": 0, "revealed": True}
+    r = Redactor()
+    for row in rows:
+        r.collect(row["data"])
+    for item in extra or []:
+        r.collect(item)
+    for n in names or []:
+        r.collect(n, "full_name")
+    for row in rows:
+        row["data"] = r.apply(row["data"])
+    for item in extra or []:
+        item.update(r.apply(item))
+    return {"hidden": r.hidden, "revealed": False}
 
 
 def _run_row(r: AgentRun, tally: dict[str, int], waiting: int) -> dict[str, Any]:
@@ -101,17 +160,29 @@ async def list_runs(session: AsyncSession, *, agent_key: str | None = None,
 
 async def check_steps(session: AsyncSession, tenant_id: uuid.UUID,
                       records: list[AuditRecord]) -> dict[str, Any]:
-    """Recompute each record's hash and check it points at the record before it."""
+    """Recompute each record's hash, check its details against their fingerprint and
+    check it points at the record before it."""
     wanted = [r.seq - 1 for r in records if r.seq > 1]
     before = dict((await session.execute(
         select(AuditRecord.seq, AuditRecord.hash)
         .where(AuditRecord.tenant_id == tenant_id, AuditRecord.seq.in_(wanted)))).all())
     before[0] = GENESIS
+    if records and min(r.seq for r in records) > 1:
+        # After retention trimmed the oldest records, a seal stands in for them.
+        from app.models import AuditSeal
+
+        for seq, h in (await session.execute(
+                select(AuditSeal.seq, AuditSeal.hash)
+                .where(AuditSeal.tenant_id == tenant_id, AuditSeal.seq.in_(wanted)))).all():
+            before.setdefault(seq, h)
+    evs = await evidence_for(session, tenant_id, [r.seq for r in records if r.evidence_digest])
     problems = []
     for r in records:
         if compute_hash(r) != r.hash:
             problems.append({"seq": r.seq, "problem": f"record {r.seq} was changed after it "
                                                       "was written"})
+        elif problem := evidence_problem(r, evs.get(r.seq)):
+            problems.append({"seq": r.seq, "problem": problem})
         elif r.seq - 1 not in before:
             problems.append({"seq": r.seq, "problem": f"record {r.seq - 1}, just before "
                                                       f"record {r.seq}, is missing"})
@@ -138,7 +209,8 @@ def _llm_row(c: LlmCall) -> dict[str, Any]:
             "latency_ms": c.latency_ms, "status": c.status, "error": c.error}
 
 
-async def replay(session: AsyncSession, run_id: uuid.UUID) -> dict[str, Any]:
+async def replay(session: AsyncSession, run_id: uuid.UUID, *,
+                 reveal: bool = False) -> dict[str, Any]:
     run = await session.get(AgentRun, run_id)
     if run is None:
         raise NotFound("Agent run not found")
@@ -155,12 +227,22 @@ async def replay(session: AsyncSession, run_id: uuid.UUID) -> dict[str, Any]:
         if r.record_type and r.record_id and (r.record_type, r.record_id) not in subjects:
             subjects[(r.record_type, r.record_id)] = await record_name(
                 session, r.record_type, r.record_id)
+    steps = await audit_rows(session, records)
+    cards = [_decision_row(d) for d in decisions]
+    subject_rows = [{"record_type": t, "record_id": str(i), "name": n}
+                    for (t, i), n in subjects.items()]
+    people = [s["name"] for s in subject_rows if s["record_type"] == "contact" and s["name"]]
+    personal = shown(steps, extra=cards, names=people, reveal=reveal)
+    if not reveal:
+        for s in subject_rows:
+            if s["record_type"] == "contact" and s["name"]:
+                s["name"] = "[name hidden]"
     return {
         "run": _run_row(run, tally.get(run.id, {}), waiting.get(run.id, 0)),
-        "steps": [audit_row(r) for r in records],
-        "decisions": [_decision_row(d) for d in decisions],
+        "steps": steps,
+        "decisions": cards,
         "model_calls": [_llm_row(c) for c in calls],
-        "records": [{"record_type": t, "record_id": str(i), "name": n}
-                    for (t, i), n in subjects.items()],
+        "records": subject_rows,
         "integrity": await check_steps(session, run.tenant_id, records),
+        "personal_data": personal,
     }

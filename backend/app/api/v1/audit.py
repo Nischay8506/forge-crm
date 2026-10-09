@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents import controls
-from app.audit import chain, replay
+from app.audit import chain, replay, seals
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import Forbidden, NotFound
 from app.core.permissions import has_permission
@@ -47,8 +47,10 @@ async def list_audit(
         stmt = stmt.where(AuditRecord.actor == actor)
     if before_seq:
         stmt = stmt.where(AuditRecord.seq < before_seq)
-    rows = await db.scalars(stmt.order_by(AuditRecord.seq.desc()).limit(limit))
-    return [replay.audit_row(a) for a in rows]
+    rows = await replay.audit_rows(db, list(await db.scalars(
+        stmt.order_by(AuditRecord.seq.desc()).limit(limit))))
+    replay.shown(rows)  # personal data stays hidden here; reveal works per replay (R4)
+    return rows
 
 
 @router.get("/audit/verify")
@@ -59,7 +61,12 @@ async def verify_audit(
     """Recompute the whole chain for this company and say whether anything changed."""
     res = await chain.verify(db, current.tenant_id)
     return {"ok": res.ok, "checked": res.checked, "first_bad_seq": res.first_bad_seq,
-            "problem": res.problem}
+            "problem": res.problem, "starts_at": res.starts_at,
+            "details_removed": res.details_removed, "seals": {
+                "state": seals.state(), "checked": res.seals_checked,
+                "sealed_upto": res.sealed_upto, "sealed_at": res.sealed_at,
+                "unknown_keys": res.unknown_seal_keys},
+            "warning": res.warning}
 
 
 # Replay ------------------------------------------------------------------------------
@@ -82,8 +89,30 @@ async def replay_run(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """One run step by step: its audit records, decision cards and model calls, and
-    whether those records are intact."""
+    whether those records are intact. Personal data is hidden (R4)."""
     return await replay.replay(db, run_id)
+
+
+class RevealIn(BaseModel):
+    reason: str = Field(min_length=10, max_length=500)
+
+
+@router.post("/audit/runs/{run_id}/reveal")
+async def reveal_run(
+    run_id: uuid.UUID, body: RevealIn,
+    current: CurrentUser = Depends(require_permission("audit.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """The same replay with personal data shown, for a person allowed to see it, after
+    they say why. The reveal itself goes into the audit trail (R4)."""
+    if not has_permission(current.permissions, "audit.personal_data"):
+        raise Forbidden("Seeing personal data in the audit trail needs the permission "
+                        "\"See personal data in the audit trail\"")
+    out = await replay.replay(db, run_id, reveal=True)
+    await chain.append(db, current.tenant_id, "audit.personal_data_revealed",
+                       actor=_actor(current), record_type="agent_run", record_id=run_id,
+                       data={"reason": body.reason.strip()})
+    return out
 
 
 # Takeovers ---------------------------------------------------------------------------

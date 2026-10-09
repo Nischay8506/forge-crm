@@ -197,6 +197,7 @@ register_tool(ToolDef(
                 "at most once.",
     args=CreateArgs, run=_create_run, facts=("account_tier",), compute_facts=_create_facts,
     touches=_create_touches, describe=_create_describe, permission="erp.write",
+    evidence_class="customer_money",
 ))
 
 

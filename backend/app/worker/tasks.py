@@ -82,3 +82,31 @@ async def _integration_run(what: str, tenant_id: str, flow_id: str, trigger: str
 @celery_app.task(name="forge.integration_run")
 def integration_run(what: str, tenant_id: str, flow_id: str, trigger: str) -> dict | None:
     return asyncio.run(_integration_run(what, tenant_id, flow_id, trigger))
+
+
+async def _audit_seal() -> dict:
+    from app.audit.seals import seal_all
+
+    try:
+        return await seal_all()
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.audit_seal")
+def audit_seal() -> dict:
+    return asyncio.run(_audit_seal())
+
+
+async def _audit_retention() -> dict:
+    from app.audit.retention import run_all
+
+    try:
+        return await run_all()
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.audit_retention")
+def audit_retention() -> dict:
+    return asyncio.run(_audit_retention())

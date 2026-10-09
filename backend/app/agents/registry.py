@@ -78,6 +78,9 @@ class ToolDef:
     describe: Callable[[AsyncSession, Any, dict[str, Any]], Awaitable[str]] | None = None
     permission: str | None = None  # RBAC code the agent's service identity uses
     version: int = 1
+    # Retention class of this tool's audit details (R5): "customer_money" for what
+    # customers are told and money (8 years by default), else "other" (3 years).
+    evidence_class: str = "other"
 
 
 @dataclass(frozen=True)
@@ -145,7 +148,24 @@ class AgentContext:
     agent: AgentDef
     run_id: Any = None
     approved_by: str | None = None  # set when a person approved this call
+    agent_version: int | None = None  # R8: the agent definition's number (app/agents/versions)
+    # R2: what the agent read since its last tool call (documents, passages, records),
+    # kept with that call's audit details. Add with saw().
+    seen: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def actor(self) -> str:
         return self.agent.actor
+
+    def saw(self, source: str, content: Any, *, record_type: str | None = None,
+            record_id: Any = None) -> None:
+        """Note something the agent was given, e.g. a retrieved passage or document."""
+        from datetime import UTC, datetime
+
+        self.seen.append({"source": source, "record_type": record_type,
+                          "record_id": str(record_id) if record_id else None,
+                          "read_at": datetime.now(UTC).isoformat(), "content": content})
+
+    def take_seen(self) -> list[dict[str, Any]]:
+        seen, self.seen = self.seen, []
+        return seen

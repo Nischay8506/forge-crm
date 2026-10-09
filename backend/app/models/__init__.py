@@ -9,6 +9,15 @@ from app.models.agents import (
     RecordTakeover,
     SandboxAction,
 )
+from app.models.audit import (
+    AgentVersion,
+    AuditEvidence,
+    AuditSeal,
+    ErasedIdentifier,
+    LegalHold,
+    Message,
+    RetentionSettings,
+)
 from app.models.base import Base
 from app.models.golden import (
     Account,
@@ -51,6 +60,13 @@ __all__ = [
     "PolicyRule",
     "RecordTakeover",
     "SandboxAction",
+    "AgentVersion",
+    "AuditEvidence",
+    "AuditSeal",
+    "ErasedIdentifier",
+    "LegalHold",
+    "Message",
+    "RetentionSettings",
     "Account",
     "AccountEmbedding",
     "Base",

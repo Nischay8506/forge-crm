@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     # Where this backend is reached from outside; names the MCP server (decision E9).
     public_base_url: str = "http://localhost:8000"
 
+    # Audit trail (F12.4). Keys that sign the hourly seals (decision R3 A), same
+    # "id:base64key,..." form as above; see app/audit/seals.py. Unset = seals off.
+    audit_seal_keys: str | None = None
+    # Encrypts the audit trail's evidence (Step 4 safeguard 1); see app/audit/evidence.py.
+    # Required: without it nothing that writes to the audit trail can run.
+    evidence_keys: str | None = None
+
     outbox_batch_size: int = 100
     outbox_max_attempts: int = 8
 

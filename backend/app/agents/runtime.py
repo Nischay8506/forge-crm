@@ -9,6 +9,11 @@ gate decides, and each step lands in the audit chain under the run's id:
 A call that needs a person becomes a Decision (decision T2). When the person
 approves, decide() runs the same call again with the approval, so the agent's
 work continues exactly as proposed.
+
+The trail keeps what the agent was given (R2): action.proposed carries the
+records the tool touches as they were at that moment, plus anything noted with
+ctx.saw(); ask_model() records the full prompt and answer of every model call.
+Every run and proposal carries the agent's version number (R8).
 """
 
 import logging
@@ -23,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.gate import GateResult, evaluate
 from app.agents.registry import AGENTS, LEVELS, TOOLS, AgentContext, Touches
+from app.agents.versions import current_version
 from app.audit import chain
 from app.core.errors import AppError, NotFound
 from app.models import AgentRun, Decision
@@ -43,11 +49,12 @@ class ToolOutcome:
 async def start_run(session: AsyncSession, tenant_id: uuid.UUID, agent_key: str, trigger: str,
                     trigger_ref: str | None = None) -> AgentContext:
     agent = AGENTS[agent_key]
+    version = await current_version(session, agent)
     run = AgentRun(tenant_id=tenant_id, agent_key=agent_key, trigger=trigger,
-                   trigger_ref=trigger_ref, status="running")
+                   trigger_ref=trigger_ref, status="running", agent_version=version)
     session.add(run)
     await session.flush()
-    return AgentContext(tenant_id=tenant_id, agent=agent, run_id=run.id)
+    return AgentContext(tenant_id=tenant_id, agent=agent, run_id=run.id, agent_version=version)
 
 
 async def finish_run(session: AsyncSession, ctx: AgentContext, status: str = "succeeded",
@@ -57,11 +64,39 @@ async def finish_run(session: AsyncSession, ctx: AgentContext, status: str = "su
         run.status, run.finished_at, run.summary = status, datetime.now(UTC), summary
 
 
-def _audit_kw(ctx: AgentContext, touches: Touches) -> dict[str, Any]:
+def _audit_kw(ctx: AgentContext, touches: Touches, evidence_class: str) -> dict[str, Any]:
     rec = touches.records[0] if touches.records else (
         ("account", touches.accounts[0]) if touches.accounts else (None, None))
+    contact = next((i for t, i in touches.records if t == "contact"), None)
     return {"actor": ctx.approved_by or ctx.actor, "agent_key": ctx.agent.key,
-            "run_id": ctx.run_id, "record_type": rec[0], "record_id": rec[1]}
+            "run_id": ctx.run_id, "record_type": rec[0], "record_id": rec[1],
+            "evidence_class": evidence_class,
+            "account_id": touches.accounts[0] if touches.accounts else None,
+            "contact_id": contact}
+
+
+async def _inputs(session: AsyncSession, touches: Touches) -> list[dict[str, Any]]:
+    """The touched records as the agent's tool saw them (R2)."""
+    from app.steward.records import MODELS, snapshot
+
+    out, done = [], set()
+    now = datetime.now(UTC).isoformat()
+    for record_type, record_id in (*touches.records,
+                                   *(("account", a) for a in touches.accounts)):
+        if (record_type, record_id) in done or record_type not in MODELS:
+            continue
+        done.add((record_type, record_id))
+        rec = await session.get(MODELS[record_type], record_id)
+        if rec is not None:
+            out.append({"source": "record", "record_type": record_type,
+                        "record_id": str(record_id), "read_at": now,
+                        "content": snapshot(rec, record_type)})
+    return out
+
+
+def _result_ids(result: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in result.items()
+            if (k == "id" or k.endswith("_id")) and isinstance(v, str | int)}
 
 
 async def call_tool(session: AsyncSession, ctx: AgentContext, tool_key: str,
@@ -77,11 +112,13 @@ async def call_tool(session: AsyncSession, ctx: AgentContext, tool_key: str,
     touches = await tool.touches(session, parsed) if tool.touches else Touches()
     summary = (await tool.describe(session, parsed, facts)) if tool.describe else tool.title
     gate = await evaluate(session, ctx, tool, facts, touches, approved=approved)
-    kw = _audit_kw(ctx, touches)
+    kw = _audit_kw(ctx, touches, tool.evidence_class)
     stored_args = parsed.model_dump(mode="json")
+    inputs = await _inputs(session, touches) + ctx.take_seen()
     await chain.append(session, ctx.tenant_id, "action.proposed", **kw, data={
-        "tool": tool.key, "version": tool.version, "summary": summary, "args": stored_args,
-        "facts": facts, "outcome": gate.outcome, "level": gate.level, "checks": gate.checks,
+        "tool": tool.key, "version": tool.version, "agent_version": ctx.agent_version,
+        "summary": summary, "args": stored_args, "facts": facts, "inputs": inputs,
+        "outcome": gate.outcome, "level": gate.level, "checks": gate.checks,
         "rule_ids": gate.rule_ids, "approved_by": ctx.approved_by})
 
     if gate.outcome == "block":
@@ -123,7 +160,8 @@ async def call_tool(session: AsyncSession, ctx: AgentContext, tool_key: str,
                            data={"tool": tool.key, "error": msg[:1000]})
         return ToolOutcome("failed", summary, error=msg)
     await chain.append(session, ctx.tenant_id, "action.executed", **kw,
-                       data={"tool": tool.key, "result": result})
+                       data={"tool": tool.key, "result": result,
+                             "result_ids": _result_ids(result)})
     if gate.notify:
         await _notice(session, ctx, tool.key, summary, gate, stored_args, facts, touches, None,
                       reasons=[f"Done by {ctx.agent.name} at {LEVELS[1].split(':')[0]}: "
@@ -164,8 +202,12 @@ async def decide(session: AsyncSession, decision_id: uuid.UUID, *, approve: bool
     if d.status != "pending":
         raise AppError(f"This decision is already {d.status}")
     d.decided_by, d.decided_at, d.note = actor, datetime.now(UTC), (note or "").strip() or None
+    tool = TOOLS.get(d.tool_key)
     kw = {"actor": actor, "agent_key": d.agent_key, "run_id": d.run_id,
-          "record_type": d.record_type, "record_id": d.record_id}
+          "record_type": d.record_type, "record_id": d.record_id,
+          "evidence_class": tool.evidence_class if tool else None,
+          "account_id": d.record_id if d.record_type == "account" else None,
+          "contact_id": d.record_id if d.record_type == "contact" else None}
     if not approve:
         d.status = "rejected"
         await chain.append(session, d.tenant_id, "decision.rejected", **kw,
@@ -173,8 +215,9 @@ async def decide(session: AsyncSession, decision_id: uuid.UUID, *, approve: bool
         return d
     await chain.append(session, d.tenant_id, "decision.approved", **kw,
                        data={"decision_id": d.id, "note": d.note})
+    run = await session.get(AgentRun, d.run_id) if d.run_id else None
     ctx = AgentContext(tenant_id=d.tenant_id, agent=AGENTS[d.agent_key], run_id=d.run_id,
-                       approved_by=actor)
+                       approved_by=actor, agent_version=run.agent_version if run else None)
     outcome = await call_tool(session, ctx, d.tool_key, d.args, approved=True)
     d.status = "approved" if outcome.status == "done" else "failed"
     d.result = {"status": outcome.status, "result": outcome.result, "error": outcome.error,
@@ -198,3 +241,35 @@ async def supersede(session: AsyncSession, dedupe_key: str, actor: str, why: str
         .values(status="superseded", decided_by=actor, decided_at=datetime.now(UTC), note=why)
         .returning(Decision.id).execution_options(synchronize_session="fetch"))).all()
     return len(rows)
+
+
+# Model calls (R2) -----------------------------------------------------------------
+
+async def ask_model(session: AsyncSession, ctx: AgentContext, *, task: str,
+                    messages: list[dict[str, str]], record_type: str | None = None,
+                    record_id: Any = None, **kwargs: Any) -> Any:
+    """Every model call an agent makes goes through here: the gateway picks the model
+    (budget, fallback, cost log), and the trail keeps the full prompt, anything the
+    agent was given for it (ctx.saw) and the answer, under the run's id."""
+    from app.llm import gateway
+
+    if not ctx.agent.model_tier:
+        raise AppError(f"{ctx.agent.name} has no model tier, so it cannot call a model")
+    kw = {"actor": ctx.actor, "agent_key": ctx.agent.key, "run_id": ctx.run_id,
+          "record_type": record_type, "record_id": record_id}
+    given = ctx.take_seen()
+    base = {"task": task, "tier": ctx.agent.model_tier, "agent_version": ctx.agent_version,
+            "messages": messages, "inputs": given,
+            "settings": {k: v for k, v in kwargs.items() if isinstance(v, str | int | float)}}
+    try:
+        res = await gateway.complete(session, ctx.tenant_id, task=task, tier=ctx.agent.model_tier,
+                                     messages=messages, trace_id=str(ctx.run_id), **kwargs)
+    except Exception as exc:
+        await chain.append(session, ctx.tenant_id, "model.failed", **kw,
+                           data={**base, "error": f"{type(exc).__name__}: {exc}"[:1000]})
+        raise
+    await chain.append(session, ctx.tenant_id, "model.called", **kw, data={
+        **base, "provider": res.provider, "model": res.model,
+        "input_tokens": res.input_tokens, "output_tokens": res.output_tokens,
+        "answer": res.text})
+    return res

@@ -18,6 +18,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -125,6 +126,7 @@ class AgentRun(IdMixin, TenantMixin, Base):
     started_at: Mapped[datetime] = _now_col()
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    agent_version: Mapped[int | None] = mapped_column(Integer)  # decision R8
 
 
 class Decision(IdMixin, TenantMixin, Base):
@@ -178,6 +180,11 @@ class AuditRecord(TenantMixin, Base):
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     prev_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # 1: Step 2 records, the hash covers `data` in full. 2 (Step 4, decision R1): `data`
+    # is a skeleton without personal data, and the hash also covers evidence_digest,
+    # the fingerprint of the details kept in audit_evidence.
+    format: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
+    evidence_digest: Mapped[str | None] = mapped_column(String(64))
 
 
 class SandboxAction(IdMixin, TenantMixin, Base):
