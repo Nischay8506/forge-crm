@@ -34,7 +34,7 @@ Phase 1 steps:
 | 0 | Foundations: repo, migrations, tenancy (RLS), login + RBAC, event outbox, worker, LLM gateway, UI shell | **Done 2026-10-08** (see section 6 for what is still open) |
 | 1 | F12.1 Golden Record & Data Steward (dedup/merge/enrich, hygiene score, adjudication screen) | **Done 2026-10-08**, with one accepted gap: ≥95% auto-resolve not met on the synthetic set (54% with S3A); re-measure on real legacy data before Phase 2 (decision S5 A) |
 | 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). U1-U4 confirmed as built |
-| 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **In progress**: groundwork in (shared contracts, ERPNext adapter, contract tests passing on a real ERPNext v16). Tables, sync engine and screens wait for Nischay's answers E1-E9, V1-V3 (section 7) |
+| 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **Built 2026-10-09**: both F12.6 "Done When" checks pass in Claude's environment on a real ERPNext 16 (section 6). Waiting for Nischay's own check in Docker Desktop (`infra/erpnext/README.md`) and his answer on the defaults (X1, section 7) |
 | 4 | F12.4 Audit replay UI, redaction, retention | Not started |
 | 5 | F12.3 Human Approval Inbox (Design File frame 05) | Not started |
 | 6 | F12.5 Multilingual & Channel Fabric (email, WhatsApp, SMS, caps) | Not started |
@@ -89,9 +89,10 @@ recommendation, and record the answer here.
 | V1 A | Support ERPNext v15 and v16; contract tests run against both | 2026-10-09 |
 | V2 A | A company can have more than one ERP connection; the setup screen adds one at a time | 2026-10-09 |
 | V3 A | The mapping studio maps customers → accounts plus the code lists Phase 2 needs (units, customer groups, territories, payment terms, warehouses, tax templates); rule-based suggestions until the D3 keys are set, then AI-assisted | 2026-10-09 |
+| W1 A | Forge's own code lists for ERP mapping: units use the GST unit codes (UQC) and tax uses the GST rate slabs; customer groups, territories, payment terms and warehouses start as a copy of the first ERP's lists, and later ERPs map onto them | 2026-10-09 |
 | Safeguards | Nischay's conditions on E1-E9 (2026-10-09): (1) creating a customer in ERPNext passes duplicate checks, permission checks and idempotency; (2) matching puts verified identifiers first and ambiguous matches need a person's approval; (3) conflicting customer data from different ERP connections keeps its source and goes to review, never silently overwrites; (4) ERP logins use authenticated encryption, never appear in logs, and the key can be rotated; (5) monitoring catches sync delays, failed jobs and revoked logins. Full audit trail for ERP writes, mapping changes, merges and manual overrides | 2026-10-09 |
 
-Still open (section 7): D3 new LLM keys, D4 daily update time.
+Still open (section 7): D3 new LLM keys, D4 daily update time, X1 integration defaults.
 
 ## 4. How to run it
 
@@ -116,8 +117,23 @@ uv run python -m app.cli create-tenant --name "Demo Manufacturing" --slug demo \
 uv run uvicorn app.main:app --reload --port 8000     # API docs at http://localhost:8000/docs
 uv run celery -A app.worker.celery_app worker --beat --loglevel=info --pool=solo   # --pool=solo on Windows
 ```
+ERP logins are stored encrypted (E8), so `backend/.env` needs `CREDENTIAL_KEYS` before an ERP can be
+connected (the Integrations page says so until it is set):
+```bash
+uv run python -m app.cli new-credential-key     # prints a line like k20261009:<key>; put it in CREDENTIAL_KEYS
+```
+To rotate: run it again, put the new key **first** (`CREDENTIAL_KEYS=knew:...,kold:...`), restart the
+backend and worker, run `uv run python -m app.cli rotate-credentials`, then remove the old key. Losing
+every key means re-entering each ERP's API key and secret. Keep the key out of git and backups of the code.
+
+To try the ERP connection end to end, start a local ERPNext with `infra/erpnext/README.md`.
+Outside AI tools (MCP, E9) connect to `http://localhost:8000/mcp/` with a token made on Integrations >
+Outside AI tools; set `PUBLIC_BASE_URL` in `backend/.env` when the backend runs at another address.
+
 The worker must be running for the Data Steward to act: new and edited records reach it through the
 outbox, and CSV imports run in the worker. Without it records save fine but no duplicates are found.
+It also runs the ERP schedule (`--beat`): every minute it checks each connection's login and starts the
+reads that are due. Without it no ERP data arrives and no ERP alert is raised.
 
 Meaning match (S2A) switches itself on when `GEMINI_API_KEY` is set in `backend/.env`; nothing else
 to configure. `STEWARD_EMBEDDINGS=false` turns it off.
@@ -141,6 +157,9 @@ cd backend && uv run pytest      # needs Postgres with the forge_test database (
 uv run ruff check .
 uv run python -m evals.duplicates --seed 7 --companies 400   # matching quality report (S4A)
 uv run python -m evals.policy_gate --seed 11 --calls 400      # F12.2 chaos test (over-limit calls)
+# against a real ERPNext (skipped otherwise): set FORGE_ERPNEXT_URL, FORGE_ERPNEXT_KEY, FORGE_ERPNEXT_SECRET
+uv run pytest tests/test_erp_sync.py -k live
+uv run python -m app.integrations.testing.contract erpnext --url ... --key ... --secret ...
 cd frontend && npm test && npm run build
 ```
 Tests use a real PostgreSQL on purpose: row-level security cannot be tested on SQLite. Tests never call
@@ -163,13 +182,17 @@ backend/
     config.py          settings from env / backend/.env
     db.py              engine, sessions, set_tenant(), tenant_session(), system_session()
     rls.py             enable_tenant_rls() helper for migrations
-    cli.py             create-tenant (admin bootstrap)
-    core/              security (JWT, bcrypt), permissions catalogue, deps (auth + RBAC), errors
+    cli.py             create-tenant (admin bootstrap), new-credential-key, rotate-credentials
+    core/              security (JWT, bcrypt), permissions catalogue, deps (auth + RBAC), errors,
+                       secrets.py (AES-256-GCM for stored ERP logins, key ring, rotation, E8)
     models/            SQLAlchemy models (tenancy, outbox, llm, golden = accounts/contacts/steward tables)
     api/v1/            routers: auth, users (+roles), accounts (+contacts), steward,
-                       agents (+policies, kill-switches, sandbox), decisions, audit (+takeovers)
+                       agents (+policies, kill-switches, sandbox), decisions, audit (+takeovers),
+                       integrations (connections, wizard test, dead letters, mapping studio,
+                       account ERP data, create-in-ERP, webhooks, MCP tokens)
     events/outbox.py   publish() + dispatch_batch() (transactional outbox)
-    worker/            Celery app + tasks (outbox delivery every 2 s, CSV import)
+    worker/            Celery app + tasks (outbox delivery every 2 s, CSV import, ERP tick every
+                       60 s and the sync / reconcile runs it hands out)
     llm/               gateway.py (complete() and embed(); only way to call a model),
                        routing.py (tiers -> models), providers.py
     steward/           F12.1 Data Steward:
@@ -193,15 +216,27 @@ backend/
       controls.py        levels and overrides, kill-switches, takeovers, account tiers
       sandbox.py         test-only Sandbox Agent (pretend payments with amounts)
     audit/chain.py     append() and verify() for the per-tenant hash chain (T6)
-    integrations/      F12.6 (Step 3, groundwork only so far; start here: adapter.py):
+    integrations/      F12.6 (Step 3; start here: adapter.py, then runner.py):
       contracts.py       the shared contracts (Customer, Item, Price, Order, Invoice, Receipt, Stock)
       adapter.py         the adapter interface, ConnectorError and its causes (for alerts)
-      erpnext/           client.py (Frappe REST, errors -> causes), adapter.py (ERPNext -> contracts)
+      erpnext/           client.py (Frappe REST, errors -> causes), adapter.py (ERPNext -> contracts,
+                         plus find_customers / create_customer for the one write)
       sync.py            run_flow() (one record type, from a high-water mark, resumable, retries)
-                         and reconcile() (nightly comparison); records go to a Sink (storage: E2)
+                         and reconcile() (nightly comparison)
+      connections.py     create / change / check a connection, encrypted logins, health problems
+      store.py           DbSink: upserts into the erp_* tables, dead letters, "gone" marks
+      runner.py          run_sync(), run_reconcile(), tick() (the minute schedule), dead-letter tasks
+      alerts.py          the one alert card per connection and the task cards in "Waiting for you"
+      linking.py         ERP customer -> account (E4, safeguards 2-3), ERP-owned fields (E5),
+                         manual link / new account / ignore / unlink (audited)
+      writes.py          "create this account as a customer in the ERP" (E3, safeguard 1)
+      mapping.py         code lists and suggestions (V3, W1)
+      agent.py           the ERP Connector agent (default L2) and its tools
+      mcp_tools.py       the Outside AI tools agent (default L0) and its read tools (E9)
+      mcp_server.py      the MCP server mounted at /mcp/ and its tokens
       testing/           contract.py (the certification suite + CLI), fake_erpnext.py, seed.py
   alembic/versions/    migrations (0001 foundation, 0002 golden records, 0003 embeddings,
-                       0004 agent runtime + audit + account tier)
+                       0004 agent runtime + audit + account tier, 0005 integrations)
   evals/duplicates.py  synthetic duplicate set and quality report (S4A)
   evals/policy_gate.py chaos test: seeded over-limit calls must all be stopped and escalated
   tests/               pytest, real Postgres
@@ -219,7 +254,9 @@ frontend/
   src/features/agents  Agents (what each can do, level, overrides, stop, sandbox "try it"),
                        policy rules with a rule builder, stops, audit log with chain check,
                        TakeoverPanel (used on the account page)
-infra/                 local Postgres + Redis (Docker)
+  src/features/integrations Connections, setup wizard, connection page, Customers and Code lists
+                       (mapping studio), Outside AI tools (MCP tokens), AccountErpCard (account page)
+infra/                 local Postgres + Redis (Docker); erpnext/ = a local ERPNext 15/16 to test with
 docs/                  this file, BUILD_LOG.md
 ```
 
@@ -259,48 +296,97 @@ docs/                  this file, BUILD_LOG.md
     and its failures to a cause; retries, dead-letter, alerts and the policy gate on writes belong to
     the sync engine. An adapter counts as certified only when `app/integrations/testing/contract.py`
     passes against a real instance of its system.
+15. **Nothing writes to an ERP except `app/integrations/writes.py`**, and only through the policy gate
+    (tool `erp.create_customer`). It checks duplicates in Forge and in the ERP, refuses a second request
+    with the same idempotency key, and looks the customer up by its Forge reference before resending
+    after a lost answer. A new ERP write must follow the same pattern (Nischay's safeguard 1).
+16. **ERP logins only through `app/core/secrets.py`.** Never log, print, return or audit a key or
+    secret; screens and audit records get `secrets.hint()` (last four characters). Models and settings
+    objects hide them from `repr`. `tests/test_erp_sync.py` checks logs and the audit log for leaks.
+17. **No ERP failure is silent.** A connection problem becomes the connection's alert card
+    (`alerts.sync_alert`); a record that cannot be read becomes a dead letter and a task. Anything new
+    that can fail in the background must end in one of the two.
 
-## 6. Current state (end of 2026-10-08)
+## 6. Current state (end of 2026-10-09)
 
-Steps 0, 1 and 2 are done; Step 3 has its groundwork in (below). Tests: 100 backend (plus 2 that run
-only when a live ERPNext is configured), 10 frontend, all passing; every new screen was checked in a
+Steps 0, 1, 2 and 3 are built. Tests: 127 backend (plus 3 that run only against a live ERPNext; they
+pass on ERPNext 16.50.0 and 15.122.0), 11 frontend, all passing; every new screen was checked in a
 browser.
 
-### Step 3 groundwork (F12.6), built while E1-E9 wait for answers
-Only the parts that do not depend on the open questions: no tables, screens, schedule or alerts yet.
-- **Sync loop** (`app/integrations/sync.py`, 2026-10-09). `run_flow()` reads one record type from
-  the last high-water mark, page by page, into a Sink (the storage interface; real tables come with
-  E2). It re-reads a 2-minute overlap so records written while a run was reading are not missed,
-  saves its place after every page so a stopped or failed run resumes from the next page, retries
-  failures that may pass (unreachable, timeout, rate limited, server error) up to 4 tries with waits
-  of 2, 4, 8 s (capped at 60 s), and stops at once on a rejected key or missing permission. Records
-  that cannot be read go to the sink's problem list (the dead-letter queue) and the run carries on.
-  `reconcile()` compares every id and modified time in the ERP with what Forge holds and fetches the
-  missing and out-of-date ones (up to 500; more means a full re-read is due); records the ERP no
-  longer has are only reported, since what to do with them depends on E2. Both run end to end on
-  real ERPNext v16.50.0 and v15.122.0 sites for all seven record types, and the contract suite passes
-  on both versions with the same code (no version-specific handling was needed).
-- **Shared contracts** for Customer, Item, Price, Order, Invoice, Receipt and Stock
-  (`app/integrations/contracts.py`): ERP ids, UTC times, Decimal money, the ERP's own codes, and one
-  canonical status list per contract with the ERP's own word kept beside it.
-- **Adapter interface** (`app/integrations/adapter.py`): `check()`, `changes()` (keyset paging on
-  modified time + id, so a bulk import sharing one time is neither skipped nor repeated), `fetch()`,
-  `stamps()` (for nightly reconciliation). Every failure carries a cause (auth rejected, permission
-  denied, unreachable, timeout, rate limited, server error, bad response, rejected, not configured)
-  so an alert can name it. A record that cannot be translated is reported with its reason (for
-  example "qty is not a number: 'ten'") and the rest of the page still arrives.
-- **ERPNext adapter** reads all seven contracts from ERPNext's REST API with an API key. Checked
-  against a real ERPNext v16.50.0 site with demo data (official Docker image `frappe/erpnext`),
-  including 12 customers forced to share one modified time. The ERPNext user needs the roles Sales
-  User, Accounts User, Stock User and Sales Master Manager (prices); `check(full=True)` names any
-  record type it cannot read. ERPNext only lets System Managers read the site time zone, so the
-  connection carries it (Asia/Kolkata unless set). The local ERPNext used for this is described by
-  `dev/erpnext/compose.yml` in the Claude project files; it moves into this repo once E1 is answered.
-- **Contract-test suite** (`app/integrations/testing/contract.py`), generic for any adapter: connects,
-  wrong key gives "auth_rejected", unreachable gives "unreachable", paging returns each record once and
-  matches reconciliation, `since` is exact, `fetch` matches the listing. Passes on the fake ERPNext in
-  CI and on the real v16 site. Run it against any site with
-  `uv run python -m app.integrations.testing.contract erpnext --url ... --key ... --secret ...`.
+### Step 3 (F12.6 Integration Framework + ERPNext)
+What a person sees (menu **Integrations**, visible with `integrations.read`):
+- **Connect an ERP** (wizard): name, ERPNext address, API key and secret, **Test connection** (logs
+  in, reads the version, checks every record type can be read, and on failure says what to fix), pick
+  record types, **Save**. The first full read starts at once in the worker.
+- **Connection page**: health, each record type's state (up to date / reading / failing with the
+  cause), last read, record count, last nightly comparison; recent runs; **records that failed** with
+  what the ERP sent, Retry and Skip; settings, **change key**, optional webhook. Buttons: check login,
+  read changes now, compare with ERP, pause.
+- **Red banner** on every Integrations page and a red dot on the menu while a connection has a problem;
+  the same problem is an **alert card** in Decisions > Waiting for you (red, "I'm on it"), which closes
+  on its own when the connection works again. Records that keep failing and customers to match are
+  **task cards** that close on their own (E7).
+- **Customers** (mapping studio): every ERP customer and its link. Forge links on its own only when a
+  verified ID (GSTIN, PAN or CIN) matches exactly one account with no GSTIN contradiction; any other
+  possible match waits here with the candidates (link, link to another account, new account, ignore,
+  unlink later). A customer with no possible match becomes a new account marked "from ERPNext"; a
+  disabled one does not (E4, safeguard 2).
+- **Code lists** (mapping studio): each ERP unit, customer group, territory, payment term, warehouse and
+  tax template mapped to Forge's list (W1). Suggestions are rule-based (same code, known alias, same GST
+  rate, similar name) until the D3 keys arrive; select and **confirm in bulk**; every change is a new
+  version with its history (V3).
+- **Account page > From the ERP**: the ERP customer codes (several per account allowed), credit limit
+  and payment terms, Orders, Invoices, Outstanding (owed and overdue) and Payments, each "as of" the
+  last read (E2). **Create in ERPNext** for an account that is not a customer there yet (E3).
+- **Outside AI tools**: tokens for the MCP server (`/mcp/`): find accounts, an account's ERP orders and
+  outstanding invoices, and (only with a write token) ask to create an ERP customer, which a person
+  approves (E9). Tokens are shown once and can be stopped.
+
+How it works underneath:
+- Tables (migration 0005): `erp_connections` (logins AES-256-GCM encrypted, bound to tenant, connection
+  and field), `sync_flows` (one per record type, with its saved place), `sync_runs`, `sync_dead_letters`,
+  one table per contract (`erp_customers` ... `erp_stock`), `erp_writes` (idempotency keys),
+  `code_maps` + `code_map_history`, `forge_codes`, `mcp_clients`. Decisions gained the kinds `alert`
+  and `task`.
+- Schedule (E6), from the worker's beat every 60 s: check each login; start reads due (every 5 minutes,
+  or at once when asked, by a webhook, or when a fixed login makes failed reads worth re-running); one
+  full comparison per record type per night after 02:00 IST, which repairs differences and marks records
+  the ERP no longer has as gone (never deleted).
+- Alerts (safeguard 5): a rejected key or missing permission alerts at once; unreachable / timeouts
+  after 3 minutes; a record type failing 3 times in a row; no successful read for 15 minutes (lag); a
+  run stuck for 30 minutes. One alert card per connection names every current problem.
+- ERP-owned fields (E5, safeguard 3): legal name, GSTIN, PAN and billing address come from the ERP. An
+  empty field is filled; a different GSTIN or PAN, or a value that another ERP connection supplied,
+  becomes an approval card showing both values and their source instead of overwriting.
+- Create customer (safeguard 1): permission `erp.write`; refused when the account is merged, not a legal
+  entity, already linked in that ERP, or when a synced customer in Forge or the ERP has the same name,
+  GSTIN or PAN; goes through the gate (ERP Connector, L2 by default, so it is sent at once for a person
+  with `erp.write`; outside AI tools are L0, so a person approves); the same request is never sent twice,
+  and after a lost answer Forge finds the customer by its "Forge ref" before trying again.
+- Audit: connection, login, flow, sync request, retry/skip, alert, task, link/unlink/ignore/new account,
+  every ERP write step, every mapping change, MCP token changes.
+
+**F12.6 "Done When" checks** (checked in Claude's environment with a browser, ERPNext 16.50.0 with
+demo data):
+- "Reference ERP connected to full sync (customers, items, orders, invoices) in under one day by a
+  non-developer": the wizard takes five fields and two clicks; the full read of all seven record types
+  finished **51 seconds** after saving. **Met in Claude's run; Nischay's own run in Docker Desktop
+  (`infra/erpnext/README.md`) is the real check.**
+- "Broken sync (auth revoked) alerts with specific cause within 5 minutes; no silent failure paths":
+  regenerating the ERPNext key raised "ERPNext rejected Forge's API key" with what to do in **36 s and
+  41 s** (two runs); entering the new key cleared it within seconds. **Met.**
+
+Known gaps (none block Step 4):
+- Code suggestions are rules only; AI-assisted suggestions wait for the D3 keys (V3).
+- "Create in ERPNext" sends the name, type (company) and GSTIN, not the address yet.
+- Approving a "create customer" card calls ERPNext inside the web request (up to 20 s, then it is
+  marked "outcome unknown" and looked up before any retry). Move it to the worker if ERPs get slow.
+- Webhooks only make Forge read sooner; their content is never trusted.
+- In the demo data, numbered customers ("Tie Test Customer 02" ... "12") all went to review against the
+  account made from "Tie Test Customer 01": the matcher treats near-identical names as possible
+  duplicates (S3A), so such lists need one review pass.
+- The frontend bundle is now 605 kB (Vite warns above 500 kB); split it by route soon.
+- No GraphQL gateway (E9: later). SAP, Dynamics, NetSuite and Tally adapters are not started.
 
 ### Step 2 (F12.2 + minimal F12.4)
 - **Agents** are defined in code (T4): charter text, tools, default and highest level, triggers, model
@@ -378,7 +464,7 @@ in the synthetic set, which Claude chose: 40% of its duplicates carry no identif
 may have a different mix. Decision S5 A: accepted for now; measure again on the real customer export
 before Phase 2 (load it with the Imports screen, then compare auto-merged vs review counts).
 
-Known gaps (none block Step 3):
+Known gaps from Steps 1 and 2 (none block Step 4):
 - F12.2 "Supervision" is only partly built: per-tenant LLM budgets and model routing exist (Step 0), but
   golden-set evals per agent per release and drift monitors wait until there are model-driven agents
   (Phase 2). Per-step tracing is the audit chain plus `agent_runs`; there is no OpenTelemetry yet.
@@ -389,7 +475,6 @@ Known gaps (none block Step 3):
   record changes or someone presses "Check all records again".
 - Audit replay screen, PII redaction and retention rules are Step 4 (F12.4). The full approval inbox
   (WhatsApp, mobile, SLA, delegation, counter-offers) is Step 5 (F12.3).
-- The frontend bundle is 540 kB (Vite warns above 500 kB); split it by route when it grows further.
 - Meaning match is built and tested with a stand-in model, but is **off until a Gemini key is set (D3)**.
   The vector column has no fixed size, so there is no ANN index yet; fine for thousands of accounts.
   The duplicate check on the create form uses the rules only, not meaning match.
@@ -400,11 +485,15 @@ Known gaps (none block Step 3):
 
 ## 7. Next step and open questions
 
-**Now: Step 3, F12.6 Integration Framework & Connector SDK with the ERPNext adapter (decision 5A).**
-Nischay answered E1-E9, V1-V3 and U4 (all A) on 2026-10-09 with five safeguards (section 3);
-the build is in progress (section 6 and the build log).
+**Now: Nischay's check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect, read,
+revoke the key, see the alert). **Next: Step 4, F12.4 Audit replay UI, redaction and retention.**
 
 Open questions for Nischay:
+- **X1** Integration defaults Claude picked (all are settings or agent levels, easy to change): ERP
+  Connector agent at L2 (acts on its own), Outside AI tools agent at L0 (a person approves every write);
+  alerts after 3 minutes unreachable, after 3 failed reads in a row, after 15 minutes without a read,
+  and for a run stuck 30 minutes; nightly comparison after 02:00 IST; ERP customers disabled in the ERP
+  are not made into accounts; "create in ERPNext" sends name, type and GSTIN only. Keep, or change some?
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
-  rotated, never copied). Meaning match (S2A) starts working as soon as the Gemini key is set.
+  rotated, never copied). Meaning match (S2A) and AI code suggestions (V3) start working once set.
 - **D4** Daily handover update time: 18:50 IST set by default; change?

@@ -5,6 +5,39 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-09 (Day 2, continued): Step 3 built, both F12.6 checks pass
+
+**Decisions (Nischay):** E1-E9, V1-V3 and U4 all A, with five safeguards (handover section 3);
+W1 A (code lists: GST standards for units and tax, the rest copied from the first ERP).
+
+**Done**
+- Tables (migration 0005), encrypted ERP logins with key rotation (`new-credential-key`,
+  `rotate-credentials`), the minute schedule in the worker, alert and task cards in Waiting for you,
+  dead letters with retry and skip, nightly comparison that marks gone records (commit b8042ff).
+- Customer linking by verified IDs with review for anything less certain, ERP-owned fields with
+  approval cards on conflicts, the gated "create in ERPNext" with duplicate checks and idempotency,
+  code lists with suggestions and versions.
+- Integrations API, MCP server at `/mcp/` with tokens, and the screens: connections, setup wizard,
+  connection page, Customers and Code lists (mapping studio), Outside AI tools, ERP section on the
+  account page, alerts and tasks on Decisions, audit labels (commits 76b8e22, dad9e0c).
+- `infra/erpnext/` (compose files for ERPNext 16 and 15, and a step-by-step README for Docker Desktop).
+- F12.6 Done-When, checked in a browser on ERPNext 16.50.0: the full read finished 51 s after the
+  wizard saved; a regenerated ERPNext key raised the alert naming the cause in 36 s and 41 s.
+- Tests: 127 backend + 11 frontend passing; the live tests pass on ERPNext 16.50.0 and 15.122.0.
+
+**Problems found and fixed**
+- The dead-letter upsert failed after a few runs on the same connection: Postgres stops matching a
+  bound predicate to a partial unique index once a prepared statement switches to its generic plan.
+  It now uses a literal predicate (the API tests caught it).
+- After a fixed login, read failures from the outage kept the alert open until the next scheduled
+  read; reads that failed only because of the login now re-run at the next minute check.
+- A connection without a time zone used Asia/Kolkata even when ERPNext could tell its own; it now
+  takes ERPNext's when readable.
+
+**Not done / next**
+- Nischay's own run of `infra/erpnext/README.md` in Docker Desktop, and his answer on X1 (the defaults).
+- Then Step 4, F12.4 (audit replay, redaction, retention).
+
 ## 2026-10-09 (Day 2): Step 3 sync loop and reconciliation
 
 **Decisions (Nischay):** do not use the GitHub repos another thread looked at; continue with the
