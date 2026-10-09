@@ -14,7 +14,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import String, func, select, update
+from sqlalchemy import String, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -117,7 +117,10 @@ class DbSink:
             stmt = pg_insert(SyncDeadLetter).values(id=uuid.uuid4(), **values)
             stmt = stmt.on_conflict_do_update(
                 index_elements=["connection_id", "entity", "external_id"],
-                index_where=SyncDeadLetter.status == "open",
+                # A literal, not a bound value: once Postgres switches a prepared
+                # statement to its generic plan it cannot match a bound predicate to
+                # the partial unique index, and every upsert would fail.
+                index_where=text("status = 'open'"),
                 set_={"reason": stmt.excluded.reason, "raw": stmt.excluded.raw,
                       "attempts": SyncDeadLetter.attempts + 1, "last_seen_at": func.now()},
             )

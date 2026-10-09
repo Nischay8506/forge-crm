@@ -9,12 +9,15 @@ from app.api.v1 import router as v1_router
 from app.config import get_settings
 from app.core.errors import AppError, app_error_handler
 from app.db import dispose_engine, get_sessionmaker
+from app.integrations.mcp_server import build_server
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app: FastAPI):
     # No background loops in the web process: pollers and timers run in the Celery worker.
-    yield
+    # The MCP server's session manager lives as long as the app.
+    async with app.state.mcp.session_manager.run():
+        yield
     await dispose_engine()
 
 
@@ -31,6 +34,12 @@ def create_app() -> FastAPI:
     )
     app.add_exception_handler(AppError, app_error_handler)
     app.include_router(v1_router)
+
+    # Outside AI tools (decision E9): MCP over streamable HTTP at /mcp/, bearer tokens
+    # issued on the Integrations page.
+    app.state.mcp = build_server()
+    app.mount("/mcp", app.state.mcp.streamable_http_app(
+        streamable_http_path="/", stateless_http=True, json_response=True, host="0.0.0.0"))
 
     @app.get("/health", tags=["ops"])
     async def health() -> dict[str, str]:

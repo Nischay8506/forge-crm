@@ -4,6 +4,7 @@ the mapping studio's code lists. Runs against the fake ERPNext."""
 
 import json
 import logging
+import os
 import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -575,3 +576,41 @@ async def test_codes_are_found_seeded_and_suggested(erp):
         assert m2[("territory", "South India")].status in ("unmapped", "suggested")
     finally:
         use_transport(e2.url, None)
+
+
+# --- live ERPNext (set FORGE_ERPNEXT_URL / _KEY / _SECRET) ----------------------------------
+
+@pytest.mark.skipif(not os.environ.get("FORGE_ERPNEXT_URL"), reason="no live ERPNext configured")
+async def test_live_sync_link_and_create_customer(make_tenant):
+    slug, *_ = await make_tenant()
+    tid = await _tenant_id(slug)
+    async with tenant_session(tid) as s:
+        conn = await create_connection(
+            s, tid, kind="erpnext", name="Live ERPNext", base_url=os.environ["FORGE_ERPNEXT_URL"],
+            api_key=os.environ["FORGE_ERPNEXT_KEY"], api_secret=os.environ["FORGE_ERPNEXT_SECRET"],
+            settings={"time_zone": os.environ.get("FORGE_ERPNEXT_TZ", "Asia/Kolkata")},
+            actor="user:test")
+        check = await connections.check_connection(s, conn, full=True)
+        assert check.ok, check
+    e = SimpleNamespace(tid=tid, conn_id=conn.id)
+    results = await sync_all(e, page_size=50)
+    assert all(r["status"] in ("succeeded", "partial") for r in results.values()), results
+    customers = await _all(e, select(ErpCustomer))
+    assert customers and all(c.link_status != "pending" or c.link_method == "disabled"
+                             for c in customers)
+
+    name = f"Forge Live Check {uuid.uuid4().hex[:6]}"
+    acc = await _new_account(e, name, gstin("27", f"AAGCL{uuid.uuid4().int % 10000:04d}Q"))
+    first = await _request(e, acc)
+    assert first["outcome"] == "done", first
+    again = await _request(e, acc)
+    assert again["outcome"] == "already"
+    async with tenant_session(tid) as s:
+        adapter = connections.adapter_for(await s.get(ErpConnection, conn.id))
+    try:
+        found = await adapter.find_customers(ref=None, gstin=None, name=name)
+        assert len(found) == 1  # created exactly once
+        await adapter.client._request("DELETE", f"/api/resource/Customer/"
+                                      f"{found[0].customer.external_id}")
+    finally:
+        await adapter.aclose()

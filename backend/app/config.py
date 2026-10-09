@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     integration_stuck_run_minutes: int = 30
     integration_reconcile_hour: int = 2  # nightly comparison, local time below
     integration_local_time_zone: str = "Asia/Kolkata"
+    # Where this backend is reached from outside; names the MCP server (decision E9).
+    public_base_url: str = "http://localhost:8000"
 
     outbox_batch_size: int = 100
     outbox_max_attempts: int = 8

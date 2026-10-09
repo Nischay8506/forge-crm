@@ -1,5 +1,6 @@
 """'Waiting for you' (decision T2): actions agents are waiting on, and notices of
-what they did at L1 or were blocked from doing. Approving runs the action as it
+what they did at L1 or were blocked from doing. People with the integrations
+permission also see integration alerts and tasks here (decision E7). Approving runs the action as it
 was proposed, through the gate again (kill-switches, takeovers and block rules
 still apply). The full inbox (channels, SLA, delegation) is F12.3, Step 5.
 """
@@ -17,9 +18,10 @@ from app.agents.policy import display_value
 from app.agents.registry import AGENTS, FACTS, TOOLS, load_definitions
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import Forbidden, NotFound
-from app.core.permissions import ALL
+from app.core.permissions import ALL, has_permission
 from app.db import get_db
-from app.models import Account, Contact, Decision, Role, UserRole
+from app.integrations.alerts import CARD_TITLES, acknowledge_alert
+from app.models import Account, Contact, Decision, ErpConnection, Role, UserRole
 
 router = APIRouter(prefix="/decisions", tags=["decisions"])
 load_definitions()
@@ -48,7 +50,17 @@ async def _record_name(db: AsyncSession, d: Decision) -> str | None:
         return await db.scalar(select(Account.name).where(Account.id == d.record_id))
     if d.record_type == "contact" and d.record_id:
         return await db.scalar(select(Contact.full_name).where(Contact.id == d.record_id))
+    if d.record_type == "erp_connection" and d.record_id:
+        return await db.scalar(select(ErpConnection.name).where(ErpConnection.id == d.record_id))
     return None
+
+
+INTEGRATION_KINDS = ("alert", "task")
+
+
+def _sees_integrations(current: CurrentUser) -> bool:
+    """Integration alerts and tasks go to people with the integrations permission (E7)."""
+    return has_permission(current.permissions, "integrations.read")
 
 
 async def _out(db: AsyncSession, d: Decision, current: CurrentUser,
@@ -58,7 +70,8 @@ async def _out(db: AsyncSession, d: Decision, current: CurrentUser,
     return {
         "id": str(d.id), "kind": d.kind, "status": d.status, "title": d.title,
         "agent_key": d.agent_key, "agent_name": agent.name if agent else d.agent_key,
-        "tool_key": d.tool_key, "tool_title": tool.title if tool else d.tool_key,
+        "tool_key": d.tool_key,
+        "tool_title": tool.title if tool else CARD_TITLES.get(d.tool_key, d.tool_key),
         "recommendation": d.recommendation, "reasons": d.reasons, "args": d.args,
         "facts": [{"key": k, "label": FACTS[k].label, "value": display_value(k, v)}
                   for k, v in d.facts.items() if k in FACTS],
@@ -81,13 +94,18 @@ async def list_decisions(
     already decided or read, newest first."""
     stmt = select(Decision)
     if view == "waiting":
-        stmt = stmt.where(Decision.kind == "approval", Decision.status == "pending")
-        stmt = stmt.order_by(Decision.created_at)
+        waiting = (Decision.kind == "approval") & (Decision.status == "pending")
+        if _sees_integrations(current):
+            waiting = waiting | (Decision.kind.in_(INTEGRATION_KINDS)
+                                 & (Decision.status == "open"))
+        stmt = stmt.where(waiting).order_by(Decision.created_at)
     elif view == "notices":
         stmt = stmt.where(Decision.kind == "notice", Decision.status == "open")
         stmt = stmt.order_by(Decision.created_at.desc())
     else:
         stmt = stmt.where(Decision.status.not_in(("pending", "open")))
+        if not _sees_integrations(current):
+            stmt = stmt.where(Decision.kind.not_in(INTEGRATION_KINDS))
         stmt = stmt.order_by(Decision.decided_at.desc().nulls_last())
     roles = await _my_roles(db, current)
     rows = await db.scalars(stmt.limit(limit).offset(offset))
@@ -109,7 +127,15 @@ async def count_decisions(
                if role_id is None or ALL in current.permissions or role_id in roles)
     notices = await db.scalar(select(func.count()).select_from(Decision).where(
         Decision.kind == "notice", Decision.status == "open"))
-    return {"waiting": mine, "notices": notices or 0}
+    alerts = tasks = 0
+    if _sees_integrations(current):
+        rows = dict((await db.execute(
+            select(Decision.kind, func.count()).where(Decision.kind.in_(INTEGRATION_KINDS),
+                                                      Decision.status == "open")
+            .group_by(Decision.kind))).all())
+        alerts, tasks = rows.get("alert", 0), rows.get("task", 0)
+    return {"waiting": mine + alerts + tasks, "approvals": mine, "alerts": alerts,
+            "tasks": tasks, "notices": notices or 0}
 
 
 @router.get("/{decision_id}")
@@ -119,7 +145,7 @@ async def get_decision(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     d = await db.get(Decision, decision_id)
-    if d is None:
+    if d is None or (d.kind in INTEGRATION_KINDS and not _sees_integrations(current)):
         raise NotFound("Decision not found")
     return await _out(db, d, current, await _my_roles(db, current))
 
@@ -166,6 +192,12 @@ async def acknowledge(
     current: CurrentUser = Depends(require_permission("decisions.decide")),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    d = await runtime.acknowledge(db, decision_id, _actor(current))
+    d = await db.get(Decision, decision_id)
+    if d is not None and d.kind == "alert":
+        if not _sees_integrations(current):
+            raise NotFound("Decision not found")
+        d = await acknowledge_alert(db, decision_id, _actor(current))
+    else:
+        d = await runtime.acknowledge(db, decision_id, _actor(current))
     await db.flush()
     return await _out(db, d, current, await _my_roles(db, current))

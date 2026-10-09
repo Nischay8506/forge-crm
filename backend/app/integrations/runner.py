@@ -253,6 +253,7 @@ async def run_reconcile(tenant_id: uuid.UUID, flow_id: uuid.UUID, *, trigger: st
 
 
 def _internal(exc: Exception) -> ConnectorError:
+    log.error("Storing synced records failed", exc_info=exc)
     return ConnectorError("bad_response", f"Forge failed while storing what ERPNext sent: "
                           f"{type(exc).__name__}", detail=str(exc)[:500])
 
