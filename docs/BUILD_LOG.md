@@ -8,7 +8,9 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 ## 2026-10-09 (Day 2, continued): Step 3 built, both F12.6 checks pass
 
 **Decisions (Nischay):** E1-E9, V1-V3 and U4 all A, with five safeguards (handover section 3);
-W1 A (code lists: GST standards for units and tax, the rest copied from the first ERP).
+W1 A (code lists: GST standards for units and tax, the rest copied from the first ERP);
+X1 A (the integration defaults stay as built: agent levels, alert limits, 02:00 IST comparison,
+disabled ERP customers skipped, create-in-ERPNext sends name, type and GSTIN only).
 
 **Done**
 - Tables (migration 0005), encrypted ERP logins with key rotation (`new-credential-key`,
@@ -35,7 +37,7 @@ W1 A (code lists: GST standards for units and tax, the rest copied from the firs
   takes ERPNext's when readable.
 
 **Not done / next**
-- Nischay's own run of `infra/erpnext/README.md` in Docker Desktop, and his answer on X1 (the defaults).
+- Nischay's own run of `infra/erpnext/README.md` in Docker Desktop.
 - Then Step 4, F12.4 (audit replay, redaction, retention).
 
 ## 2026-10-09 (Day 2): Step 3 sync loop and reconciliation
