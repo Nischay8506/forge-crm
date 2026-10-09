@@ -1,6 +1,11 @@
 """Sandbox Agent (test only, decision T7): records pretend payments with an amount,
 so policy rules on money ("ask a person above ₹1,00,000") can be tried and tested
 before real money-moving agents exist. It writes only to sandbox_actions.
+
+It also drafts test messages (decision R7) so a message can be traced back to
+everything behind it before Forge sends real ones in Step 6. A drafted message is
+marked as written by Forge's AI assistant and is never sent: nothing in Forge
+can send a message yet.
 """
 
 import uuid
@@ -22,10 +27,12 @@ from app.agents.registry import (
     register_tool,
 )
 from app.core.format import inr
-from app.models import Account, SandboxAction
+from app.models import Account, Contact, Message, SandboxAction
 
 AGENT_KEY = "sandbox"
 PAYMENT_TOOL = "sandbox.record_payment"
+MESSAGE_TOOL = "sandbox.draft_message"
+AI_DISCLOSURE = "Sent by our AI assistant"
 
 
 class PaymentArgs(BaseModel):
@@ -70,12 +77,65 @@ register_tool(ToolDef(
     evidence_class="customer_money",
 ))
 
+
+class MessageArgs(BaseModel):
+    account_id: uuid.UUID
+    contact_id: uuid.UUID | None = None
+    channel: str = Field(default="email", pattern="^(email|whatsapp)$")
+    subject: str | None = Field(default=None, max_length=300)
+    body: str | None = Field(default=None, max_length=4000)
+
+
+async def _message_touches(session: AsyncSession, a: MessageArgs) -> Touches:
+    return Touches(accounts=(a.account_id,),
+                   records=(("contact", a.contact_id),) if a.contact_id else ())
+
+
+async def _message_describe(session: AsyncSession, a: MessageArgs,
+                            facts: dict[str, Any]) -> str:
+    acc = await session.get(Account, a.account_id)
+    return f"Draft a test {a.channel} message to {acc.name if acc else 'an account'} " \
+        "(never sent)"
+
+
+async def _message_run(session: AsyncSession, ctx: AgentContext, a: MessageArgs
+                       ) -> dict[str, Any]:
+    acc = await session.get(Account, a.account_id)
+    if acc is None:
+        raise ValueError("Account not found")
+    if a.contact_id:
+        c = await session.get(Contact, a.contact_id)
+        if c is None or c.account_id != acc.id:
+            raise ValueError("That contact is not at this account")
+    body = a.body or (f"Hello from Forge. This is a test message for {acc.name}, drafted by "
+                      "the Sandbox Agent. It will never be sent.")
+    msg = Message(tenant_id=ctx.tenant_id, account_id=acc.id, contact_id=a.contact_id,
+                  channel=a.channel, direction="out", status="draft",
+                  subject=a.subject or ("Test message" if a.channel == "email" else None),
+                  body=body, ai_generated=True, disclosure=AI_DISCLOSURE, run_id=ctx.run_id,
+                  created_by=ctx.approved_by or ctx.actor)
+    session.add(msg)
+    await session.flush()
+    return {"message_id": str(msg.id), "status": msg.status, "channel": msg.channel}
+
+
+register_tool(ToolDef(
+    key=MESSAGE_TOOL,
+    title="Draft a test message",
+    description="Writes a draft message marked as written by Forge's AI assistant. It is "
+                "never sent; it exists to check that a message can be traced back to "
+                "everything behind it.",
+    args=MessageArgs, run=_message_run, touches=_message_touches,
+    describe=_message_describe, evidence_class="customer_money",
+))
+
 register_agent(AgentDef(
     key=AGENT_KEY,
     name="Sandbox Agent",
     purpose="Test only. Lets you try policy rules on amounts before real agents that move "
-            "money exist. It records pretend payments and nothing else.",
-    tools=(PAYMENT_TOOL,),
+            "money exist, and drafts test messages that are never sent. It records pretend "
+            "payments and test drafts and nothing else.",
+    tools=(PAYMENT_TOOL, MESSAGE_TOOL),
     default_level=L2, max_level=L3,
     triggers=("'Try it' on the Agents screen", "tests"),
     test_only=True,

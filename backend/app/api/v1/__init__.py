@@ -1,6 +1,16 @@
 from fastapi import APIRouter
 
-from app.api.v1 import accounts, agents, audit, auth, decisions, integrations, steward, users
+from app.api.v1 import (
+    accounts,
+    agents,
+    audit,
+    auth,
+    decisions,
+    integrations,
+    privacy,
+    steward,
+    users,
+)
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth.router)
@@ -11,3 +21,4 @@ router.include_router(agents.router)
 router.include_router(decisions.router)
 router.include_router(audit.router)
 router.include_router(integrations.router)
+router.include_router(privacy.router)

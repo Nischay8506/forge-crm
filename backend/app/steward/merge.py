@@ -275,6 +275,10 @@ async def undo_merge(session: AsyncSession, event_id: uuid.UUID, *, actor: str) 
     if ev.undone_at is not None:
         raise AppError("This merge was already undone")
     model = MODELS[ev.record_type]
+    if "erased" in set(await session.scalars(select(model.status).where(
+            model.id.in_((ev.survivor_id, ev.merged_id))))):
+        raise AppError("A contact in this merge had their personal data erased, so the merge "
+                       "cannot be undone")
     s = await _load_active(session, model, ev.survivor_id, "Survivor")
     m = await _load_active(session, model, ev.merged_id, "Merged record")
     if s.status != "active":

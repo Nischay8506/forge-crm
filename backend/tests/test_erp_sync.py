@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from app.agents import controls
 from app.agents.registry import AGENTS, load_definitions
 from app.agents.runtime import decide
+from app.audit import evidence
 from app.config import get_settings
 from app.core import secrets
 from app.db import get_sessionmaker, tenant_session
@@ -25,6 +26,7 @@ from app.integrations.testing.fake_erpnext import FakeERPNext
 from app.integrations.testing.seed import seed_demo
 from app.models import (
     Account,
+    AuditEvidence,
     AuditRecord,
     CodeMap,
     CodeMapHistory,
@@ -132,8 +134,9 @@ async def test_credentials_are_encrypted_bound_and_never_shown(erp, caplog):
     await sync_all(erp)
     assert erp.fake.api_secret not in caplog.text
     audit = await _all(erp, select(AuditRecord))
-    blob = json.dumps([a.data for a in audit])
-    assert erp.fake.api_secret not in blob and erp.fake.api_key not in blob
+    details = [evidence.read(e) for e in await _all(erp, select(AuditEvidence))]
+    blob = json.dumps([a.data for a in audit] + details)
+    assert details and erp.fake.api_secret not in blob and erp.fake.api_key not in blob
     assert any(a.kind == "integration.connection.created" for a in audit)
 
 

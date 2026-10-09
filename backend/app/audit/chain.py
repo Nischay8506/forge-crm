@@ -52,7 +52,8 @@ SKELETON_KEYS = frozenset({
     "entity", "entities", "status", "result_ids", "permissions", "reconcile",
     "ok", "enabled", "allow_write", "adopted", "count", "list", "score", "problems",
     "model", "provider", "tier", "task", "input_tokens", "output_tokens", "removed",
-    "classes", "periods", "profile", "channel", "ai_generated", "reveal_count",
+    "classes", "periods", "profile", "channel", "ai_generated", "stores", "kept",
+    "requested_by", "direction",
 })
 NOT_SKELETON = frozenset({"external_id", "erp_customer", "idempotency_key"})
 

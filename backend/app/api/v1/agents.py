@@ -13,13 +13,21 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents import controls, policy, runtime
+from app.agents import controls, policy, runtime, scorecard, versions
 from app.agents.registry import AGENTS, FACTS, LEVELS, OPS, TOOLS, AgentDef, load_definitions
-from app.audit import chain
+from app.audit import chain, replay
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import NotFound, ValidationFailed
 from app.db import get_db
-from app.models import Account, AuditRecord, AutonomyOverride, KillSwitch, PolicyRule, Role
+from app.models import (
+    Account,
+    AgentVersion,
+    AuditRecord,
+    AutonomyOverride,
+    KillSwitch,
+    PolicyRule,
+    Role,
+)
 from app.models.golden import ACCOUNT_TIERS
 
 router = APIRouter(tags=["agents"])
@@ -117,10 +125,15 @@ async def _agent(db: AsyncSession, agent: AgentDef, *, detail: bool) -> dict[str
                        "blocked": counts.get("action.blocked", 0),
                        "failed": counts.get("action.failed", 0),
                        "asked": counts.get("decision.requested", 0)}
-    recent = await db.scalars(select(AuditRecord).where(AuditRecord.agent_key == agent.key)
-                              .order_by(AuditRecord.seq.desc()).limit(15))
-    out["recent"] = [{"seq": a.seq, "kind": a.kind, "actor": a.actor,
-                      "created_at": a.created_at, "data": a.data} for a in recent]
+    recent = await replay.audit_rows(db, list(await db.scalars(
+        select(AuditRecord).where(AuditRecord.agent_key == agent.key)
+        .order_by(AuditRecord.seq.desc()).limit(15))))
+    replay.shown(recent)
+    out["recent"] = [{k: a[k] for k in ("seq", "kind", "actor", "created_at", "data")}
+                     for a in recent]
+    fp = versions.fingerprint(versions.definition(agent))
+    out["version"] = await db.scalar(select(AgentVersion.number).where(
+        AgentVersion.agent_key == agent.key, AgentVersion.fingerprint == fp))
     return out
 
 
@@ -139,6 +152,18 @@ async def get_agent(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     return await _agent(db, controls.agent_or_404(key), detail=True)
+
+
+@router.get("/agents/{key}/scorecard")
+async def get_scorecard(
+    key: str, months: int = Query(12, ge=1, le=36),
+    _: CurrentUser = Depends(require_permission("agents.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """The agent's track record by month and version (R8). It informs; it never changes
+    the agent's level."""
+    agent = controls.agent_or_404(key)
+    return await scorecard.scorecard(db, agent.key, months=months)
 
 
 class LevelIn(BaseModel):
@@ -189,6 +214,31 @@ class TryIn(BaseModel):
     account_id: uuid.UUID | None = None
     amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
     note: str | None = Field(default=None, max_length=300)
+
+
+class DraftIn(BaseModel):
+    account_id: uuid.UUID
+    contact_id: uuid.UUID | None = None
+    channel: Literal["email", "whatsapp"] = "email"
+    subject: str | None = Field(default=None, max_length=300)
+    body: str | None = Field(default=None, max_length=4000)
+
+
+@router.post("/agents/sandbox/draft-message")
+async def draft_test_message(
+    body: DraftIn, current: CurrentUser = Depends(require_permission("agents.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Ask the Sandbox Agent to draft a test message (R7). It is never sent."""
+    ctx = await runtime.start_run(db, current.tenant_id, "sandbox", "try_message",
+                                  _actor(current))
+    out = await runtime.call_tool(db, ctx, "sandbox.draft_message", body.model_dump(),
+                                  recommendation="Test message asked for by a person")
+    await runtime.finish_run(db, ctx, summary={"status": out.status})
+    return {"status": out.status, "summary": out.summary, "reasons": out.reasons,
+            "decision_id": str(out.decision_id) if out.decision_id else None,
+            "error": out.error, "message_id": out.result.get("message_id"),
+            "run_id": str(ctx.run_id)}
 
 
 @router.post("/agents/sandbox/try")

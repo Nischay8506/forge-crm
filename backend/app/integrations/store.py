@@ -78,8 +78,14 @@ class DbSink:
             if have is None or have.modified_at <= r.modified_at:
                 newest[r.external_id] = r
         rows, problems = [], []
+        # Emails and phones of erased contacts stay hidden (R6), until the ERP is cleaned.
+        from app.privacy.erasure import mask_for
+
+        mask = await mask_for(self.session, self.tenant_id)
         for r in newest.values():
             row = self._row(entity, model, r)
+            if mask and not isinstance(row, RecordProblem):
+                row["data"] = mask(row["data"])
             (problems if isinstance(row, RecordProblem) else rows).append(row)
         if problems:
             await self.problems(entity, problems)

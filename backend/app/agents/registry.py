@@ -81,6 +81,10 @@ class ToolDef:
     # Retention class of this tool's audit details (R5): "customer_money" for what
     # customers are told and money (8 years by default), else "other" (3 years).
     evidence_class: str = "other"
+    # Who may decide this tool's approval cards: people with this permission, and,
+    # with four_eyes, never the person who asked (args["requested_by"]).
+    decider_permission: str | None = None
+    four_eyes: bool = False
 
 
 @dataclass(frozen=True)
@@ -130,7 +134,7 @@ def register_agent(agent: AgentDef) -> AgentDef:
 
 # Modules that register agents and tools when imported. Add new agents here.
 DEFINITION_MODULES = ("app.steward.agent", "app.agents.sandbox", "app.integrations.agent",
-                      "app.integrations.mcp_tools")
+                      "app.integrations.mcp_tools", "app.privacy.agent")
 
 
 def load_definitions() -> None:

@@ -10,12 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents import controls
-from app.audit import chain, replay, seals
+from app.audit import chain, replay, retention, seals
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import Forbidden, NotFound
 from app.core.permissions import has_permission
 from app.db import get_db
-from app.models import AuditRecord, RecordTakeover
+from app.models import Account, AuditRecord, Contact, LegalHold, Message, RecordTakeover
 
 router = APIRouter(tags=["audit"])
 
@@ -74,13 +74,17 @@ async def verify_audit(
 @router.get("/audit/runs")
 async def list_runs(
     agent_key: str | None = None, record_id: uuid.UUID | None = None,
-    before: datetime | None = None, limit: int = Query(50, le=200),
+    before: datetime | None = None, version: int | None = None,
+    month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    outcome: Literal["proposed", "acted_alone", "asked", "approved", "rejected", "undone",
+                     "blocked", "failed"] | None = None,
+    limit: int = Query(50, le=200),
     _: CurrentUser = Depends(require_permission("audit.read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Agent runs, newest first, each with how its steps ended."""
     return await replay.list_runs(db, agent_key=agent_key, record_id=record_id, before=before,
-                                  limit=limit)
+                                  version=version, month=month, outcome=outcome, limit=limit)
 
 
 @router.get("/audit/runs/{run_id}")
@@ -113,6 +117,121 @@ async def reveal_run(
                        actor=_actor(current), record_type="agent_run", record_id=run_id,
                        data={"reason": body.reason.strip()})
     return out
+
+
+# Retention and legal holds (R5) ------------------------------------------------------
+
+@router.get("/audit/retention")
+async def get_retention(
+    current: CurrentUser = Depends(require_permission("audit.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """The company's retention periods per category, the law each follows, and whether
+    a CA or lawyer has confirmed them."""
+    return {**await retention.current(db, current.tenant_id),
+            "categories": retention.CATEGORIES,
+            "profiles": {k: v["label"] for k, v in retention.PROFILES.items()},
+            "minimums": {"skeleton": retention.SKELETON_FLOOR, "other": retention.MINIMUM}}
+
+
+class RetentionIn(BaseModel):
+    profile: str | None = None
+    periods: dict[str, int] | None = None
+    basis: dict[str, str] | None = None
+
+
+@router.put("/audit/retention")
+async def put_retention(
+    body: RetentionIn, current: CurrentUser = Depends(require_permission("audit.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    await retention.change(db, current.tenant_id, _actor(current), profile=body.profile,
+                           periods=body.periods, basis=body.basis)
+    return await get_retention(current, db)
+
+
+class ReviewIn(BaseModel):
+    reviewed_by: str = Field(min_length=3, max_length=200)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+@router.post("/audit/retention/legal-review")
+async def legal_review(
+    body: ReviewIn, current: CurrentUser = Depends(require_permission("audit.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Record who confirmed the current periods (Step 4 safeguard 4)."""
+    await retention.record_review(db, current.tenant_id, _actor(current),
+                                  reviewed_by=body.reviewed_by, note=body.note)
+    return await get_retention(current, db)
+
+
+@router.post("/audit/retention/run")
+async def run_retention(
+    current: CurrentUser = Depends(require_permission("audit.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Run tonight's clean-up now, for this company."""
+    return {"removed": await retention.run_tenant(db, current.tenant_id)}
+
+
+def _hold(h: LegalHold, names: dict[uuid.UUID, str]) -> dict[str, Any]:
+    return {"id": str(h.id), "account_id": str(h.account_id),
+            "account_name": names.get(h.account_id), "reason": h.reason,
+            "placed_by": h.placed_by, "placed_at": h.placed_at, "lifted_by": h.lifted_by,
+            "lifted_at": h.lifted_at}
+
+
+@router.get("/audit/legal-holds")
+async def list_holds(
+    account_id: uuid.UUID | None = None, include_lifted: bool = False,
+    _: CurrentUser = Depends(require_permission("accounts.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    stmt = select(LegalHold)
+    if account_id:
+        stmt = stmt.where(LegalHold.account_id == account_id)
+    if not include_lifted:
+        stmt = stmt.where(LegalHold.lifted_at.is_(None))
+    holds = list(await db.scalars(stmt.order_by(LegalHold.placed_at.desc())))
+    names = dict((await db.execute(select(Account.id, Account.name).where(
+        Account.id.in_([h.account_id for h in holds])))).all()) if holds else {}
+    return [_hold(h, names) for h in holds]
+
+
+class HoldIn(BaseModel):
+    account_id: uuid.UUID
+    reason: str = Field(min_length=5, max_length=500)
+
+
+@router.post("/audit/legal-holds", status_code=201)
+async def place_hold(
+    body: HoldIn, current: CurrentUser = Depends(require_permission("audit.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    acc = await db.get(Account, body.account_id)
+    if acc is None:
+        raise NotFound("Account not found")
+    h = await retention.place_hold(db, current.tenant_id, acc.id, body.reason, _actor(current))
+    return _hold(h, {acc.id: acc.name})
+
+
+class LiftIn(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
+
+
+@router.post("/audit/legal-holds/{hold_id}/lift")
+async def lift_hold(
+    hold_id: uuid.UUID, body: LiftIn,
+    current: CurrentUser = Depends(require_permission("audit.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    h = await db.get(LegalHold, hold_id)
+    if h is None or h.lifted_at is not None:
+        raise NotFound("Active legal hold not found")
+    await retention.lift_hold(db, h, _actor(current), body.note)
+    acc = await db.get(Account, h.account_id)
+    return _hold(h, {h.account_id: acc.name if acc else None})
 
 
 # Takeovers ---------------------------------------------------------------------------
@@ -172,3 +291,95 @@ async def hand_back(
         raise Forbidden("Only the person who took this record over can hand it back")
     return _takeover(await controls.hand_back(db, current.tenant_id, takeover_id,
                                               _actor(current)))
+
+
+# Messages and where they came from (R7) ----------------------------------------------
+
+def _message(m: Message, account: str | None, contact: str | None) -> dict[str, Any]:
+    return {"id": str(m.id), "channel": m.channel, "direction": m.direction,
+            "status": m.status, "subject": m.subject, "body": m.body,
+            "ai_generated": m.ai_generated, "disclosure": m.disclosure,
+            "account_id": str(m.account_id) if m.account_id else None, "account_name": account,
+            "contact_id": str(m.contact_id) if m.contact_id else None, "contact_name": contact,
+            "run_id": str(m.run_id) if m.run_id else None, "created_by": m.created_by,
+            "created_at": m.created_at, "sent_at": m.sent_at, "sent_by": m.sent_by,
+            "erased_at": m.erased_at}
+
+
+async def _names(db: AsyncSession, m: Message) -> tuple[str | None, str | None]:
+    acc = await db.get(Account, m.account_id) if m.account_id else None
+    con = await db.get(Contact, m.contact_id) if m.contact_id else None
+    return (acc.name if acc else None), (con.full_name if con else None)
+
+
+@router.get("/messages")
+async def list_messages(
+    account_id: uuid.UUID | None = None, limit: int = Query(50, le=200),
+    _: CurrentUser = Depends(require_permission("accounts.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """Messages to or from customers, newest first (drafts included)."""
+    stmt = select(Message)
+    if account_id:
+        stmt = stmt.where(Message.account_id == account_id)
+    rows = list(await db.scalars(stmt.order_by(Message.created_at.desc()).limit(limit)))
+    return [_message(m, *(await _names(db, m))) for m in rows]
+
+
+async def _provenance(db: AsyncSession, message_id: uuid.UUID, reveal: bool) -> dict[str, Any]:
+    m = await db.get(Message, message_id)
+    if m is None:
+        raise NotFound("Message not found")
+    account, contact = await _names(db, m)
+    msg = _message(m, account, contact)
+    run = await replay.replay(db, m.run_id, reveal=True) if m.run_id else None
+    # Who held the account or contact back from agents, and when (the takeover trail).
+    subjects = [i for i in (m.account_id, m.contact_id) if i]
+    trail = await replay.audit_rows(db, list(await db.scalars(
+        select(AuditRecord).where(AuditRecord.kind.startswith("takeover."),
+                                  AuditRecord.record_id.in_(subjects))
+        .order_by(AuditRecord.seq)))) if subjects else []
+    active = list(await db.scalars(select(RecordTakeover).where(
+        RecordTakeover.record_id.in_(subjects), RecordTakeover.released_at.is_(None)))) \
+        if subjects else []
+    rows = (run["steps"] if run else []) + trail
+    extra = [msg] + (run["decisions"] if run else [])
+    names = [contact] if contact else []
+    if run:
+        names += [r["name"] for r in run["records"] if r["record_type"] == "contact" and r["name"]]
+    personal = replay.shown(rows, extra=extra, names=names, reveal=reveal)
+    if run and not reveal:
+        for r in run["records"]:
+            if r["record_type"] == "contact" and r["name"]:
+                r["name"] = "[name hidden]"
+    if run:
+        run["personal_data"] = personal
+    return {"message": msg, "run": run, "takeovers": trail,
+            "active_takeovers": [_takeover(t) for t in active], "personal_data": personal}
+
+
+@router.get("/audit/messages/{message_id}")
+async def message_provenance(
+    message_id: uuid.UUID, _: CurrentUser = Depends(require_permission("audit.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Everything behind one message: the agent run that wrote it, step by step, what
+    the agent was given, who approved, and the takeover trail of its account and
+    contact. Personal data is hidden (R4)."""
+    return await _provenance(db, message_id, reveal=False)
+
+
+@router.post("/audit/messages/{message_id}/reveal")
+async def reveal_message(
+    message_id: uuid.UUID, body: RevealIn,
+    current: CurrentUser = Depends(require_permission("audit.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    if not has_permission(current.permissions, "audit.personal_data"):
+        raise Forbidden("Seeing personal data in the audit trail needs the permission "
+                        "\"See personal data in the audit trail\"")
+    out = await _provenance(db, message_id, reveal=True)
+    await chain.append(db, current.tenant_id, "audit.personal_data_revealed",
+                       actor=_actor(current), record_type="message", record_id=message_id,
+                       data={"reason": body.reason.strip()})
+    return out

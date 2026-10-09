@@ -144,6 +144,12 @@ def upgrade() -> None:
     for t in ("audit_evidence", "audit_seals", "retention_settings", "legal_holds", "messages",
               "erased_identifiers"):
         enable_tenant_rls(op, t)
+    # 0001's default privileges give the app every right on new tables; take back what
+    # these must never allow it.
+    op.execute("REVOKE DELETE, TRUNCATE ON audit_evidence, retention_settings, legal_holds "
+               "FROM forge_app")
+    op.execute("REVOKE UPDATE, DELETE, TRUNCATE ON audit_seals, agent_versions, "
+               "erased_identifiers FROM forge_app")
     op.execute("GRANT SELECT, INSERT, UPDATE ON audit_evidence, retention_settings, legal_holds "
                "TO forge_app")
     op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON messages TO forge_app")
@@ -199,7 +205,6 @@ def upgrade() -> None:
     )
     op.execute("CREATE TRIGGER audit_evidence_guard BEFORE UPDATE OR DELETE ON audit_evidence "
                "FOR EACH ROW EXECUTE FUNCTION audit_evidence_guard()")
-    op.execute("REVOKE TRUNCATE ON audit_evidence, audit_seals FROM forge_app")
     op.execute(
         """
         CREATE OR REPLACE FUNCTION audit_seals_append_only() RETURNS trigger

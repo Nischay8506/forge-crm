@@ -33,7 +33,7 @@ ACCOUNT_KINDS = ("group", "entity", "site")
 SITE_TYPES = ("plant", "ship_to", "bill_to", "office", "warehouse", "branch")
 # Used by autonomy overrides and policy rules (F12.2). Empty means standard.
 ACCOUNT_TIERS = ("strategic", "key", "standard")
-RECORD_STATUSES = ("active", "merged", "inactive")
+RECORD_STATUSES = ("active", "merged", "inactive", "erased")  # erased: contacts (R6)
 
 
 class Account(IdMixin, TenantMixin, TimestampMixin, Base):

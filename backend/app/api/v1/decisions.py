@@ -37,13 +37,27 @@ async def _my_roles(db: AsyncSession, current: CurrentUser) -> set[uuid.UUID]:
                                 .where(UserRole.user_id == current.user.id)))
 
 
-def _can_decide(d: Decision, current: CurrentUser, roles: set[uuid.UUID]) -> bool:
-    """Anyone allowed to decide, unless a rule named who decides: then only people
-    with that role (or full access)."""
+def _why_not(d: Decision, current: CurrentUser, roles: set[uuid.UUID]) -> str | None:
+    """Why this person cannot decide this card, or None if they can. Anyone allowed to
+    decide may, unless a rule named who decides (then only that role, or full access);
+    some tools also need a permission and a second person (four eyes, e.g. erasure)."""
     if d.kind != "approval" or d.status != "pending":
-        return False
-    return (d.approver_role_id is None or ALL in current.permissions
-            or d.approver_role_id in roles)
+        return "This is not waiting for a decision"
+    tool = TOOLS.get(d.tool_key)
+    if tool and tool.four_eyes and d.args.get("requested_by") == f"user:{current.user.id}":
+        return "A second person must decide this: you asked for it"
+    if tool and tool.decider_permission and not has_permission(current.permissions,
+                                                               tool.decider_permission):
+        return "Only people allowed to erase personal data can decide this" \
+            if tool.decider_permission == "privacy.erase" else \
+            f"This needs the permission {tool.decider_permission}"
+    if d.approver_role_id is None or ALL in current.permissions or d.approver_role_id in roles:
+        return None
+    return "role"
+
+
+def _can_decide(d: Decision, current: CurrentUser, roles: set[uuid.UUID]) -> bool:
+    return _why_not(d, current, roles) is None
 
 
 INTEGRATION_KINDS = ("alert", "task")
@@ -73,6 +87,8 @@ async def _out(db: AsyncSession, d: Decision, current: CurrentUser,
         "run_id": str(d.run_id) if d.run_id else None,
         "created_at": d.created_at, "decided_by": d.decided_by, "decided_at": d.decided_at,
         "note": d.note, "result": d.result, "can_decide": _can_decide(d, current, roles),
+        "why_not": why if (why := _why_not(d, current, roles)) not in (
+            None, "role", "This is not waiting for a decision") else None,
     }
 
 
@@ -152,9 +168,12 @@ async def _decide(db: AsyncSession, current: CurrentUser, decision_id: uuid.UUID
     if d is None or d.kind != "approval":
         raise NotFound("Decision not found")
     roles = await _my_roles(db, current)
-    if d.status == "pending" and not _can_decide(d, current, roles):
+    why = _why_not(d, current, roles) if d.status == "pending" else None
+    if why == "role":
         role = await db.get(Role, d.approver_role_id)
         raise Forbidden(f"Only {role.name if role else 'the named role'} can decide this")
+    if why:
+        raise Forbidden(why)
     d = await runtime.decide(db, decision_id, approve=approve, actor=_actor(current), note=note)
     await db.flush()
     return await _out(db, d, current, roles)

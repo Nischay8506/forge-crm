@@ -119,6 +119,7 @@ def _run_row(r: AgentRun, tally: dict[str, int], waiting: int) -> dict[str, Any]
             "agent_name": agent.name if agent else r.agent_key, "trigger": r.trigger,
             "trigger_ref": r.trigger_ref, "status": r.status, "started_at": r.started_at,
             "finished_at": r.finished_at, "summary": r.summary,
+            "agent_version": r.agent_version,
             "tally": {k: tally.get(k, 0) for k in ("done", "asked", "blocked", "failed")},
             "waiting": waiting}
 
@@ -143,11 +144,20 @@ async def _tallies(session: AsyncSession, run_ids: list[uuid.UUID]
 
 async def list_runs(session: AsyncSession, *, agent_key: str | None = None,
                     record_id: uuid.UUID | None = None, before: datetime | None = None,
-                    limit: int = 50) -> list[dict[str, Any]]:
-    """Newest first. `record_id` keeps runs that touched that record."""
+                    version: int | None = None, month: str | None = None,
+                    outcome: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    """Newest first. `record_id` keeps runs that touched that record; `outcome` (with
+    the agent, and optionally version and month) keeps the runs behind one number on
+    the agent's Evidence tab."""
+    from app.agents.scorecard import run_ids_for
+
     stmt = select(AgentRun)
     if agent_key:
         stmt = stmt.where(AgentRun.agent_key == agent_key)
+    if agent_key and outcome:
+        stmt = stmt.where(AgentRun.id.in_(run_ids_for(agent_key, outcome, version, month)))
+    elif version is not None:
+        stmt = stmt.where(AgentRun.agent_version == version)
     if record_id:
         stmt = stmt.where(AgentRun.id.in_(select(AuditRecord.run_id).where(
             AuditRecord.record_id == record_id, AuditRecord.run_id.is_not(None))))
