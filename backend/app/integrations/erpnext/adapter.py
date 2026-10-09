@@ -15,7 +15,7 @@ import json
 import re
 from collections import defaultdict
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, ClassVar
@@ -24,7 +24,14 @@ from zoneinfo import ZoneInfo
 import httpx
 from pydantic import ValidationError
 
-from app.integrations.adapter import ConnectionCheck, ConnectorError, Page, RecordProblem, Stamp
+from app.integrations.adapter import (
+    ConnectionCheck,
+    ConnectorError,
+    CustomerMatch,
+    Page,
+    RecordProblem,
+    Stamp,
+)
 from app.integrations.contracts import (
     Address,
     Allocation,
@@ -33,6 +40,7 @@ from app.integrations.contracts import (
     Invoice,
     InvoiceLine,
     Item,
+    NewCustomer,
     Order,
     OrderLine,
     Price,
@@ -48,8 +56,9 @@ GSTIN_RE = re.compile(r"^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
 @dataclass(frozen=True)
 class ERPNextSettings:
     base_url: str
-    api_key: str
-    api_secret: str
+    # Kept out of repr so a logged or printed settings object never shows them.
+    api_key: str = field(repr=False)
+    api_secret: str = field(repr=False)
     time_zone: str = "Asia/Kolkata"
     company: str | None = None  # whose credit limit to read; None = the only one set
     host_header: str | None = None
@@ -259,6 +268,7 @@ class ERPNextAdapter:
             net_total=_num(r, "net_total"),
             tax_total=_num(r, "total_taxes_and_charges"),
             grand_total=_num(r, "grand_total"),
+            tax_template=r.get("taxes_and_charges") or None,
             lines=tuple(OrderLine(
                 item_code=x["item_code"], description=_line_text(x),
                 qty=_num(x, "qty"), uom=x.get("uom"), rate=_num(x, "rate"),
@@ -284,6 +294,7 @@ class ERPNextAdapter:
             tax_total=_num(r, "total_taxes_and_charges"),
             grand_total=_num(r, "grand_total"),
             outstanding=_num(r, "outstanding_amount"),
+            tax_template=r.get("taxes_and_charges") or None,
             lines=tuple(InvoiceLine(
                 item_code=x["item_code"], description=_line_text(x),
                 qty=_num(x, "qty"), uom=x.get("uom"), rate=_num(x, "rate"),
@@ -429,6 +440,51 @@ class ERPNextAdapter:
         )
         stamps = [Stamp(source.external_id(r), self.to_utc(r["modified"])) for r in rows]
         return stamps, (rows[-1]["name"] if len(rows) >= limit else None)
+
+    # --- writing (decision E3: "create customer" is the one write in Phase 1) ----------
+
+    REF_LABEL: ClassVar[str] = "Forge ref:"
+
+    async def find_customers(
+        self, *, ref: str | None, gstin: str | None, name: str | None
+    ) -> list[CustomerMatch]:
+        """ERPNext happily creates a second customer with the same name ("X - 1") or
+        GSTIN, so Forge looks first. The GSTIN is in tax_id on a plain ERPNext (India
+        Compliance keeps a copy there too)."""
+        source = self.SOURCES[Entity.customer]
+        found: dict[str, CustomerMatch] = {}
+        for why, filters in (
+            ("ref", [["customer_details", "like", f"%{self.REF_LABEL} {ref}%"]] if ref else None),
+            ("gstin", [["tax_id", "=", gstin]] if gstin else None),
+            ("name", [["customer_name", "=", name]] if name else None),
+        ):
+            if filters is None:
+                continue
+            rows = await self.client.get_list(source.doctype, fields=["*"], filters=filters,
+                                              limit=20)
+            records, _ = await self._translate(Entity.customer, source, rows)
+            for c in records:
+                found.setdefault(c.external_id, CustomerMatch(c, why))
+        return list(found.values())
+
+    async def create_customer(self, new: NewCustomer) -> Customer:
+        doc: dict[str, Any] = {
+            "customer_name": new.name,
+            "customer_type": "Individual" if new.customer_type == "individual" else "Company",
+            "customer_details": f"Created from Forge CRM. {self.REF_LABEL} {new.ref}",
+        }
+        if new.gstin:
+            doc["tax_id"] = new.gstin
+        if new.customer_group:
+            doc["customer_group"] = new.customer_group
+        if new.territory:
+            doc["territory"] = new.territory
+        created = await self.client.insert("Customer", doc)
+        record = await self.fetch(Entity.customer, created["name"])
+        if record is None:
+            raise ConnectorError("bad_response",
+                                 f"ERPNext created customer {created['name']} but cannot read it")
+        return record
 
     # --- connection --------------------------------------------------------------------
 

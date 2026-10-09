@@ -1,8 +1,8 @@
 """The sync loop (F12.6 sync engine), written once for every adapter.
 
-This part does not depend on where synced records are stored (open question E2):
-records go to a Sink, and the caller keeps each flow's FlowState between runs. The
-scheduler, tables, health page and alerts come once E2, E6 and E7 are answered.
+This part does not depend on where synced records are stored: records go to a Sink
+(app/integrations/store.py DbSink in production, MemorySink in tests), and the caller
+keeps each flow's FlowState between runs (app/integrations/runner.py).
 
 - run_flow() reads one record type from one connection: page by page from the last
   high-water mark, retrying failures that may pass (unreachable, timeout, rate
@@ -54,6 +54,22 @@ class FlowState:
     @property
     def resuming(self) -> bool:
         return self.cursor is not None
+
+    def to_json(self) -> dict[str, str | None]:
+        return {k: (v.isoformat() if isinstance(v, datetime) else v)
+                for k, v in (("watermark", self.watermark), ("run_since", self.run_since),
+                             ("cursor", self.cursor), ("run_max", self.run_max))}
+
+    @classmethod
+    def from_json(cls, data: dict[str, str | None] | None) -> "FlowState":
+        data = data or {}
+
+        def when(key: str) -> datetime | None:
+            v = data.get(key)
+            return datetime.fromisoformat(v) if v else None
+
+        return cls(watermark=when("watermark"), run_since=when("run_since"),
+                   cursor=data.get("cursor"), run_max=when("run_max"))
 
 
 @dataclass(frozen=True)
@@ -115,9 +131,11 @@ async def run_flow(
     retry: RetryPolicy = DEFAULT_RETRY,
     overlap: timedelta = OVERLAP,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    checkpoint: Callable[[FlowState], Awaitable[None]] | None = None,
 ) -> RunResult:
     """Read one record type into the sink. Never raises a ConnectorError: the result
-    carries it, with a state that resumes from the last page saved."""
+    carries it, with a state that resumes from the last page saved. `checkpoint` is
+    called with the state after every page, so the caller can store it."""
     if state.resuming:
         since, cursor, run_max = state.run_since, state.cursor, state.run_max
     else:
@@ -151,6 +169,8 @@ async def run_flow(
         result.state = FlowState(
             watermark=state.watermark, run_since=since, cursor=cursor, run_max=run_max
         )
+        if checkpoint is not None:
+            await checkpoint(result.state)
     return result
 
 
@@ -182,8 +202,8 @@ async def reconcile(
 ) -> Reconciliation:
     """Compare every record id and modified time with what Forge holds and fetch the
     missing or out-of-date ones (up to repair_limit; more means a full re-read is due).
-    Records the ERP no longer has are reported in `gone`; what to do with them is
-    decided with the storage (E2)."""
+    Records the ERP no longer has are reported in `gone`; the runner marks them gone
+    (never deletes them)."""
     rec = Reconciliation(entity=entity)
     scratch = RunResult(entity=entity, state=FlowState())
     erp: dict[str, datetime] = {}

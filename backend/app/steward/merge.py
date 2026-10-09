@@ -24,6 +24,8 @@ from app.models import (
     Account,
     AutonomyOverride,
     Contact,
+    ErpCustomer,
+    ErpWrite,
     FieldProvenance,
     KillSwitch,
     MatchCandidate,
@@ -51,6 +53,8 @@ REFERENCES: dict[str, list[tuple[type, str]]] = {
         # level set on either record still applies after the merge (undo moves them back).
         (KillSwitch, "account_id"), (AutonomyOverride, "account_id"),
         (SandboxAction, "account_id"),
+        # ERP customers linked to the account, and writes made for it (F12.6).
+        (ErpCustomer, "account_id"), (ErpWrite, "account_id"),
     ],
     "contact": [],
 }

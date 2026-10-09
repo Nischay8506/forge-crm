@@ -24,6 +24,8 @@ APP_URL = os.environ.get(
 os.environ["DATABASE_URL"] = APP_URL
 os.environ["MIGRATION_DATABASE_URL"] = OWNER_URL
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-hs256"
+# A fixed test-only key for stored ERP credentials (never used outside tests).
+os.environ["CREDENTIAL_KEYS"] = "ktest:" + "dGVzdC1vbmx5LWtleS1mb3ItZXJwLWNyZWRlbnRpYWw="
 # Tests never call real model providers, even if backend/.env holds keys.
 for _key in ("GROQ_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY"):
     os.environ[_key] = ""

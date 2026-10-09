@@ -20,6 +20,13 @@ PERMISSIONS: dict[str, str] = {
     "decisions.decide": "See what agents are waiting on, and approve or reject it",
     "audit.read": "View and verify the audit log",
     "records.takeover": "Take a record over from agents and hand it back",
+    # F12.6 Integration framework and ERP adapters
+    "integrations.read": "View ERP connections, sync health, alerts and synced ERP data",
+    "integrations.manage": "Connect ERPs, change their credentials and settings, run syncs",
+    "integrations.map": "Match ERP customers to accounts and map ERP codes in the mapping "
+                        "studio, and retry or skip records that failed to sync",
+    "erp.write": "Ask for an account to be created as a customer in an ERP",
+    "mcp.manage": "Create and revoke tokens for outside AI tools (MCP)",
 }
 
 ALL = "*"

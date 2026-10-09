@@ -48,6 +48,9 @@ def _matches(row: dict[str, Any], flt: list[Any]) -> bool:
         return _cmp_value(have) == _cmp_value(value) or (have is None and value in ("", None))
     if op == "!=":
         return _cmp_value(have) != _cmp_value(value)
+    if op == "like":
+        needle = str(value).strip("%").lower()
+        return have is not None and needle in str(have).lower()
     if op == "in":
         return have in value
     if op == "not in":
@@ -74,7 +77,10 @@ class FakeERPNext(httpx.AsyncBaseTransport):
         self.docs: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
         self.child_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self.denied: set[str] = set()
+        self.read_only: set[str] = set()  # doctypes the key may read but not create
         self.fault: str | None = None
+        # Do the next insert, then answer as if the connection dropped (lost answer).
+        self.lose_next_answer = False
         self.revoked = False
         self.requests: list[httpx.Request] = []
         self._clock = datetime(2026, 4, 1, 9, 0, tzinfo=UTC)
@@ -141,6 +147,12 @@ class FakeERPNext(httpx.AsyncBaseTransport):
                 return self._get_doc(doctype, name)
             if request.method == "GET":
                 return self._get_list(doctype, params)
+            if request.method == "POST" and not name:
+                response = self._insert(doctype, json.loads(request.content or b"{}"))
+                if self.lose_next_answer and response.status_code == 200:
+                    self.lose_next_answer = False
+                    raise httpx.ReadTimeout("timed out", request=request)
+                return response
         return _frappe_error(404, "PageDoesNotExistError", "Page not found")
 
     def _method(self, name: str) -> httpx.Response:
@@ -171,6 +183,25 @@ class FakeERPNext(httpx.AsyncBaseTransport):
             if parent_doctype == doctype:
                 doc[key] = [c for c in self.child_rows[child_doctype] if c["parent"] == name]
         return _json(200, {"data": doc})
+
+    def _insert(self, doctype: str, doc: dict[str, Any]) -> httpx.Response:
+        if doctype in self.denied or doctype in self.read_only:
+            return _frappe_error(403, "PermissionError", f"No permission to create {doctype}")
+        if doctype == "Customer":
+            if not doc.get("customer_name"):
+                return _frappe_error(417, "MandatoryError",
+                                     "Error: Value missing for Customer: Customer Name")
+            # Like ERPNext: the name is the customer name, made unique with " - 1", " - 2".
+            base, n = doc["customer_name"], 0
+            name = base
+            while name in self.docs["Customer"]:
+                n += 1
+                name = f"{base} - {n}"
+            doc = {"customer_type": "Company", **doc, "name": name}
+        elif "name" not in doc:
+            return _frappe_error(417, "MandatoryError", "name missing")
+        row = self.add(doctype, doc)
+        return _json(200, {"data": dict(row)})
 
     def _get_list(self, doctype: str, params: httpx.QueryParams) -> httpx.Response:
         if (denied := self._readable(doctype)) is not None:

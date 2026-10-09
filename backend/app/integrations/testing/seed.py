@@ -11,14 +11,14 @@ import random
 from app.integrations.testing.fake_erpnext import FakeERPNext
 
 CUSTOMERS = [
-    ("Bharat Forge Components Pvt Ltd", "27AABCB1234F1Z5", "Pune", "Maharashtra", "411018"),
-    ("Sundaram Precision Castings Ltd", "33AADCS5678K1ZQ", "Chennai", "Tamil Nadu", "600058"),
-    ("Kirloskar Pumps & Valves", "29AAACK9012M1Z2", "Bengaluru", "Karnataka", "560058"),
-    ("Godavari Steel Fabricators", "36AAGFG3456P1ZX", "Hyderabad", "Telangana", "500037"),
-    ("Anand Auto Electricals", "24AAFFA7890Q1Z1", "Ahmedabad", "Gujarat", "380015"),
-    ("Mahindra Agri Implements", "27AAACM2468R1ZA", "Nashik", "Maharashtra", "422007"),
-    ("Shakti Hydraulics", "06AAPFS1357T1ZB", "Faridabad", "Haryana", "121003"),
-    ("Coromandel Gears Pvt Ltd", "33AABCC8642U1ZC", "Coimbatore", "Tamil Nadu", "641021"),
+    ("Bharat Forge Components Pvt Ltd", "27AABCB1234F1Z8", "Pune", "Maharashtra", "411018"),
+    ("Sundaram Precision Castings Ltd", "33AADCS5678K1ZX", "Chennai", "Tamil Nadu", "600058"),
+    ("Kirloskar Pumps & Valves", "29AAACK9012M1Z9", "Bengaluru", "Karnataka", "560058"),
+    ("Godavari Steel Fabricators", "36AAGFG3456P1ZW", "Hyderabad", "Telangana", "500037"),
+    ("Anand Auto Electricals", "24AAFFA7890Q1ZS", "Ahmedabad", "Gujarat", "380015"),
+    ("Mahindra Agri Implements", "27AAACM2468R1ZV", "Nashik", "Maharashtra", "422007"),
+    ("Shakti Hydraulics", "06AAPFS1357T1ZA", "Faridabad", "Haryana", "121003"),
+    ("Coromandel Gears Pvt Ltd", "33AABCC8642U1Z1", "Coimbatore", "Tamil Nadu", "641021"),
 ]
 ITEMS = [
     ("GBX-110", "Helical gearbox 110 mm", "Gearboxes", "8483"),
@@ -110,6 +110,7 @@ def seed_demo(fake: FakeERPNext, *, seed: int = 7, burst: int = 0, broken: bool 
             "po_no": f"PO/{n:04d}", "status": status, "docstatus": docstatus,
             "per_delivered": per_delivered, "currency": "INR", "net_total": net,
             "total_taxes_and_charges": round(net * 0.18, 2), "grand_total": round(net * 1.18, 2),
+            "taxes_and_charges": "Output GST In-state 18%" if n % 3 else "Output GST Out-state 18%",
         }, items=lines)
         if docstatus == 1 and n % 2 == 0:
             total = so["grand_total"]

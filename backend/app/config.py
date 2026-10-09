@@ -46,6 +46,19 @@ class Settings(BaseSettings):
     steward_embedding_neighbours: int = 10
     import_max_rows: int = 20000
 
+    # Integrations (F12.6). Keys that encrypt stored ERP credentials (decision E8):
+    # "id:base64key,..." with the current key first; see app/core/secrets.py.
+    credential_keys: str | None = None
+    integration_poll_minutes: int = 5  # decision E6
+    integration_lag_alert_minutes: int = 15
+    # A revoked key or missing permission alerts at once; the ERP being unreachable or
+    # a sync failing for a reason that may pass alerts only once it lasts this long.
+    integration_unreachable_alert_minutes: int = 3
+    integration_failures_before_alert: int = 3
+    integration_stuck_run_minutes: int = 30
+    integration_reconcile_hour: int = 2  # nightly comparison, local time below
+    integration_local_time_zone: str = "Asia/Kolkata"
+
     outbox_batch_size: int = 100
     outbox_max_attempts: int = 8
 

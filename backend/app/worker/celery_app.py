@@ -16,6 +16,8 @@ celery_app.conf.update(
     timezone="UTC",
     beat_schedule={
         "dispatch-outbox": {"task": "forge.dispatch_outbox", "schedule": 2.0},
+        # F12.6: connection checks every minute, due syncs, the nightly reconciliation.
+        "integrations-tick": {"task": "forge.integrations_tick", "schedule": 60.0},
     },
 )
 celery_app.autodiscover_tasks(["app.worker"], related_name="tasks")

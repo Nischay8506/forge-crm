@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
-from app.integrations.contracts import Entity, Record
+from app.integrations.contracts import Customer, Entity, NewCustomer, Record
 
 # Why a call to the other system failed. The sync engine decides on retries and
 # alerts from this alone.
@@ -113,3 +113,29 @@ class Adapter(Protocol):
         ...
 
     async def aclose(self) -> None: ...
+
+
+@dataclass(frozen=True)
+class CustomerMatch:
+    """An existing ERP customer that may be the one Forge is about to create."""
+
+    customer: Customer
+    matched_on: str  # ref | gstin | name
+
+
+@runtime_checkable
+class CustomerWriter(Protocol):
+    """Adapters that can create customers (decision E3). The engine around it does the
+    duplicate checks, the policy gate, idempotency and the audit trail."""
+
+    async def find_customers(
+        self, *, ref: str | None, gstin: str | None, name: str | None
+    ) -> list[CustomerMatch]:
+        """Customers that could be the same one: carrying Forge's ref, the same GSTIN,
+        or the same name."""
+        ...
+
+    async def create_customer(self, new: NewCustomer) -> Customer:
+        """Create it and return it as the ERP now holds it."""
+        ...
+

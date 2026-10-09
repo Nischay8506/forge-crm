@@ -130,6 +130,7 @@ class Order(Record):
     net_total: Decimal
     tax_total: Decimal
     grand_total: Decimal
+    tax_template: str | None = None  # the source's tax template code
     lines: tuple[OrderLine, ...] = ()
 
 
@@ -161,6 +162,7 @@ class Invoice(Record):
     tax_total: Decimal
     grand_total: Decimal
     outstanding: Decimal
+    tax_template: str | None = None
     lines: tuple[InvoiceLine, ...] = ()
 
 
@@ -191,6 +193,19 @@ class Stock(Record):
     ordered_qty: Decimal = Decimal(0)
     projected_qty: Decimal
     uom: str | None = None
+
+
+class NewCustomer(_Shape):
+    """What Forge sends to create a customer in an ERP (decision E3: the one write in
+    Phase 1). `ref` is Forge's idempotency key; the adapter stores it on the record so
+    a request whose answer was lost can be found again instead of sent twice."""
+
+    ref: str = Field(min_length=8, max_length=120)
+    name: str = Field(min_length=1, max_length=140)
+    customer_type: Literal["company", "individual"] = "company"
+    gstin: str | None = None
+    customer_group: str | None = None
+    territory: str | None = None
 
 
 CONTRACTS: dict[Entity, type[Record]] = {

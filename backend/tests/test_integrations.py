@@ -178,9 +178,9 @@ async def test_customer_translation():
     fake = make_fake()
     a = adapter_for(fake)
     c = await a.fetch(Entity.customer, "Bharat Forge Components Pvt Ltd")
-    assert c.gstin == "27AABCB1234F1Z5"  # from tax_id
+    assert c.gstin == "27AABCB1234F1Z8"  # from tax_id
     other = await a.fetch(Entity.customer, "Sundaram Precision Castings Ltd")
-    assert other.gstin == "33AADCS5678K1ZQ"  # from India Compliance's gstin field
+    assert other.gstin == "33AADCS5678K1ZX"  # from India Compliance's gstin field
     assert c.billing_address.city == "Pune" and c.billing_address.pincode == "411018"
     assert c.credit_limit == Decimal("500000")
     assert c.payment_terms == "Net 30" and c.customer_type == "company"

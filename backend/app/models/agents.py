@@ -133,9 +133,11 @@ class Decision(IdMixin, TenantMixin, Base):
 
     __tablename__ = "decisions"
 
-    kind: Mapped[str] = mapped_column(String(10), nullable=False)  # approval | notice
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)  # approval|notice|alert|task
     # approval: pending -> approved | rejected | superseded | failed
     # notice:   open -> acknowledged
+    # alert:    open -> acknowledged -> resolved (by itself when the problem is gone)
+    # task:     open -> done (by itself when nothing is left to do)
     status: Mapped[str] = mapped_column(String(12), nullable=False, index=True)
     agent_key: Mapped[str] = mapped_column(String(60), nullable=False)
     tool_key: Mapped[str] = mapped_column(String(80), nullable=False)

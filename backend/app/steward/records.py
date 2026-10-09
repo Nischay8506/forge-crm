@@ -211,7 +211,7 @@ async def _after_write(session: AsyncSession, record: Account | Contact, record_
 
 async def create_account(
     session: AsyncSession, tenant_id: uuid.UUID, data: dict[str, Any], *, source: str,
-    actor: str, strict: bool = True, publish_event: bool = True,
+    actor: str, strict: bool = True, publish_event: bool = True, source_ref: str | None = None,
 ) -> Account:
     values, errors, warnings = clean_account(data)
     if not values.get("name"):
@@ -228,7 +228,7 @@ async def create_account(
     for f in ACCOUNT_KEY_FIELDS:
         if getattr(acc, f) is not None:
             await record_provenance(session, acc, "account", f, getattr(acc, f), source=source,
-                                    actor=actor)
+                                    actor=actor, source_ref=source_ref)
     await _after_write(session, acc, "account", "account.created" if publish_event else None,
                        warnings + (errors if not strict else []))
     return acc
@@ -236,7 +236,7 @@ async def create_account(
 
 async def update_account(
     session: AsyncSession, acc: Account, changes: dict[str, Any], *, source: str, actor: str,
-    strict: bool = True,
+    strict: bool = True, source_ref: str | None = None,
 ) -> Account:
     if acc.status != "active":
         raise AppError(f"Account is {acc.status}; edit the surviving record instead")
@@ -253,7 +253,8 @@ async def update_account(
             setattr(acc, f, v)
             changed = True
             if f in ACCOUNT_KEY_FIELDS:
-                await record_provenance(session, acc, "account", f, v, source=source, actor=actor)
+                await record_provenance(session, acc, "account", f, v, source=source, actor=actor,
+                                        source_ref=source_ref)
     if changed:
         refresh_match_fields(acc)
     await _after_write(session, acc, "account", "account.updated" if changed else None,

@@ -51,3 +51,34 @@ async def _process_import(tenant_id: str, batch_id: str) -> None:
 @celery_app.task(name="forge.process_import")
 def process_import(tenant_id: str, batch_id: str) -> None:
     asyncio.run(_process_import(tenant_id, batch_id))
+
+
+async def _integrations_tick() -> dict:
+    from app.integrations.runner import tick
+
+    try:
+        return await tick()
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.integrations_tick")
+def integrations_tick() -> dict:
+    return asyncio.run(_integrations_tick())
+
+
+async def _integration_run(what: str, tenant_id: str, flow_id: str, trigger: str) -> dict | None:
+    from uuid import UUID
+
+    from app.integrations.runner import run_reconcile, run_sync
+
+    run = run_sync if what == "sync" else run_reconcile
+    try:
+        return await run(UUID(tenant_id), UUID(flow_id), trigger=trigger)
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.integration_run")
+def integration_run(what: str, tenant_id: str, flow_id: str, trigger: str) -> dict | None:
+    return asyncio.run(_integration_run(what, tenant_id, flow_id, trigger))
