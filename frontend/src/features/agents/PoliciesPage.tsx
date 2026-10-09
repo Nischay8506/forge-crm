@@ -20,21 +20,62 @@ interface Draft {
   tool_key: string
   conditions: Condition[]
   outcome: Rule["outcome"]
-  approver_role_id: string
+  /** The roles that decide, in order (H1); "" = anyone who can decide. */
+  steps: string[]
+  /** Deadline in working hours (H4); "" = the company default. */
+  sla_hours: string
   note: string
   enabled: boolean
 }
 
 const EMPTY: Draft = { agent_key: "", tool_key: "", conditions: [], outcome: "ask_person",
-  approver_role_id: "", note: "", enabled: true }
+  steps: [""], sla_hours: "", note: "", enabled: true }
 
 function body(d: Draft) {
   return {
     agent_key: d.agent_key || null, tool_key: d.tool_key || null,
     conditions: d.conditions.map((c) => ({ ...c, value: Array.isArray(c.value) || typeof c.value !== "string" || c.value === "" || Number.isNaN(Number(c.value)) ? c.value : Number(c.value) })),
-    outcome: d.outcome, approver_role_id: d.outcome === "ask_person" && d.approver_role_id ? d.approver_role_id : null,
+    outcome: d.outcome, approver_role_id: null,
+    approval_steps: d.outcome === "ask_person" ? d.steps.filter(Boolean) : [],
+    sla_hours: d.outcome === "ask_person" && d.sla_hours.trim() ? d.sla_hours.trim() : null,
     note: d.note || null, enabled: d.enabled,
   }
+}
+
+/** H1: who decides, in order. Each step is a role; the card moves to the next step
+ * only after the one before approves, and each step needs a different person. */
+function ChainEditor({ roles, steps, onChange }: {
+  roles: { id: string; name: string }[]; steps: string[]; onChange: (s: string[]) => void
+}) {
+  const setAt = (i: number, v: string) => onChange(steps.map((x, j) => (j === i ? v : x)))
+  const used = new Set(steps.filter(Boolean))
+  return (
+    <Field label="Who decides, in order" group
+      hint={steps.length > 1 ? "Each step is decided by a different person, and the person who asked never decides." : "Add a step when a second role must approve after the first."}>
+      <ol className="space-y-1.5">
+        {steps.map((rid, i) => (
+          <li key={i} className="flex items-center gap-2">
+            <span className="w-5 text-[12px] text-ink-300 shrink-0">{i + 1}.</span>
+            <Select aria-label={`Step ${i + 1}`} value={rid} onChange={(e) => setAt(i, e.target.value)}>
+              {steps.length === 1 && <option value="">Anyone who can decide</option>}
+              {steps.length > 1 && rid === "" && <option value="">Pick a role</option>}
+              {roles.map((r) => (
+                <option key={r.id} value={r.id} disabled={r.id !== rid && used.has(r.id)}>{r.name}</option>
+              ))}
+            </Select>
+            {steps.length > 1 && (
+              <button type="button" className="text-[12px] text-ink-500 hover:text-red-500 shrink-0"
+                onClick={() => onChange(steps.filter((_, j) => j !== i))}>Remove</button>
+            )}
+          </li>
+        ))}
+      </ol>
+      {steps.length < 5 && (
+        <button type="button" className="text-[12.5px] text-teal-600 hover:underline"
+          onClick={() => onChange([...steps, ""])}>+ Add a step</button>
+      )}
+    </Field>
+  )
 }
 
 function RuleBuilder({ catalog, initial, onDone }: { catalog: Catalog; initial: Draft; onDone: () => void }) {
@@ -48,6 +89,8 @@ function RuleBuilder({ catalog, initial, onDone }: { catalog: Catalog; initial: 
   const facts = catalog.facts.filter((f) => !tool || tool.facts.some((tf) => tf.key === f.key))
   const factOf = (key: string) => catalog.facts.find((f) => f.key === key)
   const localProblems = d.conditions.map((c) => conditionProblem(c, factOf(c.fact))).filter(Boolean) as string[]
+  if (d.outcome === "ask_person" && d.steps.length > 1 && d.steps.some((x) => !x)) localProblems.push("Pick a role for every step")
+  if (d.outcome === "ask_person" && d.sla_hours.trim() && !(Number(d.sla_hours) > 0)) localProblems.push("The deadline is a number of working hours, such as 4 or 0.5")
 
   const debounced = useDebounced(useMemo(() => body(d), [d]), 300)
   const preview = useQuery({
@@ -149,11 +192,12 @@ function RuleBuilder({ catalog, initial, onDone }: { catalog: Catalog; initial: 
               </div>
             </Field>
             {d.outcome === "ask_person" && (
-              <Field label="Who decides" hint="Leave as anyone to let everyone who can decide see it.">
-                <Select value={d.approver_role_id} onChange={(e) => set({ approver_role_id: e.target.value })}>
-                  <option value="">Anyone who can decide</option>
-                  {catalog.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </Select>
+              <ChainEditor roles={catalog.roles} steps={d.steps} onChange={(steps) => set({ steps })} />
+            )}
+            {d.outcome === "ask_person" && (
+              <Field label="Deadline for each step" hint="In working hours, counted on the company's working calendar. Leave empty for the company default.">
+                <Input className="max-w-[140px]" inputMode="decimal" placeholder="Default" value={d.sla_hours}
+                  onChange={(e) => set({ sla_hours: e.target.value })} />
               </Field>
             )}
           </div>
@@ -234,7 +278,8 @@ export function PoliciesPage() {
                     <div className="flex gap-3 text-[12px] shrink-0">
                       <button className="text-teal-600 hover:underline" onClick={() => setEditing({
                         id: r.id, agent_key: r.agent_key ?? "", tool_key: r.tool_key ?? "", conditions: r.conditions,
-                        outcome: r.outcome, approver_role_id: r.approver_role_id ?? "", note: r.note ?? "", enabled: r.enabled })}>Change</button>
+                        outcome: r.outcome, steps: r.approval_steps.length ? r.approval_steps : [r.approver_role_id ?? ""],
+                        sla_hours: r.sla_hours ?? "", note: r.note ?? "", enabled: r.enabled })}>Change</button>
                       <button className="text-ink-500 hover:underline" onClick={() => toggle.mutate(r)}>{r.enabled ? "Turn off" : "Turn on"}</button>
                       <button className="text-red-500 hover:underline" onClick={() => { if (confirm("Delete this rule?")) remove.mutate(r) }}>Delete</button>
                     </div>

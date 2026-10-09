@@ -43,6 +43,10 @@ export interface Rule {
   conditions: Condition[]
   outcome: "allow" | "ask_person" | "block"
   approver_role_id: string | null
+  /** H1: the roles that decide, in order (first = approver_role_id). */
+  approval_steps: string[]
+  /** H4: deadline in working hours; null = the company default. */
+  sla_hours: string | null
   note: string | null
   enabled: boolean
   sentence: string
@@ -127,6 +131,149 @@ export interface DecisionCard {
   decision_ms: number | null
   /** Only on GET /decisions/{id}: what the decision led to. */
   next?: AuditRow[]
+  // Step 5 (F12.3)
+  recommended_option: "approve" | "reject" | "counter" | null
+  decided_by_name: string | null
+  as_stand_in_for: string | null
+  requested_by: string | null
+  requested_by_name: string | null
+  counter_of: string | null
+  /** On GET /decisions/{id}: the card that replaced this one after a counter. */
+  countered_by?: string | null
+  steps: DecisionStepInfo[]
+  step: number | null
+  due_at: string | null
+  past_deadline: boolean
+  escalated_to_me: boolean
+  counter_fields: { key: string; label: string; type: string; value: unknown }[]
+  /** The fingerprint of the card as shown, sent back with every decision (H7). */
+  card_hash: string | null
+  history: CardHistory | null
+  counter: CounterInfo | null
+}
+
+export interface DecisionStepInfo {
+  position: number
+  role_id: string | null
+  role: string | null
+  status: "waiting" | "pending" | "approved" | "rejected" | "countered" | "cancelled" | "superseded"
+  started_at: string | null
+  due_at: string | null
+  overdue_at: string | null
+  reminded_at: string | null
+  decided_by: string | null
+  decided_by_name: string | null
+  on_behalf_of: string | null
+  on_behalf_of_name: string | null
+  decided_at: string | null
+  note: string | null
+  decision_ms: number | null
+}
+
+export interface ErpFigures {
+  linked: boolean
+  erps?: string[]
+  as_of?: string | null
+  stale?: boolean
+  figures?: { currency: string; outstanding: string; overdue: string; invoiced_12m: string }[]
+}
+
+export interface CardHistory {
+  account: { id: string; name: string } | null
+  tier?: string
+  earlier?: { count: number; by_status: Record<string, number>; latest: { title: string; status: string }[] }
+  erp?: ErpFigures
+}
+
+export interface CounterInfo {
+  decision_id: string
+  fields: string[]
+  asked: { key: string; label: string; value: string }[]
+  countered: { key: string; label: string; value: string }[]
+  by: string | null
+  by_name: string | null
+  on_behalf_of: string | null
+  on_behalf_of_name: string | null
+  note: string | null
+}
+
+export interface DecisionCounts {
+  waiting: number
+  approvals: number
+  near_deadline: number
+  past_deadline: number
+  alerts: number
+  tasks: number
+  notices: number
+}
+
+export interface MyNumbers {
+  days: number
+  decided: number
+  median_decision_seconds: number | null
+  override_rate: number | null
+  overrides: number
+  with_recommendation: number
+}
+
+export interface InboxSettings {
+  time_zone: string
+  work_days: number[]
+  day_start: string
+  day_end: string
+  holidays: { date: string; name: string }[]
+  default_sla_hours: string
+  reminder_pct: number
+  escalation_role_id: string | null
+  escalation_role: string | null
+  bottleneck_overdue: number
+  bottleneck_wait_ratio: string
+  is_default: boolean
+  updated_by: string | null
+  updated_at: string | null
+  day_names: string[]
+  roles: { id: string; name: string }[]
+}
+
+export interface Delegation {
+  id: string
+  kind: "card" | "away"
+  from_user_id: string
+  from_name: string | null
+  to_user_id: string
+  to_name: string | null
+  decision_id: string | null
+  starts_at: string
+  ends_at: string | null
+  tool_keys: string[]
+  tools: string[]
+  max_amount: string | null
+  note: string | null
+  created_by: string
+  created_at: string
+  revoked_at: string | null
+  revoked_by: string | null
+  active: boolean
+}
+
+export interface CardType { key: string; title: string; has_amount: boolean; agent: string | null }
+
+interface Rates {
+  median_wait_hours: number | null
+  median_decision_seconds: number | null
+  overrides: number
+  with_recommendation: number
+  override_rate: number | null
+  missed_deadlines: number
+}
+
+export interface ApprovalAnalytics {
+  days: number
+  since: string
+  by_type: (Rates & { tool_key: string; title: string; decided: number; by_status: Record<string, number>; pending: number; pending_past_deadline: number })[]
+  approvers: (Rates & { actor: string; name: string; decided: number; for_others: number })[]
+  waiting_by_role: { role_id: string | null; role: string; waiting: number; past_deadline: number }[]
+  overall: { decisions: number; steps: number; median_decision_seconds: number | null; under_60s: number | null; measured: number }
 }
 
 export interface AuditRow {

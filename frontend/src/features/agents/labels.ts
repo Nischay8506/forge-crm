@@ -9,7 +9,7 @@ export const OUTCOME_LABELS: Record<string, { label: string; tone: Tone }> = {
 }
 
 export const STATUS_TONES: Record<string, Tone> = {
-  pending: "gold", approved: "green", rejected: "red", superseded: "neutral", failed: "red",
+  pending: "gold", approved: "green", rejected: "red", superseded: "neutral", failed: "red", countered: "amber",
   open: "teal", acknowledged: "neutral", resolved: "green", done: "green",
 }
 
@@ -29,6 +29,13 @@ export const AUDIT_KINDS: Record<string, string> = {
   "decision.requested": "Asked a person",
   "decision.approved": "Approved",
   "decision.rejected": "Rejected",
+  "decision.countered": "Approved a changed version",
+  "decision.overdue": "Went past its deadline",
+  "delegation.created": "Handed decisions to a colleague",
+  "delegation.ended": "Ended a hand-over",
+  "inbox.settings.changed": "Changed the approval deadlines",
+  "inbox.alert.raised": "Approval bottleneck alert raised",
+  "inbox.alert.resolved": "Approval bottleneck alert resolved",
   "record.merged": "Merged records",
   "merge.undone": "Undid a merge",
   "candidate.not_duplicate": "Marked not a duplicate",
@@ -145,8 +152,23 @@ export function auditLine(row: Pick<AuditRow, "kind" | "data">): string {
     case "policy.deleted":
       return `${base}: ${str(d.sentence)}`
     case "decision.approved":
-    case "decision.rejected":
-      return d.note ? `${base}: "${str(d.note)}"` : base
+    case "decision.rejected": {
+      const step = Number(d.steps) > 1 ? ` step ${String(d.step)} of ${String(d.steps)}` : ""
+      const forWhom = d.on_behalf_of ? " (as a stand-in)" : ""
+      return `${base}${step}${forWhom}${d.note ? `: "${str(d.note)}"` : ""}`
+    }
+    case "decision.countered": {
+      const asked = (d.asked ?? {}) as Record<string, unknown>
+      const countered = (d.countered ?? {}) as Record<string, unknown>
+      const change = Object.keys(countered).map((k) => `${k.replace(/_/g, " ")} ${String(asked[k] ?? "")} → ${String(countered[k] ?? "")}`).join(", ")
+      return `${base}: ${change}${d.note ? ` ("${str(d.note)}")` : ""}`
+    }
+    case "decision.overdue":
+      return Number(d.steps) > 1 ? `${base} (step ${String(d.step)} of ${String(d.steps)})` : base
+    case "delegation.created":
+      return d.kind === "card" ? "Handed a card to a colleague" : `${base}: out of office until ${new Date(str(d.ends_at)).toLocaleString("en-IN")}`
+    case "inbox.alert.raised":
+      return `${base}: ${str(d.title)}`
     case "integration.alert.raised":
     case "integration.alert.changed":
       return `${base}: ${str(d.title)}`

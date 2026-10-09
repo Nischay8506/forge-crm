@@ -26,6 +26,10 @@ import { PoliciesPage } from '@/features/agents/PoliciesPage'
 import { StopsPage } from '@/features/agents/StopsPage'
 import { MessageTracePage } from '@/features/audit/MessageTracePage'
 import { RetentionPage } from '@/features/audit/RetentionPage'
+import { ApprovalsPage } from '@/features/decisions/ApprovalsPage'
+import { AwayPage } from '@/features/decisions/AwayPage'
+import { DeadlinesPage } from '@/features/decisions/DeadlinesPage'
+import { DecisionsLayout } from '@/features/decisions/DecisionsLayout'
 import { DecisionsPage } from '@/features/decisions/DecisionsPage'
 import { CodesPage } from '@/features/integrations/CodesPage'
 import { ConnectionDetailPage } from '@/features/integrations/ConnectionDetailPage'
@@ -66,7 +70,16 @@ const router = createBrowserRouter([
           { path: 'hygiene', element: <HygienePage /> },
         ],
       },
-      { path: 'decisions', element: <DecisionsPage /> },
+      {
+        path: 'decisions',
+        element: <DecisionsLayout />,
+        children: [
+          { index: true, element: <DecisionsPage /> },
+          { path: 'away', element: <AwayPage /> },
+          { path: 'analytics', element: <ApprovalsPage /> },
+          { path: 'deadlines', element: <DeadlinesPage /> },
+        ],
+      },
       {
         path: 'agents',
         element: <AgentsLayout />,

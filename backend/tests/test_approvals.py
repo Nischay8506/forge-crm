@@ -225,7 +225,7 @@ async def test_counter_is_checked_by_the_rules_and_keeps_both_versions(client, c
     r = await counter(fin_h, w["decision_id"], {"amount": "250000"}, note="Agreed 2.5L")
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "countered"
-    new = r.json()["countered_by"]
+    new = r.json()["new_card"]
     assert new["status"] == "approved" and new["counter_of"] == w["decision_id"]
     assert await _amounts(ctx["tid"]) == [250000.0]
     detail = await _card(client, h, new["id"])
@@ -239,7 +239,7 @@ async def test_counter_is_checked_by_the_rules_and_keeps_both_versions(client, c
     # Higher: the counter triggers the extra approval the new amount needs.
     w2 = await _try(client, h, "350000")
     r = await counter(fin_h, w2["decision_id"], {"amount": "450000"})
-    new = r.json()["countered_by"]
+    new = r.json()["new_card"]
     assert new["status"] == "pending" and [s["status"] for s in new["steps"]] == [
         "approved", "pending"]
     assert await _amounts(ctx["tid"]) == [250000.0]

@@ -168,6 +168,9 @@ async def _out(db: AsyncSession, d: Decision, current: CurrentUser, ctx: Ctx,
     if d.kind == "approval" and (pending or detail):
         built = await card.build(db, d, ctx.roles)
         out["history"], out["counter"] = built["history"], built["counter"]
+        if out["counter"]:
+            out["counter"] = {**out["counter"], "by_name": ctx.name(out["counter"]["by"]),
+                              "on_behalf_of_name": ctx.name(out["counter"]["on_behalf_of"])}
         if pending:
             out["card_hash"] = built["hash"]
     return out
@@ -307,7 +310,9 @@ def _settings_out(s: dict[str, Any], roles: dict[uuid.UUID, str]) -> dict[str, A
             "escalation_role_id": str(s["escalation_role_id"]) if s["escalation_role_id"]
             else None,
             "escalation_role": roles.get(s["escalation_role_id"]) if s["escalation_role_id"]
-            else None, "day_names": list(calendar.DAY_NAMES)}
+            else None, "day_names": list(calendar.DAY_NAMES),
+            "roles": sorted(({"id": str(i), "name": n} for i, n in roles.items()),
+                            key=lambda r: r["name"])}
 
 
 @router.get("/settings")
@@ -619,8 +624,8 @@ async def counter_card(
                              "decision_id": str(outcome.decision_id)
                              if outcome.decision_id else None}
     if outcome.decision_id:
-        out["countered_by"] = await _out(db, await db.get(Decision, outcome.decision_id),
-                                         current, ctx)
+        out["new_card"] = await _out(db, await db.get(Decision, outcome.decision_id),
+                                     current, ctx)
     return out
 
 

@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom"
 import { useAuthStore, usePermissions } from "@/stores/authStore"
 import { hasPermission } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
-import { useDecisionCount } from "@/features/decisions/DecisionsPage"
+import { useDecisionCount } from "@/features/decisions/hooks"
 import { useOverview } from "@/features/integrations/hooks"
 
 /** Nav items appear only when the user holds the permission (null = everyone).
@@ -31,11 +31,12 @@ export function AppBar() {
     : "U"
 
   return (
-    <header className="flex items-center gap-3 bg-ink-700 px-4 h-[52px] w-full shrink-0">
+    <header className="flex items-center gap-2 sm:gap-3 bg-ink-700 px-3 sm:px-4 h-[52px] w-full shrink-0 sticky top-0 z-20">
       <Link to="/" className="font-disp font-bold text-white text-[14px] tracking-[0.02em] shrink-0">
         FORGE<b className="text-gold-500 font-bold mx-[1px]">·</b>CRM
       </Link>
-      <nav className="flex gap-1 h-full flex-1 ml-2">
+      {/* On a phone the menu scrolls sideways. */}
+      <nav className="flex gap-1 h-full flex-1 min-w-0 ml-1 sm:ml-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {NAV.filter((i) => i.permission === null || hasPermission(permissions, i.permission)).map(
           (item) => {
             const active =
@@ -44,7 +45,7 @@ export function AppBar() {
             return (
               <Link key={item.path} to={item.path}
                 className={cn(
-                  "text-[#B9C4D6] text-[12px] font-medium px-2 h-full flex items-center border-b-2 border-transparent hover:text-white hover:bg-white/5",
+                  "text-[#B9C4D6] text-[12px] font-medium px-2 h-full flex items-center shrink-0 whitespace-nowrap border-b-2 border-transparent hover:text-white hover:bg-white/5",
                   active && "text-white border-gold-500 bg-white/5"
                 )}>
                 {item.name}
