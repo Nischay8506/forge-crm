@@ -9,7 +9,7 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 **Decisions (Nischay):** R1-R8 all A; seven Step 4 safeguards (handover section 3); R3 B (outside
 write-once copy of the seals) recorded for real deployment, before the first paying customer.
-Pending: whether erasing a contact also blanks Forge's copy of ERP records (built as "erase and block").
+17:19Z: erasing a contact also blanks Forge's copy of ERP records and blocks it ("Erase and block", as built).
 
 **Done** (commits 503a84e, d5e4ce0 and today's last commit)
 - Audit records split into a hashed skeleton and encrypted evidence (EVIDENCE_KEYS, required);
@@ -34,7 +34,7 @@ Pending: whether erasing a contact also blanks Forge's copy of ERP records (buil
 - The sealing-stopped test was passing for the wrong reason; rewritten.
 
 **Not done / next**
-- Nischay: the ERP-copy answer; D3 keys; D4 time; his Step 3 check; legal validation of the periods.
+- Nischay: the retention minimums; D3 keys; D4 time; his Step 3 check; legal validation of the periods.
 - Step 5 (F12.3 approval inbox): questions first.
 - Copy to Nischay's PC: his PC was offline at 17:05 UTC, so the device folder is still at ba04e3f;
   the bundle is ready and the next copy brings everything since.

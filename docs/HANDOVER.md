@@ -99,6 +99,7 @@ recommendation, and record the answer here.
 | R4 A | Personal data in the trail is hidden by default for everyone; the permission "See personal data in the audit trail" lets a person reveal it for one replay after typing a reason, and the reveal is recorded. Hiding uses known personal fields plus patterns in free text (emails, phones, PAN, Aadhaar) | 2026-10-09 |
 | R5 A | Every company starts on an editable India retention profile: skeleton and evidence behind customer-facing or money actions 8 years; other evidence 3 years; ERP sync history and model-call logs 1 year; a legal hold on an account pauses deletion; a nightly job deletes and records each run. Periods are a starting suggestion, to be confirmed by Nischay's CA or lawyer | 2026-10-09 |
 | R6 A | An admin can erase a contact: personal data is removed from the contact, their messages and the trail's evidence, what the law requires stays, a stub remains; a second person approves on a decision card; the erasure is recorded | 2026-10-09 |
+| R6 ERP copy | Erasing a contact also blanks their data in Forge's copy of ERP records and blocks it from coming back on later syncs (keyed fingerprints of the email and phone, no plain values kept); the ERP itself is not changed ("Erase and block", Nischay's card, 2026-10-09 17:19Z) | 2026-10-09 |
 | R7 A | Message provenance built now (message record, "sent by our AI assistant" marker, takeover trail, replay from a message), proved with a Sandbox test message that is never sent; re-checked in Step 6 with real email and WhatsApp | 2026-10-09 |
 | R8 A | An "Evidence" tab per agent, by month and agent version: actions, approvals, rejections (overrides), blocks, failures and override rate, linked to the audit records; agents get version numbers that change with their charter, tools or model tier | 2026-10-09 |
 | Step 4 safeguards | Nischay's conditions on R1-R8 (2026-10-09 16:19Z): (1) evidence is encrypted and secrets are removed before it is stored; skeletons avoid directly identifying personal data; the trail keeps the exact context an agent saw, without credentials or unnecessary sensitive data; (2) signing keys stay outside the database, old keys stay usable for checking after rotation, missing, changed or reordered records **and seals** are detected, and sealing can later be anchored in an outside write-once store; (3) personal data hidden by default, revealed only with the permission, a reason and an audit record; (4) the India profile is an editable starting point, not a blanket legal rule: retention is set per record category, applicable law and legal hold, and is legally validated before production; (5) erasure needs a second authorised person and covers related personal data, evidence, embeddings and other Forge-controlled stores, subject to lawful retention, leaving a non-personal record of the erasure; (6) replay shows the historical inputs, retrieved evidence, model and version, policy checks, human decisions, tool calls and outcomes, and never re-runs a side-effecting action; (7) per agent version: actions, approvals, rejections, blocks and errors linked to their records; raising autonomy stays an explicit decision by an authorised person, never automatic from good numbers | 2026-10-09 |
@@ -600,7 +601,7 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 ## 7. Next step and open questions
 
 **Next: Step 5, F12.3 Human Approval Inbox** (Design File frame 05), after Nischay's go-ahead and
-questions. Step 4 is built (section 6); waiting on Nischay's answer on erasing ERP copies (below).
+questions. Step 4 is built (section 6).
 **Also open: Nischay's own check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect,
 read, revoke the key, see the alert). His PC needs Forge set up first (section 4).
 
@@ -614,9 +615,6 @@ read, revoke the key, see the alert). His PC needs Forge set up first (section 4
   periods per record category and applicable law; record who confirmed it on the retention settings screen.
 
 Open questions for Nischay:
-- **R6 ERP copy** Should erasing a contact also blank their data in Forge's copy of ERP records and
-  block it from coming back? Built as "Erase and block" (the recommended option) while he decides;
-  the other options were "erase and flag the ERP" or "leave the ERP copy".
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
   rotated, never copied). Meaning match (S2A) and AI code suggestions (V3) start working once set.
 - **D4** Daily handover update time: 18:50 IST set by default; change?
