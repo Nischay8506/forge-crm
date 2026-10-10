@@ -297,33 +297,26 @@ async def hand_back(
 
 def _message(m: Message, account: str | None, contact: str | None) -> dict[str, Any]:
     return {"id": str(m.id), "channel": m.channel, "direction": m.direction,
-            "status": m.status, "subject": m.subject, "body": m.body,
+            "status": m.status, "purpose": m.purpose, "subject": m.subject, "body": m.body,
             "ai_generated": m.ai_generated, "disclosure": m.disclosure,
+            "language": m.language, "script": m.script,
             "account_id": str(m.account_id) if m.account_id else None, "account_name": account,
             "contact_id": str(m.contact_id) if m.contact_id else None, "contact_name": contact,
+            "user_id": str(m.user_id) if m.user_id else None,
+            "to_address": m.to_address, "from_address": m.from_address,
+            "provider": m.provider, "reason": m.reason, "send_after": m.send_after,
+            "attempts": m.attempts, "checks": m.checks, "feature": m.feature,
+            "in_reply_to_id": str(m.in_reply_to_id) if m.in_reply_to_id else None,
+            "override_by": m.override_by,
             "run_id": str(m.run_id) if m.run_id else None, "created_by": m.created_by,
-            "created_at": m.created_at, "sent_at": m.sent_at, "sent_by": m.sent_by,
-            "erased_at": m.erased_at}
+            "created_at": m.created_at, "status_at": m.status_at, "sent_at": m.sent_at,
+            "sent_by": m.sent_by, "erased_at": m.erased_at}
 
 
 async def _names(db: AsyncSession, m: Message) -> tuple[str | None, str | None]:
     acc = await db.get(Account, m.account_id) if m.account_id else None
     con = await db.get(Contact, m.contact_id) if m.contact_id else None
     return (acc.name if acc else None), (con.full_name if con else None)
-
-
-@router.get("/messages")
-async def list_messages(
-    account_id: uuid.UUID | None = None, limit: int = Query(50, le=200),
-    _: CurrentUser = Depends(require_permission("accounts.read")),
-    db: AsyncSession = Depends(get_db),
-) -> list[dict[str, Any]]:
-    """Messages to or from customers, newest first (drafts included)."""
-    stmt = select(Message)
-    if account_id:
-        stmt = stmt.where(Message.account_id == account_id)
-    rows = list(await db.scalars(stmt.order_by(Message.created_at.desc()).limit(limit)))
-    return [_message(m, *(await _names(db, m))) for m in rows]
 
 
 async def _provenance(db: AsyncSession, message_id: uuid.UUID, reveal: bool) -> dict[str, Any]:

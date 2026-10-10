@@ -8,7 +8,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -101,8 +111,10 @@ class LegalHold(IdMixin, TenantMixin, Base):
 
 
 class Message(IdMixin, TenantMixin, Base):
-    """A customer-facing message (R7). Channels arrive in Step 6; until then only the
-    Sandbox Agent drafts test messages, which are never sent."""
+    """A message to or from a customer (R7, F12.5). Outgoing messages leave only
+    through app/channels/send.py, which checks every rule before a provider sees them;
+    the statuses are the common set every channel's receipts map onto
+    (app/channels/statuses.py)."""
 
     __tablename__ = "messages"
 
@@ -112,7 +124,7 @@ class Message(IdMixin, TenantMixin, Base):
                                                          index=True)
     channel: Mapped[str] = mapped_column(String(20), nullable=False)
     direction: Mapped[str] = mapped_column(String(10), nullable=False, default="out")
-    status: Mapped[str] = mapped_column(String(15), nullable=False)  # draft | sent | failed
+    status: Mapped[str] = mapped_column(String(15), nullable=False)
     subject: Mapped[str | None] = mapped_column(String(300))
     body: Mapped[str] = mapped_column(Text, nullable=False)
     ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -124,6 +136,29 @@ class Message(IdMixin, TenantMixin, Base):
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sent_by: Mapped[str | None] = mapped_column(String(100))
     erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Step 6 (migration 0009)
+    to_address: Mapped[str | None] = mapped_column(String(320))
+    from_address: Mapped[str | None] = mapped_column(String(320))
+    language: Mapped[str | None] = mapped_column(String(10))
+    script: Mapped[str | None] = mapped_column(String(10))
+    # promotional | transactional | reply | staff (a notification to a member of staff)
+    purpose: Mapped[str | None] = mapped_column(String(15))
+    provider: Mapped[str | None] = mapped_column(String(30))
+    provider_ref: Mapped[str | None] = mapped_column(String(200))
+    status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Why it is held, blocked, failed or bounced, in a sentence for people.
+    reason: Mapped[str | None] = mapped_column(String(500))
+    send_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    idempotency_key: Mapped[str | None] = mapped_column(String(100))
+    feature: Mapped[str | None] = mapped_column(String(60))
+    # The unsubscribe link's secret, hashed (app/channels/consent.py).
+    link_token_hash: Mapped[str | None] = mapped_column(String(64))
+    # Who sent it anyway, past quiet hours and the limits (never past consent or a stop).
+    override_by: Mapped[str | None] = mapped_column(String(100))
+    in_reply_to_id: Mapped[uuid.UUID | None] = mapped_column(UUIDCol, ForeignKey("messages.id"))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUIDCol, ForeignKey("users.id"))
+    attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    checks: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
 
 
 class ErasedIdentifier(TenantMixin, Base):

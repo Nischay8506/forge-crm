@@ -244,6 +244,34 @@ async def draft_test_message(
             "run_id": str(ctx.run_id)}
 
 
+class TestEmailIn(BaseModel):
+    contact_id: uuid.UUID
+    purpose: Literal["promotional", "transactional"] = "transactional"
+    language: str | None = Field(default=None, max_length=10)
+    subject: str | None = Field(default=None, max_length=300)
+    body: str | None = Field(default=None, max_length=4000)
+    brief: str | None = Field(default=None, max_length=1000)
+
+
+@router.post("/agents/sandbox/send-test-email")
+async def send_test_email(
+    body: TestEmailIn, current: CurrentUser = Depends(require_permission("agents.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Ask the Sandbox Agent to send a test email (Step 6). It goes through every
+    channel check and lands only in the Test inbox."""
+    ctx = await runtime.start_run(db, current.tenant_id, "sandbox", "try_email",
+                                  _actor(current))
+    out = await runtime.call_tool(db, ctx, "sandbox.send_test_email", body.model_dump(),
+                                  recommendation="Test email asked for by a person",
+                                  recommend="approve", requested_by=_actor(current))
+    await runtime.finish_run(db, ctx, summary={"status": out.status})
+    return {"status": out.status, "summary": out.summary, "reasons": out.reasons,
+            "decision_id": str(out.decision_id) if out.decision_id else None,
+            "error": out.error, "message_id": out.result.get("message_id"),
+            "message_status": out.result.get("status"), "run_id": str(ctx.run_id)}
+
+
 @router.post("/agents/sandbox/try")
 async def try_sandbox(
     body: TryIn, current: CurrentUser = Depends(require_permission("agents.manage")),

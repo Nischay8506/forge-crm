@@ -37,7 +37,7 @@ Phase 1 steps:
 | 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **Built 2026-10-09**: both F12.6 "Done When" checks pass in Claude's environment on a real ERPNext 16 (section 6). Waiting for Nischay's own check in Docker Desktop (`infra/erpnext/README.md`). Defaults kept as built (X1 A) |
 | 4 | F12.4 Audit replay UI, redaction, retention | **Built 2026-10-09**: both F12.4 acceptance checks pass in Claude's environment (section 6), built to R1-R8 (all A) and Nischay's Step 4 safeguards. Retention periods need legal validation before production (section 7) |
 | 5 | F12.3 Human Approval Inbox (Design File frame 05) | **Built 2026-10-09** to H1-H9 and Nischay's Step 5 safeguards; Claude's automated browser check passes (median decision 3 s, section 6). The Done-When stays **waiting for Nischay's usability run** with real people (H8 C, `docs/USABILITY_TEST.md`); the first session ran on his PC on 2026-10-10, results to come |
-| 6 | F12.5 Multilingual & Channel Fabric (email, WhatsApp, SMS, caps) | **Questions L1-L11 sent 2026-10-09** (`plans/Step6_Language_Channels_Questions.md` in the Claude project files). Paused at Nischay's request until he answers; the little that was started is kept as a patch outside this repository (`forge-crm-wip/step6-wip.patch` in the Claude project files) |
+| 6 | F12.5 Multilingual & Channel Fabric (email now; WhatsApp and SMS on the later list) | **Building** since 2026-10-10. Nischay answered L1-L11 on 2026-10-10 (section 3) |
 
 Phase 1 is done when: all six F12 "Done When" checks pass, ERPNext syncs customers, items, orders
 and invoices, and one test agent runs policy gate → decision card → audit chain end to end.
@@ -116,6 +116,17 @@ recommendation, and record the answer here.
 | H9 A | An "Approvals" view per decision type and per approver: counts, median waiting time, median decision time, override rate and missed deadlines; the inbox header shows your own median and override rate; a bottleneck alert card goes to full-access admins when a person or role has more than 5 cards past deadline, or a decision type's median wait doubles week on week | 2026-10-09 |
 | Step 5 safeguards | Nischay's conditions on H1-H9 (2026-10-09 17:57Z): (1) mandatory DOA stages cannot be bypassed, a rejection ends the chain, the action runs only after all required approvals (built as: a different person for each step, and the asker never approves); (2) countered values are checked against the tool's allowed fields, pass the policy gate again and trigger any extra approvals; the original and countered values stay in the audit trail; (3) delegates need explicit authority for the approval scope, no unrestricted inheritance of financial authority, four-eyes holds during delegation and out-of-office; (4) configurable business calendars, reminders and escalation rules; a missed deadline never approves anything or skips a mandatory stage; (5) ERP figures on a card show their last-synced time, and stale ERP data is never presented as current; (6) the exact decision-relevant card content shown is recorded, its fingerprint checked when the decision is sent, and the resulting action and audit references kept; (7) automated tests first, then the Done-When stays pending until real users finish the 15-minute test with prepared cards; target median under 60 seconds; (8) analytics: decision counts, waiting times, decision times, overrides, missed deadlines and bottleneck alerts; overrides counted only where the agent's recommendation was recorded | 2026-10-09 |
 
+| L1 (email only) | Step 6 builds email only. WhatsApp and SMS go on the later list (section 7), not built now (Nischay, 2026-10-10) | 2026-10-10 |
+| L2 A | Email goes out over SMTP from the company's own mailbox or domain (Google Workspace, Microsoft 365, Zoho). Statuses: sent, and bounced when the mail server says so; no read tracking. Reading the sales inbox (Gmail or Microsoft Graph) comes with F1.1 in Phase 2 | 2026-10-10 |
+| L3, L4 later | WhatsApp (Meta Cloud API was the recommendation) and SMS (MSG91 after DLT registration) are not added now; they wait on the later list in section 7 | 2026-10-10 |
+| L5 A | Each message is written natively in the customer's language (not translated from English), following the company's tone guide and glossary for that language, and checked before sending. English, Hindi and Telugu now; more languages are added as settings, not code. Gemini writes Indian languages once the D3 keys are in | 2026-10-10 |
+| L6 (major languages) | Forge recognises the language of incoming messages by script, for major languages only: English (Latin script) plus Hindi, Marathi, Telugu, Tamil, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia (Nischay chose "Major scripts" on the card, 2026-10-10). Minor languages and Indian languages typed in English letters come later | 2026-10-10 |
+| L7 A | Each company has a tone guide per language (formality, greeting and sign-off, words to avoid; starting versions for English, Hindi, Telugu) and one glossary (terms kept as they are, fixed translations, forbidden words). A message that breaks the glossary is rewritten once with the problem pointed out; if it still breaks, a person reviews it on a card. Every check is recorded | 2026-10-10 |
+| L8 A | Per contact, across channels: promotional and follow-up messages at most 1 a day and 3 a week; transactional messages (a reply, order and invoice updates, approvals they asked for) not capped but counted. Quiet hours 21:00-09:00 for everything except replies to a message the customer just sent; promotional messages also wait on Sundays and company holidays. A held message goes out at the next allowed time unless a person sends it anyway, which is recorded. Each company can change the numbers | 2026-10-10 |
+| L9 A | Consent is recorded per contact and channel (when, how, from whom). "STOP" or "unsubscribe" on any channel stops promotional messages on all channels at once, is confirmed to the customer and recorded; transactional messages still go. Erasure (Step 4) also removes consent records except what the law keeps. (WhatsApp's opt-in rule applies when WhatsApp is added) | 2026-10-10 |
+| L10 A | Speech-to-text: Whisper on Groq through the LLM gateway, with the company's glossary as hints, built as an adapter so Sarvam AI can be added if Telugu quality is poor | 2026-10-10 |
+| L11 A | Built and proved with a simulator first (a test email inbox with receipts, replies, unsubscribe and caps), then real accounts connected as they are created. Done-When: Claude's automated checks, then native speakers review a sample of 10 messages per language; F12.5 stays "waiting for review" until they have | 2026-10-10 |
+| Step 6 Done-When | With WhatsApp on the later list, the email half of F12.5's Done-When is checked now and F12.5 stays open for the WhatsApp half (Nischay chose "Email now, keep open" on the card, 2026-10-10) | 2026-10-10 |
 Still open (section 7): D3 new LLM keys, D4 daily update time.
 
 ## 4. How to run it
@@ -741,6 +752,16 @@ answers L1-L11. It also brings decision buttons in WhatsApp and email (H5) and r
 check there.
 **Also open: Nischay's own check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect,
 read, revoke the key, see the alert). His PC now runs Forge (section 4), so this can follow.
+
+**Later list (agreed, not built yet):**
+- **WhatsApp** (L3, Nischay 2026-10-10: not now). When it comes: Meta's WhatsApp Cloud API was the
+  recommendation (templates, buttons, delivery and read receipts, incoming messages by webhook); it needs a
+  Meta Business account, a WhatsApp Business phone number and approved message templates. It plugs into the
+  same sending path, consent (WhatsApp's own opt-in rule) and caps built in Step 6, and brings the decision
+  buttons for the approval inbox (H5) and the WhatsApp half of F12.5's Done-When.
+- **SMS** (L4, same as WhatsApp). Needs the company's DLT registration with TRAI (company, sender ID and every
+  template) before any SMS goes out; MSG91 was the recommendation. TRAI also forbids promotional SMS between
+  21:00 and 09:00.
 
 **Before real deployment (first paying customer)**, planned and agreed but not built yet:
 - **R3 B: outside copy of the audit seals.** Copy each hourly seal (tenant, record number, hash, time, key id,

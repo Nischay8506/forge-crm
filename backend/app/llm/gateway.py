@@ -3,6 +3,7 @@
     result = await complete(session, tenant_id, task="enquiry.classify",
                             tier="fast", messages=[...])
     vectors = await embed(session, tenant_id, task="steward.embed", texts=[...])
+    words = await transcribe(session, tenant_id, task="speech.note", audio=..., ...)
 
 It enforces the tenant's monthly budget, tries the tier's routes in order
 (fallback on error), and records every attempt in `llm_calls` for cost,
@@ -214,6 +215,54 @@ async def embed(
                           trace_id)
         await session.flush()
         return EmbedResult(resp.vectors, route.provider, route.model, resp.input_tokens, cost)
+
+    await session.flush()
+    raise LlmError("All routes failed: " + " | ".join(errors))
+
+
+@dataclass
+class TranscriptResult:
+    text: str
+    language: str | None
+    seconds: float
+    provider: str
+    model: str
+
+
+async def transcribe(
+    session: AsyncSession,
+    tenant_id: UUID,
+    *,
+    task: str,
+    audio: bytes,
+    filename: str,
+    content_type: str,
+    language: str | None = None,
+    prompt: str | None = None,
+    tier: str = "speech",
+    trace_id: str | None = None,
+) -> TranscriptResult:
+    """Speech to text (decision L10 A), same budget, fallback and recording as
+    complete(). The audio is not stored; seconds are recorded as input tokens."""
+    routes = _routes(tier)
+    await _check_budget(session, tenant_id, task, tier, trace_id)
+
+    errors: list[str] = []
+    for route in routes:
+        provider = providers_mod.PROVIDERS[route.provider]
+        started = time.monotonic()
+        try:
+            resp = await provider.transcribe(route.model, audio, filename, content_type,
+                                             language, prompt)
+        except Exception as exc:  # noqa: BLE001 - recorded, then fall back to the next route
+            errors.append(_record_error(session, tenant_id, task, tier, route, exc, started,
+                                        trace_id))
+            continue
+        _record_ok(session, tenant_id, task, tier, route, int(resp.seconds), 0, started,
+                   trace_id)
+        await session.flush()
+        return TranscriptResult(resp.text, resp.language, resp.seconds, route.provider,
+                                route.model)
 
     await session.flush()
     raise LlmError("All routes failed: " + " | ".join(errors))

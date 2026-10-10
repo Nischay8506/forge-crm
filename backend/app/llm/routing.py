@@ -29,6 +29,17 @@ ROUTES: dict[str, list[Route]] = {
         Route("gemini", "gemini-2.5-pro"),
         Route("groq", "llama-3.3-70b-versatile"),
     ],
+    # Customer messages written natively in English and Indian languages (decision L5 A:
+    # Gemini writes Indian languages). No Groq fallback: its models write Telugu poorly.
+    "writing": [
+        Route("gemini", "gemini-2.5-pro"),
+        Route("gemini", "gemini-2.5-flash"),
+    ],
+    # Speech to text (decision L10 A): Whisper on Groq. Sarvam AI can be added as a
+    # provider here if Telugu comes out poorly.
+    "speech": [
+        Route("groq", "whisper-large-v3"),
+    ],
     # Text embeddings (Data Steward meaning match, decision S2A). Vectors from different
     # models cannot be compared, so callers store the model next to each vector.
     "embedding": [

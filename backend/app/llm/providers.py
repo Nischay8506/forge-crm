@@ -18,6 +18,13 @@ class ProviderResponse:
 
 
 @dataclass
+class TranscriptResponse:
+    text: str
+    language: str | None
+    seconds: float
+
+
+@dataclass
 class EmbeddingResponse:
     vectors: list[list[float]]
     input_tokens: int
@@ -31,6 +38,9 @@ class Provider(Protocol):
     ) -> ProviderResponse: ...
 
     async def embed(self, model: str, texts: list[str]) -> EmbeddingResponse: ...
+
+    async def transcribe(self, model: str, audio: bytes, filename: str, content_type: str,
+                         language: str | None, prompt: str | None) -> TranscriptResponse: ...
 
 
 class OpenAICompatibleProvider:
@@ -79,6 +89,26 @@ class OpenAICompatibleProvider:
             vectors=[[float(x) for x in d["embedding"]] for d in items],
             input_tokens=int(usage.get("prompt_tokens", 0)),
         )
+
+
+    async def transcribe(self, model: str, audio: bytes, filename: str, content_type: str,
+                         language: str | None, prompt: str | None) -> TranscriptResponse:
+        """OpenAI-compatible /audio/transcriptions (Groq serves Whisper there)."""
+        data = {"model": model, "response_format": "verbose_json"}
+        if language:
+            data["language"] = language
+        if prompt:
+            data["prompt"] = prompt
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.post(
+                f"{self.base_url}/audio/transcriptions",
+                headers={"Authorization": f"Bearer {self._key()}"},
+                data=data, files={"file": (filename, audio, content_type)},
+            )
+            r.raise_for_status()
+            body = r.json()
+        return TranscriptResponse(text=body.get("text") or "", language=body.get("language"),
+                                  seconds=float(body.get("duration") or 0))
 
 
 PROVIDERS: dict[str, Provider] = {

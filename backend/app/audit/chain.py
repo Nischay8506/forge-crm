@@ -65,7 +65,7 @@ NOT_SKELETON = frozenset({"external_id", "erp_customer", "idempotency_key"})
 # always customer/money.
 CUSTOMER_MONEY = "customer_money"
 OTHER = "other"
-CUSTOMER_MONEY_KINDS = ("erp.write.", "message.", "contact.erased")
+CUSTOMER_MONEY_KINDS = ("erp.write.", "message.", "contact.erased", "consent.")
 
 
 def _plain(data: dict[str, Any] | None) -> dict[str, Any]:

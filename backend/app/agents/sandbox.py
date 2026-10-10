@@ -3,9 +3,10 @@ so policy rules on money ("ask a person above ₹1,00,000") can be tried and tes
 before real money-moving agents exist. It writes only to sandbox_actions.
 
 It also drafts test messages (decision R7) so a message can be traced back to
-everything behind it before Forge sends real ones in Step 6. A drafted message is
-marked as written by Forge's AI assistant and is never sent: nothing in Forge
-can send a message yet.
+everything behind it; a drafted message is marked as written by Forge's AI assistant
+and is never sent. Since Step 6 it can also send a test email through the channel
+checks, which always lands in the Test inbox (the simulator), never a real mailbox:
+that is how an agent's message, the language review and the controls are tried.
 """
 
 import uuid
@@ -32,6 +33,7 @@ from app.models import Account, Contact, Message, SandboxAction
 AGENT_KEY = "sandbox"
 PAYMENT_TOOL = "sandbox.record_payment"
 MESSAGE_TOOL = "sandbox.draft_message"
+EMAIL_TOOL = "sandbox.send_test_email"
 AI_DISCLOSURE = "Sent by our AI assistant"
 
 
@@ -131,13 +133,78 @@ register_tool(ToolDef(
     describe=_message_describe, evidence_class="customer_money",
 ))
 
+class TestEmailArgs(BaseModel):
+    contact_id: uuid.UUID
+    purpose: str = Field(default="transactional", pattern="^(promotional|transactional)$")
+    language: str | None = Field(default=None, max_length=10)
+    subject: str | None = Field(default=None, max_length=300)
+    body: str | None = Field(default=None, max_length=4000)
+    # With a brief, the Writing Assistant writes it natively in `language` (L5).
+    brief: str | None = Field(default=None, max_length=1000)
+
+
+async def _email_touches(session: AsyncSession, a: TestEmailArgs) -> Touches:
+    c = await session.get(Contact, a.contact_id)
+    return Touches(accounts=(c.account_id,) if c and c.account_id else (),
+                   records=(("contact", a.contact_id),))
+
+
+async def _email_describe(session: AsyncSession, a: TestEmailArgs,
+                          facts: dict[str, Any]) -> str:
+    c = await session.get(Contact, a.contact_id)
+    return f"Send a test {a.purpose} email to {c.full_name if c else 'a contact'} " \
+        "(Test inbox only)"
+
+
+async def _email_run(session: AsyncSession, ctx: AgentContext, a: TestEmailArgs
+                     ) -> dict[str, Any]:
+    from app.channels import send
+    from app.language import writer
+
+    c = await session.get(Contact, a.contact_id)
+    if c is None:
+        raise ValueError("Contact not found")
+    language = a.language or c.preferred_language or "en"
+    problems = None
+    if a.brief:
+        d = await writer.write(session, ctx.tenant_id, language=language, purpose=a.purpose,
+                               brief=a.brief, contact=c, trigger="agent",
+                               trigger_ref=str(ctx.run_id))
+        subject, body, problems = d.subject, d.body, d.problems
+    else:
+        subject = a.subject or "Test email from Forge"
+        body = a.body or (f"Dear {c.full_name},\n\nThis is a test email from Forge's Sandbox "
+                          "Agent. It went only to the Test inbox.")
+    msg = await send.draft(session, ctx.tenant_id, purpose=a.purpose, subject=subject,
+                           body=body, created_by=ctx.approved_by or ctx.actor, contact_id=c.id,
+                           language=language if a.brief else None, ai_generated=True,
+                           disclosure=send.disclosure_for(language, agent=True),
+                           run_id=ctx.run_id, feature="sandbox.test_email",
+                           simulator_only=True)
+    if not a.brief:
+        msg.disclosure = send.disclosure_for(msg.language, agent=True)
+    await send.queue(session, msg, actor=ctx.actor, writing_problems=problems)
+    return {"message_id": str(msg.id), "status": msg.status, "reason": msg.reason}
+
+
+register_tool(ToolDef(
+    key=EMAIL_TOOL,
+    title="Send a test email",
+    description="Sends a test email to a contact through every channel check (consent, "
+                "quiet hours, limits, kill-switches, takeovers). It always lands in the Test "
+                "inbox, never a real mailbox.",
+    args=TestEmailArgs, run=_email_run, touches=_email_touches,
+    describe=_email_describe, evidence_class="customer_money",
+))
+
 register_agent(AgentDef(
     key=AGENT_KEY,
     name="Sandbox Agent",
     purpose="Test only. Lets you try policy rules on amounts before real agents that move "
-            "money exist, and drafts test messages that are never sent. It records pretend "
-            "payments and test drafts and nothing else.",
-    tools=(PAYMENT_TOOL, MESSAGE_TOOL),
+            "money exist, drafts test messages that are never sent, and sends test emails "
+            "that only ever reach the Test inbox. It records pretend payments, test drafts "
+            "and test emails and nothing else.",
+    tools=(PAYMENT_TOOL, MESSAGE_TOOL, EMAIL_TOOL),
     default_level=L2, max_level=L3,
     triggers=("'Try it' on the Agents screen", "tests"),
     test_only=True,

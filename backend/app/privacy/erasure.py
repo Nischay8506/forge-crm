@@ -7,8 +7,10 @@ request). Then, for the contact and every older record merged into it:
 - the contact keeps a stub ("Erased contact", its id, its account) and loses its
   name, email, phone and other personal fields;
 - the same values are removed from field history, duplicate pairs, merge snapshots,
-  import rows, decision cards, background event payloads, takeovers, messages, sync
-  history and Forge's copy of ERP records; there are no meaning vectors for
+  import rows, decision cards, background event payloads, takeovers, messages (their
+  text and addresses) and their language reviews, sync history and Forge's copy of
+  ERP records; consent records stay without their free text, as proof of what the
+  customer asked for; there are no meaning vectors for
   contacts (only account names have them), so there are none to remove;
 - the audit trail's details that mention them are removed, except where the law
   requires them to stay: details behind customer-facing and money actions while
@@ -40,11 +42,13 @@ from app.core.errors import ValidationFailed
 from app.models import (
     AuditEvidence,
     AuditRecord,
+    Consent,
     Contact,
     Decision,
     ErasedIdentifier,
     FieldProvenance,
     ImportBatch,
+    LanguageReview,
     MatchCandidate,
     MergeEvent,
     Message,
@@ -227,10 +231,24 @@ async def erase_contact(session: AsyncSession, tenant_id: uuid.UUID, contact_id:
     for m in msgs:
         if m.contact_id in ids:
             m.body, m.subject, m.erased_at = ERASED, None, datetime.now(UTC)
+            m.to_address = m.from_address = m.link_token_hash = None
         else:
             m.body = sc.text(m.body)
             m.subject = sc.text(m.subject) if m.subject else None
     done["messages"] = len(msgs)
+    # Language reviews keep their verdict and score; their text goes (Step 6).
+    reviews = list(await session.scalars(select(LanguageReview).where(
+        LanguageReview.message_id.in_([m.id for m in msgs if m.contact_id in ids]))))
+    for r in reviews:
+        r.comment = sc.text(r.comment) if r.comment else None
+        r.original_body = ERASED if r.original_body else None
+    done["language_reviews"] = len(reviews)
+    # Consent records stay (they prove what the customer asked for, and that it was
+    # honoured); their free text goes. They hold no other personal data.
+    consents = list(await session.scalars(select(Consent).where(Consent.contact_id.in_(ids))))
+    for c in consents:
+        c.note, c.source_ref = None, None
+    kept["consent_records"] = len(consents)
     done["meaning_vectors"] = 0  # none are kept for contacts (S2A embeds account names)
 
     # Audit details: removed unless the law keeps them.

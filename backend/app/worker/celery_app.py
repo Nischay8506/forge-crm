@@ -27,6 +27,8 @@ celery_app.conf.update(
         # F12.3: approval reminders, deadlines and escalation every minute; bottleneck
         # alerts every 15 minutes (H4, H9).
         "inbox-tick": {"task": "forge.inbox_tick", "schedule": crontab()},
+        # F12.5: send due messages (queued, or held until now) every 10 seconds.
+        "channels-tick": {"task": "forge.channels_tick", "schedule": 10.0},
     },
 )
 celery_app.autodiscover_tasks(["app.worker"], related_name="tasks")

@@ -5,9 +5,11 @@ from app.api.v1 import (
     agents,
     audit,
     auth,
+    channels,
     decisions,
     integrations,
     privacy,
+    public,
     steward,
     users,
 )
@@ -22,3 +24,5 @@ router.include_router(decisions.router)
 router.include_router(audit.router)
 router.include_router(integrations.router)
 router.include_router(privacy.router)
+router.include_router(channels.router)
+router.include_router(public.router)

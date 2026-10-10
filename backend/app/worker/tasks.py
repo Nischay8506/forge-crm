@@ -126,3 +126,17 @@ async def _inbox_tick() -> dict:
 @celery_app.task(name="forge.inbox_tick")
 def inbox_tick() -> dict:
     return asyncio.run(_inbox_tick())
+
+
+async def _channels_tick() -> dict:
+    from app.channels.send import tick_all
+
+    try:
+        return await tick_all()
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.channels_tick")
+def channels_tick() -> dict:
+    return asyncio.run(_channels_tick())

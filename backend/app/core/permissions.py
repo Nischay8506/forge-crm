@@ -37,6 +37,13 @@ PERMISSIONS: dict[str, str] = {
                         "studio, and retry or skip records that failed to sync",
     "erp.write": "Ask for an account to be created as a customer in an ERP",
     "mcp.manage": "Create and revoke tokens for outside AI tools (MCP)",
+    # F12.5 Multilingual & channel fabric (Step 6)
+    "messages.send": "Write and send messages to customers, send a held message anyway, and "
+                     "act as the customer in the Test inbox",
+    "channels.manage": "Set up the email account, sending limits and quiet hours, and switch "
+                       "email between the Test inbox and live sending",
+    "languages.manage": "Change the tone guides and the glossary",
+    "languages.review": "Review the writing of AI-written messages (for native speakers)",
 }
 
 ALL = "*"

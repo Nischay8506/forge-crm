@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     vapid_private_key: str | None = None
     vapid_subject: str = "mailto:admin@example.com"
 
+    # Step 6 (F12.5): where people open Forge in a browser (links in notification
+    # emails), and how long a message may sit in "sending" before it counts as lost.
+    app_base_url: str = "http://localhost:5173"
+    channels_stuck_sending_minutes: int = 10
+
     outbox_batch_size: int = 100
     outbox_max_attempts: int = 8
 

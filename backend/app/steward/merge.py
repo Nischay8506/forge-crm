@@ -23,6 +23,7 @@ from app.events.outbox import publish
 from app.models import (
     Account,
     AutonomyOverride,
+    Consent,
     Contact,
     ErpCustomer,
     ErpWrite,
@@ -60,7 +61,9 @@ REFERENCES: dict[str, list[tuple[type, str]]] = {
         # A legal hold keeps protecting the surviving account; messages follow it (F12.4).
         (LegalHold, "account_id"), (Message, "account_id"),
     ],
-    "contact": [(Message, "contact_id")],
+    # Consent follows the surviving contact, so a request to stop made on either
+    # record still holds after the merge (F12.5, L9).
+    "contact": [(Message, "contact_id"), (Consent, "contact_id")],
 }
 UUID_FIELDS = frozenset({"parent_id", "account_id", "merged_into_id"})
 LOCATION_FIELDS = ("address_line1", "address_line2", "city", "state", "pincode")

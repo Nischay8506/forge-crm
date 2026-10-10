@@ -23,6 +23,15 @@ from app.models.audit import (
     RetentionSettings,
 )
 from app.models.base import Base
+from app.models.channels import (
+    ChannelSettings,
+    Consent,
+    EmailAccount,
+    GlossaryTerm,
+    LanguageReview,
+    MessageEvent,
+    ToneGuide,
+)
 from app.models.golden import (
     Account,
     AccountEmbedding,
@@ -74,6 +83,13 @@ __all__ = [
     "ErasedIdentifier",
     "LegalHold",
     "Message",
+    "MessageEvent",
+    "ChannelSettings",
+    "Consent",
+    "EmailAccount",
+    "GlossaryTerm",
+    "LanguageReview",
+    "ToneGuide",
     "RetentionSettings",
     "Account",
     "AccountEmbedding",
