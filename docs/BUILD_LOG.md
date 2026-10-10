@@ -5,6 +5,34 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-10 (Day 3): Forge running on Nischay's PC, Step 5 usability run started; no code changes
+
+**Decisions (Nischay):** Step 6 waits until he has finished the Step 5 test and answered L1-L11
+(2026-10-09 19:25Z). Claude sent the Step 6 questions L1-L11 just before that.
+
+**Done**
+- Forge set up on Nischay's Windows PC for the first time: Docker Postgres and Redis, `uv sync`,
+  migrations 0001-0008, `npm install`. Claude wrote `backend/.env` and `frontend/.env` there (local
+  database passwords, keys generated on the PC itself; both git-ignored).
+- A step-by-step guide for the test, as a Claude Doc ("Step 5 Approval Test Guide", linked in HANDOVER
+  section 4), with a results table to fill in.
+- First session started on test company `ut-priya`; the counter and the ERP figures worked as built.
+- Docs: HANDOVER section 4 and README now give the Windows worker commands (below).
+
+**Problems found**
+- `celery worker --beat` fails on Windows ("-B option does not work on Windows"). The worker and the
+  scheduler now run in two windows; HANDOVER section 4, README and the guide are fixed.
+- Usability finding: on **Counter…**, "Approve with this change" stays grey while the amount equals
+  what was asked, and nothing says why. To fix after the runs, so the screens don't change mid-test.
+- An "ERPNext cannot be reached" alert appeared in the test company: the paused pretend ERP connection
+  had been resumed from the Integrations page, so Forge tried its made-up address (erp.invalid).
+  Expected behaviour; pausing it again clears the alert. Nothing outside the PC was called.
+
+**Not done / next**
+- Nischay: finish the usability sessions (2-3 people) and fill in the results table; answer L1-L11;
+  his Step 3 Docker check; D3 and D4.
+- Claude: record the results and mark F12.3 on the Build Map; fix the counter hint; then Step 6.
+
 ## 2026-10-09 (Day 2, night): Step 5 built, automated check passes, usability run pending
 
 **Decisions (Nischay):** H1-H8 A, H8 C, H9 A with eight safeguards (17:57Z, handover section 3);

@@ -14,7 +14,8 @@ Quick commands (details in the handover):
 cd backend && uv sync && uv run alembic upgrade head && uv run uvicorn app.main:app --reload
 uv run pytest            # needs Postgres; see HANDOVER section 4
 # worker
-uv run celery -A app.worker.celery_app worker --beat --loglevel=info   # Windows: add --pool=solo
+uv run celery -A app.worker.celery_app worker --beat --loglevel=info
+# on Windows, two windows instead: worker --loglevel=info --pool=solo, and beat --loglevel=info
 # frontend
 cd frontend && npm install && npm run dev
 ```

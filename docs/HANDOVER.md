@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-09
+Last updated: 2026-10-10
 
 ---
 
@@ -36,8 +36,8 @@ Phase 1 steps:
 | 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). U1-U4 confirmed as built |
 | 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **Built 2026-10-09**: both F12.6 "Done When" checks pass in Claude's environment on a real ERPNext 16 (section 6). Waiting for Nischay's own check in Docker Desktop (`infra/erpnext/README.md`). Defaults kept as built (X1 A) |
 | 4 | F12.4 Audit replay UI, redaction, retention | **Built 2026-10-09**: both F12.4 acceptance checks pass in Claude's environment (section 6), built to R1-R8 (all A) and Nischay's Step 4 safeguards. Retention periods need legal validation before production (section 7) |
-| 5 | F12.3 Human Approval Inbox (Design File frame 05) | **Built 2026-10-09** to H1-H9 and Nischay's Step 5 safeguards; Claude's automated browser check passes (median decision 3 s, section 6). The Done-When stays **waiting for Nischay's usability run** with real people (H8 C, `docs/USABILITY_TEST.md`) |
-| 6 | F12.5 Multilingual & Channel Fabric (email, WhatsApp, SMS, caps) | Not started |
+| 5 | F12.3 Human Approval Inbox (Design File frame 05) | **Built 2026-10-09** to H1-H9 and Nischay's Step 5 safeguards; Claude's automated browser check passes (median decision 3 s, section 6). The Done-When stays **waiting for Nischay's usability run** with real people (H8 C, `docs/USABILITY_TEST.md`); the first session ran on his PC on 2026-10-10, results to come |
+| 6 | F12.5 Multilingual & Channel Fabric (email, WhatsApp, SMS, caps) | **Questions L1-L11 sent 2026-10-09** (`plans/Step6_Language_Channels_Questions.md` in the Claude project files). Paused at Nischay's request until he answers; the little that was started is kept as a patch outside this repository (`forge-crm-wip/step6-wip.patch` in the Claude project files) |
 
 Phase 1 is done when: all six F12 "Done When" checks pass, ERPNext syncs customers, items, orders
 and invoices, and one test agent runs policy gate → decision card → audit chain end to end.
@@ -139,8 +139,19 @@ uv run alembic upgrade head      # creates tables, RLS policies and the forge_ap
 uv run python -m app.cli create-tenant --name "Demo Manufacturing" --slug demo \
     --admin-email admin@demo.example.com --admin-name "Demo Admin" --admin-password "<choose>"
 uv run uvicorn app.main:app --reload --port 8000     # API docs at http://localhost:8000/docs
-uv run celery -A app.worker.celery_app worker --beat --loglevel=info --pool=solo   # --pool=solo on Windows
+uv run celery -A app.worker.celery_app worker --beat --loglevel=info   # Linux and macOS
 ```
+On Windows, Celery cannot run the scheduler inside the worker (`-B option does not work on Windows`), so
+run them in two windows:
+```bash
+uv run celery -A app.worker.celery_app worker --loglevel=info --pool=solo
+uv run celery -A app.worker.celery_app beat --loglevel=info
+```
+With the Docker Postgres from `infra/`, the database passwords in `backend/.env` are `forge_owner` for
+`MIGRATION_DATABASE_URL` (set by `infra/postgres-init.sql`) and whatever `APP_DB_PASSWORD` says for
+`DATABASE_URL` (the first migration gives `forge_app` that password). A step-by-step Windows guide
+for the Step 5 usability test, from installing the tools to reading the results, is the Claude Doc
+"Step 5 Approval Test Guide": https://claude.ai/code/artifact/8a0fa397-9f36-403a-9bec-b91d11efcbde
 ERP logins are stored encrypted (E8), so `backend/.env` needs `CREDENTIAL_KEYS` before an ERP can be
 connected (the Integrations page says so until it is set):
 ```bash
@@ -429,9 +440,10 @@ docs/                  this file, BUILD_LOG.md
 27. **When several rules ask for people, every role they name must approve** (`policy.chain_for`): the
     longest chain sets the order and roles from other rules follow it, each once.
 
-## 6. Current state (end of 2026-10-09)
+## 6. Current state (end of 2026-10-10)
 
-Steps 0 to 5 are built; Step 5's Done-When waits for Nischay's usability run. Tests: 161 backend (plus 3 that run only
+Steps 0 to 5 are built; Step 5's Done-When waits for Nischay's usability run, which he started on
+2026-10-10 on his own PC (the first time Forge ran there). No code changed on 2026-10-10. Tests: 161 backend (plus 3 that run only
 against a live ERPNext; they pass on ERPNext 16.50.0 and 15.122.0), 21 frontend, all passing; every new screen was
 checked in a browser, on a desktop and at phone width (390 px).
 
@@ -701,6 +713,9 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 - A stop takes effect at the next action; it does not interrupt an action already running.
 - A pair whose merge was blocked or stopped stays in the review queue; it is tried again only when a
   record changes or someone presses "Check all records again".
+- Approval inbox usability findings so far (Nischay, 2026-10-10), to fix after the runs: on **Counter…**,
+  "Approve with this change" stays grey while the amount still equals what was asked, with nothing
+  saying why (`frontend/src/features/decisions/DecisionCard.tsx`, CounterForm).
 - Approval inbox (Step 5) gaps: decision buttons in WhatsApp and email come with Step 6 (H5); push on a
   phone needs Forge at an `https://` address; the inbox list does not refresh by itself (the menu
   count does, every 30 s), so a card changed by someone else is caught by the fingerprint check
@@ -715,14 +730,17 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 
 ## 7. Next step and open questions
 
-**Now: Nischay's usability run for Step 5** (`docs/USABILITY_TEST.md`): two or three colleagues, 15
-minutes each, on a fresh test company each (`uv run python -m app.cli seed-usability --slug ut-<name>`).
-Send Claude each person's median decision time, overrides and notes; F12.3 is done when the overall
-median is under 60 seconds and nobody got stuck on a card. **Next build: Step 6, F12.5 Multilingual &
-Channel Fabric** (email, WhatsApp, SMS, caps), which also brings decision buttons in WhatsApp and email
-(H5) and repeats the 60-second check there.
+**Now: Nischay's usability run for Step 5** (`docs/USABILITY_TEST.md`, and the step-by-step guide linked
+in section 4). Forge runs on his PC since 2026-10-10 and the first session (test company `ut-priya`)
+has started. Two or three people, 15 minutes each, on a fresh test company each
+(`uv run python -m app.cli seed-usability --slug ut-<name>`); he fills in the results table at the end
+of the guide. F12.3 is done when the overall median is under 60 seconds and nobody got stuck on a card.
+After the runs, fix what they found (section 6, "usability findings").
+**Next build: Step 6, F12.5 Multilingual & Channel Fabric** (email, WhatsApp, SMS, caps), once Nischay
+answers L1-L11. It also brings decision buttons in WhatsApp and email (H5) and repeats the 60-second
+check there.
 **Also open: Nischay's own check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect,
-read, revoke the key, see the alert). His PC needs Forge set up first (section 4).
+read, revoke the key, see the alert). His PC now runs Forge (section 4), so this can follow.
 
 **Before real deployment (first paying customer)**, planned and agreed but not built yet:
 - **R3 B: outside copy of the audit seals.** Copy each hourly seal (tenant, record number, hash, time, key id,
