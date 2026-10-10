@@ -13,6 +13,9 @@ import { usePermissions } from "@/stores/authStore"
 import { AccountPicker } from "@/features/accounts/AccountPicker"
 import { Actor } from "@/features/steward/Actor"
 import type { AccountSummary } from "@/features/steward/types"
+import { ContactPicker, type PickedContact } from "@/features/messages/ContactPicker"
+import { STATUS_LABELS } from "@/features/messages/labels"
+import type { MessageStatus } from "@/features/messages/types"
 import { EvidenceTab } from "./EvidenceTab"
 import { LEVEL_HELP, OUTCOME_LABELS, auditLine, lowerFirst } from "./labels"
 import type { AgentDetail, TryResult } from "./types"
@@ -183,6 +186,65 @@ function TryIt() {
   )
 }
 
+interface EmailTry { status: "done" | "waiting" | "blocked" | "failed"; summary: string; reasons: string[]; message_id: string | null; message_status: string | null; error: string | null }
+
+/** Step 6: the Sandbox Agent sends a test email through every channel check. It lands only in the Test inbox. */
+function TryEmail() {
+  const qc = useQueryClient()
+  const [contact, setContact] = useState<PickedContact | null>(null)
+  const [purpose, setPurpose] = useState<"transactional" | "promotional">("promotional")
+  const [brief, setBrief] = useState("")
+  const [language, setLanguage] = useState("en")
+  const run = useMutation({
+    mutationFn: async () => (await api.post<EmailTry>("/agents/sandbox/send-test-email", {
+      contact_id: contact!.id, purpose, brief: brief.trim() || null, language: brief.trim() ? language : null })).data,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["messages"] }); qc.invalidateQueries({ queryKey: ["decisions"] }) },
+  })
+  const r = run.data
+  const tone = { done: "green", waiting: "gold", blocked: "red", failed: "red" } as const
+  return (
+    <div className="space-y-3">
+      <p className="text-[12.5px] text-ink-500">
+        Ask the Sandbox Agent to email a contact. It passes the same checks as any message (consent, limits, quiet hours,
+        stops and takeovers) and lands only in the Test inbox. With a brief, the Writing Assistant writes it.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_170px_120px] gap-2 items-end">
+        <Field label="To" group><ContactPicker value={contact} onChange={setContact} /></Field>
+        <Field label="Kind">
+          <Select value={purpose} onChange={(e) => setPurpose(e.target.value as typeof purpose)}>
+            <option value="promotional">Promotional</option><option value="transactional">About their business</option>
+          </Select>
+        </Field>
+        <Field label="Language">
+          <Select value={language} onChange={(e) => setLanguage(e.target.value)} disabled={!brief.trim()}>
+            <option value="en">English</option><option value="hi">Hindi</option><option value="te">Telugu</option>
+          </Select>
+        </Field>
+      </div>
+      <Field label="Brief for the Writing Assistant (optional; needs the Gemini key)">
+        <Input value={brief} maxLength={1000} placeholder="Leave empty for a fixed test text" onChange={(e) => setBrief(e.target.value)} />
+      </Field>
+      <Button disabled={!contact || run.isPending} onClick={() => run.mutate()}>{run.isPending ? "Sending…" : "Send a test email"}</Button>
+      <ErrorText error={run.error} fallback="Could not run the test" />
+      {r && (
+        <div className="rounded-md border border-line p-3 text-[13px] space-y-1">
+          <div className="flex items-center gap-2"><Tag variant={tone[r.status]}>{r.status}</Tag><span>{r.summary}</span></div>
+          {r.reasons.map((x) => <p key={x} className="text-ink-500 text-[12.5px]">{x}</p>)}
+          {r.error && <p className="text-red-500 text-[12.5px]">{r.error}</p>}
+          {r.message_id && (
+            <p className="text-[12.5px]">
+              The message: <b>{STATUS_LABELS[r.message_status as MessageStatus] ?? r.message_status}</b>{r.message_status === "review" ? " (the first AI messages in each language are checked by a person)" : ""}.{" "}
+              <Link to={`/messages/${r.message_id}`} className="text-teal-600 hover:underline">Open it</Link>
+              {" · "}<Link to="/messages/test-inbox" className="text-teal-600 hover:underline">Test inbox</Link>
+            </p>
+          )}
+          {r.status === "waiting" && <Link to="/decisions" className="text-teal-600 text-[12.5px] hover:underline">Open Decisions</Link>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AgentDetailPage() {
   const { key } = useParams()
   const perms = usePermissions()
@@ -314,6 +376,12 @@ export function AgentDetailPage() {
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle>Try it</CardTitle></CardHeader>
             <CardContent><TryIt /></CardContent>
+          </Card>
+        )}
+        {a.key === "sandbox" && canManage && (
+          <Card className="lg:col-span-2">
+            <CardHeader><CardTitle>Try an email</CardTitle></CardHeader>
+            <CardContent><TryEmail /></CardContent>
           </Card>
         )}
       </div>

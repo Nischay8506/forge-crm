@@ -37,7 +37,7 @@ Phase 1 steps:
 | 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **Built 2026-10-09**: both F12.6 "Done When" checks pass in Claude's environment on a real ERPNext 16 (section 6). Waiting for Nischay's own check in Docker Desktop (`infra/erpnext/README.md`). Defaults kept as built (X1 A) |
 | 4 | F12.4 Audit replay UI, redaction, retention | **Built 2026-10-09**: both F12.4 acceptance checks pass in Claude's environment (section 6), built to R1-R8 (all A) and Nischay's Step 4 safeguards. Retention periods need legal validation before production (section 7) |
 | 5 | F12.3 Human Approval Inbox (Design File frame 05) | **Built 2026-10-09** to H1-H9 and Nischay's Step 5 safeguards; Claude's automated browser check passes (median decision 3 s, section 6). The Done-When stays **waiting for Nischay's usability run** with real people (H8 C, `docs/USABILITY_TEST.md`); the first session ran on his PC on 2026-10-10, results to come |
-| 6 | F12.5 Multilingual & Channel Fabric (email now; WhatsApp and SMS on the later list) | **Building** since 2026-10-10. Nischay answered L1-L11 on 2026-10-10 (section 3) |
+| 6 | F12.5 Multilingual & Channel Fabric (email now; WhatsApp and SMS on the later list) | **Email built 2026-10-10** to L1-L11 (section 3). F12.5 check 2 (limits enforced for every sender) is met for email; check 1 (the same message correctly toned in EN / HI / TE) waits for the Gemini key (D3) and native speakers' reviews, 10 per language (L11 A). F12.5 stays open for the WhatsApp half (later list) |
 
 Phase 1 is done when: all six F12 "Done When" checks pass, ERPNext syncs customers, items, orders
 and invoices, and one test agent runs policy gate → decision card → audit chain end to end.
@@ -197,6 +197,23 @@ worker, and press "Turn on alerts on this device" on the Decisions page. Push ne
 `localhost`: it works in the PC's own browser now, and on phones once Forge runs at an `https://` address.
 Keep the private key out of git; new keys mean everyone turns alerts on again.
 
+**Email and languages (Step 6).** Step 6 added migration 0009, so run `uv run alembic upgrade head` once
+after copying. Email starts in **test mode**: everything Forge sends lands in Messages → Test inbox,
+where you act as the customer (reply, make it bounce, press unsubscribe). Nothing reaches a real mailbox
+until an admin switches it. To send real email:
+1. `CREDENTIAL_KEYS` must be set (above): the mailbox password is stored encrypted with it.
+2. Messages → Settings → Email account: choose the mail provider, fill in the login and the address to
+   send from, Save, then **Check it works** (it logs in without sending). For Gmail or Google Workspace,
+   turn on 2-step verification and make an app password at myaccount.google.com/apppasswords.
+3. **Switch to live sending** (only possible after a passing check). Back to the Test inbox at any time.
+The worker (`beat`) sends due messages every 10 seconds; without it messages wait as Queued. Two
+addresses go in links inside emails: `APP_BASE_URL` (default `http://localhost:5173`) for links to
+Forge's screens, e.g. an approval card emailed to the person who decides it, and `PUBLIC_BASE_URL`
+(default `http://localhost:8000`) for the unsubscribe page. Customers cannot open a localhost address,
+so real promotional email needs Forge at a public https address first (Settings says so until then).
+"Draft it for me" (the Writing Assistant) needs `GEMINI_API_KEY` and dictation needs `GROQ_API_KEY`
+(D3); without them those two buttons say so and everything else works.
+
 To try the ERP connection end to end, start a local ERPNext with `infra/erpnext/README.md`.
 Outside AI tools (MCP, E9) connect to `http://localhost:8000/mcp/` with a token made on Integrations >
 Outside AI tools; set `PUBLIC_BASE_URL` in `backend/.env` when the backend runs at another address.
@@ -206,7 +223,8 @@ outbox, and CSV imports run in the worker. Without it records save fine but no d
 It also runs the ERP schedule (`--beat`): every minute it checks each connection's login and starts the
 reads that are due. Without it no ERP data arrives and no ERP alert is raised. And every minute it
 checks approval deadlines (reminders, past-deadline marks, escalation, bottleneck alerts) and sends the
-inbox notifications; without it cards still wait and can be decided, but nobody is reminded.
+inbox notifications; without it cards still wait and can be decided, but nobody is reminded. Every 10
+seconds it sends the messages that are due (Step 6); without it they wait as Queued.
 
 Meaning match (S2A) switches itself on when `GEMINI_API_KEY` is set in `backend/.env`; nothing else
 to configure. `STEWARD_EMBEDDINGS=false` turns it off.
@@ -269,7 +287,9 @@ backend/
                        agents (+policies, kill-switches, sandbox), decisions, audit (+takeovers),
                        integrations (connections, wizard test, dead letters, mapping studio,
                        account ERP data, create-in-ERP, webhooks, MCP tokens),
-                       audit (+retention, legal holds, messages, reveal), privacy (erasure requests)
+                       audit (+retention, legal holds, reveal), privacy (erasure requests),
+                       channels (messages, Test inbox, consent, channel and language settings),
+                       public (the unsubscribe page, no login)
     events/outbox.py   publish() + dispatch_batch() (transactional outbox)
     worker/            Celery app + tasks (outbox delivery every 2 s, CSV import, ERP tick every
                        60 s and the sync / reconcile runs it hands out, audit seal hourly,
@@ -295,7 +315,8 @@ backend/
       runtime.py         call_tool() (the only way an agent acts), decide(), supersede()
       policy.py          rule matching, validation, rules as sentences
       controls.py        levels and overrides, kill-switches, takeovers, account tiers
-      sandbox.py         test-only Sandbox Agent (pretend payments; test messages, never sent, R7)
+      sandbox.py         test-only Sandbox Agent (pretend payments; test drafts, never sent, R7;
+                         test emails that only reach the Test inbox, Step 6)
       versions.py        agent version numbers from a fingerprint of the definition (R8)
       inbox.py           F12.3: what a decision led to ("What happened next")
       scorecard.py       per agent, month and version: proposed, acted alone, asked, approved,
@@ -323,6 +344,21 @@ backend/
       replay.py          runs list, one run step by step, per-step intact check, hide/reveal
       retention.py       India profile, periods per category with their law, legal review, legal
                          holds, the nightly clean-up (R5)
+    channels/          F12.5 sending path (Step 6; start here: send.py):
+      send.py            the ONLY way a message is sent: draft() -> queue() (checks) -> deliver_due()
+                         (lock, check again, adapter outside the transaction, record), receipts,
+                         incoming messages, STOP, send anyway, cancel, resend
+      checks.py          the checks in order: recipient, address, agent controls, content, consent,
+                         timing (limits, quiet hours, rest days, reply window)
+      rules.py           each company's limits and quiet hours; consent.py (opt-out for email,
+                         STOP words, unsubscribe tokens); accounts.py (the SMTP account, encrypted
+                         password, check, pause); statuses.py (common statuses, receipts never go back)
+      adapters/          simulator.py (the Test inbox, fixed bounce/outage/lost addresses), smtp.py
+      simulate.py        the customer's side of the Test inbox; staff.py (approval cards by email)
+    language/          F12.5 language service: script.py (recognise the language by script),
+                       tone.py (tone guides), glossary.py (glossary + text checks), writer.py and
+                       agent.py (the Writing Assistant, writes natively in EN/HI/TE), review.py
+                       (native-speaker review sampling and report), speech.py (dictation)
     privacy/           erasure.py (what an erasure scrubs, R6) and agent.py (the Privacy agent:
                        L0 only, a second person with "privacy.erase" approves)
     integrations/      F12.6 (Step 3; start here: adapter.py, then runner.py):
@@ -348,7 +384,9 @@ backend/
                        0004 agent runtime + audit + account tier, 0005 integrations,
                        0006 audit evidence, seals, versions, retention, holds, messages, erasure,
                        0007 approval inbox, 0008 approval chains, steps, delegations,
-                       inbox settings, push subscriptions)
+                       inbox settings, push subscriptions, 0009 channel fabric: message
+                       columns, message events, consents, channel settings, email account,
+                       tone guides, glossary, language reviews)
   evals/duplicates.py  synthetic duplicate set and quality report (S4A)
   evals/policy_gate.py chaos test: seeded over-limit calls must all be stopped and escalated
   tests/               pytest, real Postgres
@@ -372,6 +410,11 @@ frontend/
                        TakeoverPanel (used on the account page)
   src/features/audit   Retention page, message trace (/agents/messages/<id>), and the account-page
                        cards: Messages, Legal hold, "Erase…" on a contact
+  src/features/messages Messages (Step 6): list, one message (checks, what happened, send anyway,
+                       cancel, resend), New message (MessageEditor with live language and glossary
+                       checks, dictation, "Draft it for me"), Test inbox, Language review, Languages
+                       (tone guides, glossary), Settings (live switch, email account, limits and
+                       quiet hours); ConsentPanel ("Consent" on a contact on the account page)
   src/features/integrations Connections, setup wizard, connection page, Customers and Code lists
                        (mapping studio), Outside AI tools (MCP tokens), AccountErpCard (account page)
 infra/                 local Postgres + Redis (Docker); erpnext/ = a local ERPNext 15/16 to test with
@@ -450,13 +493,91 @@ docs/                  this file, BUILD_LOG.md
     sync does not refuse decisions, while figures turning stale (or fresh) do change it.
 27. **When several rules ask for people, every role they name must approve** (`policy.chain_for`): the
     longest chain sets the order and roles from other rules follow it, each once.
+28. **Every message goes through `app/channels/send.py`.** Nothing else may call an adapter or move a
+    message past "draft"; `test_only_the_channel_package_reaches_adapters_or_moves_a_message_on` fails
+    otherwise. New senders (Phase 2 enquiry replies, quotes, reminders) call `draft()` then `queue()`,
+    so consent, limits and quiet hours apply to them without extra code (F12.5 check 2).
+29. **A message whose fate is unknown is never sent again by itself.** If the connection drops while
+    sending, it ends as failed with "check with the customer"; only a person presses "Send it again".
+30. **Send anyway skips only timing** (quiet hours, limits, rest days), is recorded with a reason, and
+    never passes a block (consent, a stop, an erased or merged contact).
+31. **Consent records are append-only** (the app role may only re-point them on a merge and blank their
+    note on an erasure); the latest record per channel, or for "all", wins. Text written with the AI
+    always carries its marker in the message's language (R7), checked before sending.
+32. **Native-speaker review samples only text the Writing Assistant wrote**; an agent's AI-written
+    message waits for the review, a person's own AI draft does not (the person has read it).
 
 ## 6. Current state (end of 2026-10-10)
 
-Steps 0 to 5 are built; Step 5's Done-When waits for Nischay's usability run, which he started on
-2026-10-10 on his own PC (the first time Forge ran there). No code changed on 2026-10-10. Tests: 161 backend (plus 3 that run only
-against a live ERPNext; they pass on ERPNext 16.50.0 and 15.122.0), 21 frontend, all passing; every new screen was
-checked in a browser, on a desktop and at phone width (390 px).
+Steps 0 to 5 are built, and Step 6 for email (2026-10-10). Step 5's Done-When waits for Nischay's
+usability run, which he started on 2026-10-10 on his own PC (the first time Forge ran there). Tests: 210
+backend (plus 3 that run only against a live ERPNext; they pass on ERPNext 16.50.0 and 15.122.0), 25
+frontend, all passing; every new screen was checked in a browser, on a desktop and at phone width (390 px).
+
+### Step 6 (F12.5 Multilingual & Channel Fabric): email built, two things to wait for
+Built to L1-L11 (section 3): email only, over SMTP, with WhatsApp and SMS on the later list. What a
+person sees (menu **Messages**):
+- **Messages**: every message to and from customers, newest first, with filters (Waiting, Sent,
+  Problems, Received, Drafts) and a switch to the notifications sent to staff. A held message says why
+  and until when ("Already had today's promotional message: goes at 09:00 on Mon 12 Oct").
+- **One message**: what the customer sees (text, the AI marker, the unsubscribe line on promotional
+  email), the six checks with a tick or a cross and the reason, "What happened" (every status with who or
+  what caused it), the conversation, language reviews, and the buttons its status allows: Reply,
+  Send it now anyway (with a reason), Send it again (failed only), Cancel it. Links to the audit trace.
+- **New message**: pick a contact (or reply to a customer's message), the kind (about their business,
+  promotional, reply), the language, subject and text. While typing, Forge says which language it reads
+  and what breaks the glossary or the language ("It is written in English, not Telugu"). Dictate (needs
+  the Groq key) and **Draft it for me** (the Writing Assistant writes it natively in English, Hindi or
+  Telugu from a few lines; needs the Gemini key) give a draft the person reads, changes and sends.
+- **Test inbox**: what Forge "sent" while email is in test mode, and the customer's side: reply (a reply
+  of just STOP stops promotional messages everywhere and is confirmed), make it bounce, press unsubscribe.
+  Test addresses: `bounce@simulator.test`, `outage@simulator.test` (retried 1, 5, 15, 60 min, then
+  failed), `lost@simulator.test` (connection drops: failed, never resent by itself).
+- **Language review**: AI-written messages for a native speaker (permission `languages.review`): score
+  1-5, comment, correct it (the original is kept) or stop it. A report per language counts reviews
+  against the 10 the Done-When needs.
+- **Languages**: the eleven recognised languages, tone guides for English, Hindi and Telugu (tone,
+  greeting, sign-off, words to avoid, notes), and the glossary (keep as it is, always translate as, never
+  use).
+- **Settings**: Test inbox or live, the email account (encrypted password, check, pause), promotional
+  limits, quiet hours, rest days and holidays, the reply window, how many AI messages are reviewed, and
+  whether approval cards are also emailed.
+- **Account page**: each contact has **Write** and **Consent** (agreed / stopped per channel, history,
+  record what the customer told you); the Messages card lists the account's messages.
+- **Agents → Sandbox Agent → Try an email**: the agent emails a contact through every check, Test inbox only.
+
+Engineering defaults Claude chose inside L1-L11 (each can be changed on Settings, or by asking):
+- Every AI-written message is reviewed until 10 per language have been, then 1 in 20; a message whose
+  checks still find a problem after one rewrite is always reviewed. An agent's message waits for the
+  review; a person's own AI draft goes and is reviewed afterwards. Fixed test text is not sampled.
+- Email is in the Test inbox until an admin switches it live, which needs an account that passed its check.
+- Promotional email is opt-out (it may go until the customer asks to stop); L9 A asks for opt-in only on
+  WhatsApp. Messages about their business with us always go, but wait for the end of quiet hours.
+- A reply goes at once, even in quiet hours, within 24 hours of the customer's message (the reply window).
+- The daily limit counts calendar days in the company's time zone; the weekly one any 7 days.
+- Two AI markers: "Sent by our AI assistant" on an agent's message, "Written with help from our AI
+  assistant" on a person's AI draft (English, Hindi and Telugu texts).
+- Approval cards also go by email to the people who decide them (on by default); the email links to
+  the card and cannot approve anything.
+- Until Forge reads the company inbox (F1.1, Phase 2), the unsubscribe link is how a customer stops
+  promotional email, and bounces that arrive later by email are not seen; bounces the mail server
+  refuses at once are.
+- An erasure keeps consent rows (what was agreed or stopped, and when) but blanks their notes, and
+  clears message addresses.
+
+F12.5 Done-When (section 2 of the requirements), email half:
+- **Check 2, limits enforced for every sender: met for email.** One sending path
+  (`app/channels/send.py`), a test that fails if any code sends another way, and tests for consent,
+  quiet hours, rest days, holidays, daily and weekly limits, the reply window and send anyway.
+- **Check 1, the same message correctly toned in EN / HI / TE: waiting.** The Writing Assistant is built
+  and tested with a stand-in model; it needs the Gemini key (D3) to write for real, and then native
+  speakers review 10 messages per language (L11 A). The Hindi and Telugu fixed texts (AI markers,
+  unsubscribe line, STOP confirmation) also need a native speaker's check.
+- The WhatsApp half waits for WhatsApp (later list, section 7).
+
+Gaps: no reading of the company inbox yet (F1.1), so real customer replies and late bounces do not
+arrive by themselves; one email account per company; no open or read tracking for email (L2 A); a
+message held for its time is checked again when the time comes, so changed limits apply then.
 
 ### Step 5 (F12.3 Human Approval Inbox): built, waiting for the usability run
 Built to H1-H9 and Nischay's eight Step 5 safeguards (section 3). What a person sees:
@@ -720,14 +841,16 @@ Known gaps from Steps 1 and 2 (none block Step 4):
   golden-set evals per agent per release and drift monitors wait until there are model-driven agents
   (Phase 2). Per-step tracing is the audit chain plus `agent_runs`; there is no OpenTelemetry yet.
 - Approving a decision runs the action inside the web request. Fine for merges and test payments;
-  slow actions (ERP pushes, sending messages) must be handed to the worker when they arrive.
+  slow actions (ERP pushes) must be handed to the worker when they arrive. Sending messages already is
+  (Step 6: the request only queues; the worker sends).
 - A stop takes effect at the next action; it does not interrupt an action already running.
 - A pair whose merge was blocked or stopped stays in the review queue; it is tried again only when a
   record changes or someone presses "Check all records again".
 - Approval inbox usability findings so far (Nischay, 2026-10-10), to fix after the runs: on **Counter…**,
   "Approve with this change" stays grey while the amount still equals what was asked, with nothing
   saying why (`frontend/src/features/decisions/DecisionCard.tsx`, CounterForm).
-- Approval inbox (Step 5) gaps: decision buttons in WhatsApp and email come with Step 6 (H5); push on a
+- Approval inbox (Step 5) gaps: approval cards now also go by email with a link (Step 6); decision
+  buttons in WhatsApp come with WhatsApp (later list); push on a
   phone needs Forge at an `https://` address; the inbox list does not refresh by itself (the menu
   count does, every 30 s), so a card changed by someone else is caught by the fingerprint check
   when deciding, not shown live; the calendar has one time zone per company.
@@ -747,9 +870,14 @@ has started. Two or three people, 15 minutes each, on a fresh test company each
 (`uv run python -m app.cli seed-usability --slug ut-<name>`); he fills in the results table at the end
 of the guide. F12.3 is done when the overall median is under 60 seconds and nobody got stuck on a card.
 After the runs, fix what they found (section 6, "usability findings").
-**Next build: Step 6, F12.5 Multilingual & Channel Fabric** (email, WhatsApp, SMS, caps), once Nischay
-answers L1-L11. It also brings decision buttons in WhatsApp and email (H5) and repeats the 60-second
-check there.
+**Step 6 (email) is built** (section 6). To finish its Done-When: the Gemini key (D3), then native
+speakers review 10 AI-written messages each in English, Hindi and Telugu on Messages → Language review
+(give them a role with `languages.review`). To try it on his PC: `uv run alembic upgrade head`, restart
+the API, worker and beat, then Messages → New message, and the Test inbox.
+**Next build: to be agreed with Nischay.** All six Phase 1 features are now built; their open checks are
+the Step 5 usability run, his Step 3 Docker check, the D3 keys with the Step 6 language reviews, and the
+F12.1 re-measure on real data (S5 A). By the build order, Phase 2 starts with M1 Enquiry; its F1.1
+(reading the shared inbox) brings real customer replies and bounces into the Step 6 path.
 **Also open: Nischay's own check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect,
 read, revoke the key, see the alert). His PC now runs Forge (section 4), so this can follow.
 
@@ -774,5 +902,6 @@ read, revoke the key, see the alert). His PC now runs Forge (section 4), so this
 
 Open questions for Nischay:
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
-  rotated, never copied). Meaning match (S2A) and AI code suggestions (V3) start working once set.
+  rotated, never copied). Meaning match (S2A) and AI code suggestions (V3) start working once set,
+  and so do "Draft it for me" (Gemini) and dictation (Groq) from Step 6; F12.5's check 1 needs them.
 - **D4** Daily handover update time: 18:50 IST set by default; change?

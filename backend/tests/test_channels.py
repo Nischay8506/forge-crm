@@ -479,13 +479,11 @@ async def test_a_kill_switch_or_takeover_stops_an_agents_queued_email(client, ct
     mid = r.json()["message_id"]
     async with tenant_session(tid) as s:
         msg = await s.get(Message, uuid.UUID(mid))
-        assert msg.status == "review"  # the first AI-written English messages are reviewed
+        # Fixed test text, not written by the AI, so no language review is sampled.
+        assert msg.status == "queued"
         assert msg.ai_generated and msg.disclosure == "Sent by our AI assistant"
         assert msg.provider == "simulator" and msg.sent_by == "agent:sandbox"
-    rev = (await client.get(f"{API}/languages/reviews", headers=h)).json()
-    ok = await client.post(f"{API}/languages/reviews/{rev[0]['id']}", headers=h,
-                           json={"verdict": "approve", "score": 5})
-    assert ok.status_code == 200, ok.text
+    assert (await client.get(f"{API}/languages/reviews", headers=h)).json() == []
     stop = await client.post(f"{API}/kill-switches", headers=h, json={
         "scope": "agent", "agent_key": "sandbox", "reason": "checking the controls"})
     assert stop.status_code == 201, stop.text
@@ -741,3 +739,14 @@ async def test_consent_records_cannot_be_changed_or_deleted(ctx):
     async with tenant_session(tid) as s:
         await s.execute(text("UPDATE consents SET note = NULL"))  # erasure may blank text
     assert chain
+
+
+async def test_settings_say_when_unsubscribe_links_only_work_on_this_computer(client, ctx,
+                                                                             monkeypatch):
+    from app.config import get_settings
+
+    r = await client.get(f"{API}/channels/settings", headers=ctx["h"])
+    assert r.json()["links_public"] is False  # http://localhost:8000 by default
+    monkeypatch.setattr(get_settings(), "public_base_url", "https://crm.kpl.example.in")
+    r = await client.get(f"{API}/channels/settings", headers=ctx["h"])
+    assert r.json()["links_public"] is True

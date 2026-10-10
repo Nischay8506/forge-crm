@@ -7,6 +7,7 @@ The email password goes in and never comes out (its last four characters do).
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from pydantic import BaseModel, Field
@@ -19,6 +20,7 @@ from app.channels import accounts, rules, send, simulate
 from app.channels import consent as consent_mod
 from app.channels import statuses as st
 from app.channels.adapters.simulator import BOUNCE, LOST, OUTAGE
+from app.config import get_settings
 from app.core import secrets
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import AppError, NotFound, ValidationFailed
@@ -330,7 +332,15 @@ async def get_settings_(current: CurrentUser = Depends(READ),
         "email_account": accounts.view(await accounts.get(db)),
         "presets": accounts.PRESETS, "credential_keys_configured": secrets.configured(),
         "writer_available": writer.available(), "speech_available": speech.available(),
-        "simulator_addresses": {"bounce": BOUNCE, "outage": OUTAGE, "lost": LOST}}
+        "simulator_addresses": {"bounce": BOUNCE, "outage": OUTAGE, "lost": LOST},
+        # Unsubscribe links point at PUBLIC_BASE_URL: a customer cannot open localhost.
+        "links_public": _public(get_settings().public_base_url)}
+
+
+def _public(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    return bool(host) and host not in ("localhost", "127.0.0.1", "::1") \
+        and not host.endswith(".local")
 
 
 class SettingsIn(BaseModel):

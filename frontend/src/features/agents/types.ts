@@ -1,4 +1,5 @@
 /** Shapes returned by backend app/api/v1/agents.py, decisions.py and audit.py. */
+import type { MessageStatus } from "@/features/messages/types"
 
 export interface Level { level: number; code: string; label: string }
 
@@ -423,7 +424,8 @@ export interface Message {
   id: string
   channel: "email" | "whatsapp" | string
   direction: string
-  status: "draft" | "sent" | "failed"
+  status: MessageStatus
+  status_label?: string
   subject: string | null
   body: string
   ai_generated: boolean

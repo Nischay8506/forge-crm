@@ -38,6 +38,14 @@ import { ConnectionWizardPage } from '@/features/integrations/ConnectionWizardPa
 import { CustomersPage } from '@/features/integrations/CustomersPage'
 import { IntegrationsLayout } from '@/features/integrations/IntegrationsLayout'
 import { McpClientsPage } from '@/features/integrations/McpClientsPage'
+import { ChannelSettingsPage } from '@/features/messages/ChannelSettingsPage'
+import { ComposePage } from '@/features/messages/ComposePage'
+import { LanguageReviewPage } from '@/features/messages/LanguageReviewPage'
+import { LanguagesPage } from '@/features/messages/LanguagesPage'
+import { MessageDetailPage } from '@/features/messages/MessageDetailPage'
+import { MessagesLayout } from '@/features/messages/MessagesLayout'
+import { MessagesPage } from '@/features/messages/MessagesPage'
+import { TestInboxPage } from '@/features/messages/TestInboxPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -78,6 +86,19 @@ const router = createBrowserRouter([
           { path: 'away', element: <AwayPage /> },
           { path: 'analytics', element: <ApprovalsPage /> },
           { path: 'deadlines', element: <DeadlinesPage /> },
+        ],
+      },
+      {
+        path: 'messages',
+        element: <MessagesLayout />,
+        children: [
+          { index: true, element: <MessagesPage /> },
+          { path: 'new', element: <ComposePage /> },
+          { path: 'test-inbox', element: <TestInboxPage /> },
+          { path: 'reviews', element: <LanguageReviewPage /> },
+          { path: 'languages', element: <LanguagesPage /> },
+          { path: 'settings', element: <ChannelSettingsPage /> },
+          { path: ':messageId', element: <MessageDetailPage /> },
         ],
       },
       {

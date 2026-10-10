@@ -171,11 +171,13 @@ async def test_an_agents_message_that_still_breaks_a_rule_waits_for_a_person(cli
                               json={"verdict": "approve"})).status_code == 400
 
 
-async def test_a_rejected_review_cancels_the_waiting_message(client, ctx):
+async def test_a_rejected_review_cancels_the_waiting_message(client, ctx, model):
     h, tid = ctx["h"], ctx["tid"]
     _, cid = await _setup(client, ctx)
+    model({"subject": "Hello", "body": "Hello, your order ships today."})
     r = await client.post(f"{API}/agents/sandbox/send-test-email", headers=h,
-                          json={"contact_id": cid, "body": "Hello"})
+                          json={"contact_id": cid, "brief": "Say hello", "language": "en"})
+    assert r.json()["message_status"] == "review", r.text
     rev = (await client.get(f"{API}/languages/reviews", headers=h)).json()
     no = await client.post(f"{API}/languages/reviews/{rev[0]['id']}", headers=h,
                            json={"verdict": "reject", "comment": "Too short"})

@@ -5,6 +5,50 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-10 (Day 3, evening): Step 6 built for email; F12.5 check 2 met, check 1 waits for D3 and reviews
+
+**Decisions (Nischay):** L1 email only, L2 A (SMTP), L3 and L4 WhatsApp and SMS on the later list, L5 A,
+L6 major languages (card: "Major scripts", English plus ten Indian scripts, no Indian languages typed in
+English letters), L7-L11 A; Done-When card: "Email now, keep open" (14:30-14:34Z).
+
+**Done** (commit 5e08996 backend, and today's last commit for the screens)
+- Migration 0009: message columns (addresses, language, purpose, provider, send-after, tries, checks),
+  message events (append-only), consents (append-only), channel settings, email account (encrypted
+  password), tone guides, glossary, language reviews; all with row-level security.
+- `app/channels/`: one sending path (draft, queue with six checks, deliver in three phases so a
+  message goes at most once), simulator (the Test inbox) and SMTP adapters, consent with STOP words and
+  an unsubscribe page, limits, quiet hours, rest days and holidays, the reply window, send anyway,
+  retries (1, 5, 15, 60 min) and "lost" messages that only a person resends; approval cards by email.
+- `app/language/`: language by script (11 languages), tone guides, glossary and text checks, the Writing
+  Assistant (writes natively in EN/HI/TE, one rewrite), native-speaker review sampling and report,
+  dictation through the LLM gateway with glossary hints.
+- Screens: Messages (list, one message, New message, Test inbox, Language review, Languages, Settings),
+  Write and Consent on the account page's contacts, the Sandbox Agent's "Try an email".
+- Tests: 49 new backend (210 in all, plus 3 live-ERPNext ones) and 4 new frontend (25). Browser check
+  as an admin, desktop and phone: send, reply as the customer in Telugu (recognised), reply in her
+  language with the wrong-language warning, Hindi promotional email, unsubscribe, consent shown as
+  stopped, the next promotional email stopped by consent, bounce, language review approved (report
+  1 of 10), a promotional email held by the daily limit and sent anyway with a reason, settings
+  validation and save, consent recorded by a person, glossary term, no page errors, no sideways scroll.
+
+**Problems found and fixed**
+- Claude's own dev database had an early copy of migration 0009 without `override_by`; re-ran
+  0009 down and up. Nischay's PC gets 0009 fresh, so nothing to do there.
+- The Sandbox Agent's fixed test text was being sampled for language review, which would have
+  counted towards the 10 per language without testing the AI's writing. Only text the Writing
+  Assistant wrote is sampled now.
+- Unsubscribe links point at `PUBLIC_BASE_URL`, which is localhost on a PC; Settings now warns that
+  real promotional email needs a public https address first.
+- Tests: quiet hours vs the reply window, the weekly limit taking over from the daily one, Hindi
+  words shared with Marathi, and the glossary check, all corrected (the code was right or now is).
+
+**Not done / next**
+- F12.5 check 1 (EN/HI/TE correctly toned) needs the Gemini key (D3) and native speakers' reviews,
+  10 per language; the Hindi and Telugu fixed texts need a native check too. WhatsApp half: later list.
+- Nischay: `uv run alembic upgrade head` after the copy, then try Messages; the Step 5 usability runs;
+  the Step 3 Docker check; D3, D4.
+- Claude: record the Step 5 results when they come; the counter hint; agree the next build.
+
 ## 2026-10-10 (Day 3): Forge running on Nischay's PC, Step 5 usability run started; no code changes
 
 **Decisions (Nischay):** Step 6 waits until he has finished the Step 5 test and answered L1-L11

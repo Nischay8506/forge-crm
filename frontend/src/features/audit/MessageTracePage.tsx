@@ -11,6 +11,7 @@ import { PersonalDataBar } from "@/features/agents/PersonalDataBar"
 import { ReplayView } from "@/features/agents/ReplayPage"
 import { auditLine } from "@/features/agents/labels"
 import type { Provenance } from "@/features/agents/types"
+import { STATUS_LABELS, STATUS_TONE } from "@/features/messages/labels"
 
 const CHANNEL: Record<string, string> = { email: "Email", whatsapp: "WhatsApp" }
 
@@ -82,9 +83,7 @@ export function MessageTracePage() {
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <Tag>{CHANNEL[m.channel] ?? m.channel}</Tag>
-              <Tag variant={m.status === "sent" ? "green" : m.status === "failed" ? "red" : "neutral"}>
-                {m.status === "draft" ? "Draft, not sent" : m.status}
-              </Tag>
+              <Tag variant={STATUS_TONE[m.status] ?? "neutral"}>{m.status_label ?? STATUS_LABELS[m.status] ?? m.status}</Tag>
               {m.ai_generated && <Tag variant="teal">{m.disclosure ?? "Written by AI"}</Tag>}
             </div>
             <CardTitle>{m.subject ?? `${CHANNEL[m.channel] ?? m.channel} message`}</CardTitle>
@@ -101,9 +100,9 @@ export function MessageTracePage() {
               The customer sees “{m.disclosure}” with this message, so they know an AI assistant wrote it.
             </p>
           )}
-          {m.status === "draft" && (
-            <p className="text-[12px] text-ink-500">Never sent: Forge cannot send messages until email and WhatsApp arrive in Step 6.</p>
-          )}
+          <Link to={`/messages/${m.id}`} className="text-[12.5px] text-teal-600 hover:underline">
+            Open in Messages (checks, delivery and what happened)
+          </Link>
           {m.erased_at && <p className="text-[12px] text-ink-500">The person's details were erased on {formatDateTime(m.erased_at)}.</p>}
           <AtAGlance p={p} />
         </CardContent>

@@ -183,7 +183,10 @@ async def _email_run(session: AsyncSession, ctx: AgentContext, a: TestEmailArgs
                            simulator_only=True)
     if not a.brief:
         msg.disclosure = send.disclosure_for(msg.language, agent=True)
-    await send.queue(session, msg, actor=ctx.actor, writing_problems=problems)
+    # Only text the Writing Assistant wrote goes to the language review sample (L11):
+    # the fixed test text says nothing about how well the AI writes.
+    await send.queue(session, msg, actor=ctx.actor, writing_problems=problems,
+                     review=bool(a.brief))
     return {"message_id": str(msg.id), "status": msg.status, "reason": msg.reason}
 
 

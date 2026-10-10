@@ -13,6 +13,7 @@ const NAV: { name: string; path: string; permission: string | null }[] = [
   { name: "Contacts", path: "/contacts", permission: "accounts.read" },
   { name: "Data Steward", path: "/steward", permission: "steward.read" },
   { name: "Decisions", path: "/decisions", permission: "decisions.decide" },
+  { name: "Messages", path: "/messages", permission: "accounts.read" },
   { name: "Agents", path: "/agents", permission: "agents.read" },
   { name: "Integrations", path: "/integrations", permission: "integrations.read" },
   { name: "Users", path: "/admin/users", permission: "users.read" },

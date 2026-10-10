@@ -16,6 +16,7 @@ uv run pytest            # needs Postgres; see HANDOVER section 4
 # worker
 uv run celery -A app.worker.celery_app worker --beat --loglevel=info
 # on Windows, two windows instead: worker --loglevel=info --pool=solo, and beat --loglevel=info
+# the worker also sends email every 10 s; email starts in Messages > Test inbox (HANDOVER section 4)
 # frontend
 cd frontend && npm install && npm run dev
 ```

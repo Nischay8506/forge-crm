@@ -20,6 +20,7 @@ import { AccountErpCard } from "@/features/integrations/AccountErpCard"
 import { EraseContact } from "@/features/audit/EraseContact"
 import { LegalHoldCard } from "@/features/audit/LegalHoldCard"
 import { MessagesCard } from "@/features/audit/MessagesCard"
+import { ConsentPanel } from "@/features/messages/ConsentPanel"
 import { HygieneBreakdown } from "./HygieneBreakdown"
 
 const SHOWN_FIELDS: (keyof Account)[] = [
@@ -223,7 +224,9 @@ function ContactsCard({ accountId, contacts, canWrite }: {
   const qc = useQueryClient()
   const perms = usePermissions()
   const canErase = hasPermission(perms, "privacy.erase")
+  const canSend = hasPermission(perms, "messages.send")
   const [erasing, setErasing] = useState<string | null>(null)
+  const [consent, setConsent] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ full_name: "", email: "", phone: "", designation: "" })
   const add = useMutation({
@@ -274,6 +277,13 @@ function ContactsCard({ accountId, contacts, canWrite }: {
                     <td className="py-2 pr-3">{c.email ?? ""}</td>
                     <td className="py-2 pr-3">{c.phone ?? ""}</td>
                     <td className="py-2 text-right"><ScoreBadge score={c.hygiene_score} /></td>
+                    <td className="py-2 pl-2 text-right whitespace-nowrap">
+                      {canSend && c.email && (
+                        <Link to={`/messages/new?contact=${c.id}`} className="text-[12px] text-teal-600 hover:underline mr-2">Write</Link>
+                      )}
+                      <button className="text-[12px] text-teal-600 hover:underline"
+                        onClick={() => setConsent(consent === c.id ? null : c.id)}>Consent</button>
+                    </td>
                     {canErase && (
                       <td className="py-2 pl-2 text-right">
                         <button className="text-[12px] text-ink-300 hover:text-red-500 hover:underline"
@@ -281,8 +291,11 @@ function ContactsCard({ accountId, contacts, canWrite }: {
                       </td>
                     )}
                   </tr>
+                  {consent === c.id && (
+                    <tr><td colSpan={7} className="pb-2"><ConsentPanel contactId={c.id} onClose={() => setConsent(null)} /></td></tr>
+                  )}
                   {erasing === c.id && (
-                    <tr><td colSpan={6} className="pb-2"><EraseContact contactId={c.id} onClose={() => setErasing(null)} /></td></tr>
+                    <tr><td colSpan={7} className="pb-2"><EraseContact contactId={c.id} onClose={() => setErasing(null)} /></td></tr>
                   )}
                 </Fragment>
               ))}
