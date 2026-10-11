@@ -5,6 +5,16 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-11 (Day 4): nothing built; paused by Nischay
+
+Nothing was built or changed in the code today. On 2026-10-10 at 15:35Z Nischay chose to start Phase 2
+with the M1 Enquiry questions, then at 15:36Z asked to pause ("pause for now we will continue later");
+the questions have not been written. Waiting on Nischay: the word to continue (then the M1 questions come
+first, nothing is built before he answers them), his Step 5 usability runs, his Step 3 Docker check, the
+D3 keys for the Step 6 language reviews, and `uv run alembic upgrade head` (migration 0009) on his PC.
+
+---
+
 ## 2026-10-10 (Day 3, evening): Step 6 built for email; F12.5 check 2 met, check 1 waits for D3 and reviews
 
 **Decisions (Nischay):** L1 email only, L2 A (SMTP), L3 and L4 WhatsApp and SMS on the later list, L5 A,

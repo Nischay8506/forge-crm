@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-10
+Last updated: 2026-10-11
 
 ---
 
@@ -38,6 +38,9 @@ Phase 1 steps:
 | 4 | F12.4 Audit replay UI, redaction, retention | **Built 2026-10-09**: both F12.4 acceptance checks pass in Claude's environment (section 6), built to R1-R8 (all A) and Nischay's Step 4 safeguards. Retention periods need legal validation before production (section 7) |
 | 5 | F12.3 Human Approval Inbox (Design File frame 05) | **Built 2026-10-09** to H1-H9 and Nischay's Step 5 safeguards; Claude's automated browser check passes (median decision 3 s, section 6). The Done-When stays **waiting for Nischay's usability run** with real people (H8 C, `docs/USABILITY_TEST.md`); the first session ran on his PC on 2026-10-10, results to come |
 | 6 | F12.5 Multilingual & Channel Fabric (email now; WhatsApp and SMS on the later list) | **Email built 2026-10-10** to L1-L11 (section 3). F12.5 check 2 (limits enforced for every sender) is met for email; check 1 (the same message correctly toned in EN / HI / TE) waits for the Gemini key (D3) and native speakers' reviews, 10 per language (L11 A). F12.5 stays open for the WhatsApp half (later list) |
+
+After Phase 1, Phase 2 starts with **M1 Enquiry**: Nischay chose on 2026-10-10 to begin with its questions,
+then paused the work the same minute (section 7). Nothing is built for M1 yet.
 
 Phase 1 is done when: all six F12 "Done When" checks pass, ERPNext syncs customers, items, orders
 and invoices, and one test agent runs policy gate → decision card → audit chain end to end.
@@ -507,9 +510,9 @@ docs/                  this file, BUILD_LOG.md
 32. **Native-speaker review samples only text the Writing Assistant wrote**; an agent's AI-written
     message waits for the review, a person's own AI draft does not (the person has read it).
 
-## 6. Current state (end of 2026-10-10)
+## 6. Current state (end of 2026-10-11)
 
-Steps 0 to 5 are built, and Step 6 for email (2026-10-10). Step 5's Done-When waits for Nischay's
+No change on 2026-10-11 (work paused by Nischay). Steps 0 to 5 are built, and Step 6 for email (2026-10-10). Step 5's Done-When waits for Nischay's
 usability run, which he started on 2026-10-10 on his own PC (the first time Forge ran there). Tests: 210
 backend (plus 3 that run only against a live ERPNext; they pass on ERPNext 16.50.0 and 15.122.0), 25
 frontend, all passing; every new screen was checked in a browser, on a desktop and at phone width (390 px).
@@ -874,10 +877,14 @@ After the runs, fix what they found (section 6, "usability findings").
 speakers review 10 AI-written messages each in English, Hindi and Telugu on Messages → Language review
 (give them a role with `languages.review`). To try it on his PC: `uv run alembic upgrade head`, restart
 the API, worker and beat, then Messages → New message, and the Test inbox.
-**Next build: to be agreed with Nischay.** All six Phase 1 features are now built; their open checks are
-the Step 5 usability run, his Step 3 Docker check, the D3 keys with the Step 6 language reviews, and the
-F12.1 re-measure on real data (S5 A). By the build order, Phase 2 starts with M1 Enquiry; its F1.1
-(reading the shared inbox) brings real customer replies and bounces into the Step 6 path.
+**Next build: Phase 2, M1 Enquiry, starting with its questions. PAUSED by Nischay.** On 2026-10-10 he chose
+to start the M1 questions now rather than finish Phase 1's checks first (15:35Z), then said "pause for now
+we will continue later" (15:36Z). The questions doc is not written yet. When he says to continue: write
+the M1 questions (lettered options with a recommendation, as for every step), wait for his answers, and
+only then build. All six Phase 1 features are built; their open checks run alongside: the Step 5
+usability run, his Step 3 Docker check, the D3 keys with the Step 6 language reviews, and the F12.1
+re-measure on real data (S5 A). M1's F1.1 (reading the shared inbox) brings real customer replies and
+bounces into the Step 6 path.
 **Also open: Nischay's own check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect,
 read, revoke the key, see the alert). His PC now runs Forge (section 4), so this can follow.
 
