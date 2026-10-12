@@ -139,7 +139,7 @@ export interface InboundEmailView {
   body: string | null
 }
 
-export interface Question { key: string; label: string; asked_at: string; answered_at: string | null }
+export interface Question { key: string; label: string; asked_at: string; answered_at: string | null; answer?: string | null }
 
 export interface EnquiryEvent {
   kind: string

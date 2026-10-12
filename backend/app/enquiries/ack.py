@@ -185,13 +185,19 @@ def ask_questions(enq: Enquiry, items: list[dict[str, Any]], keys: list[str],
                                        for k in keys if k not in have]]
 
 
-def mark_answered(enq: Enquiry, given: set[str], now: datetime | None = None) -> list[str]:
+def mark_answered(enq: Enquiry, given: set[str], now: datetime | None = None,
+                  words: dict[str, str] | None = None) -> list[str]:
+    """Tick off the questions a reply answers, keeping the customer's words with each
+    one when they are known (app/enquiries/answers.py)."""
     now = now or datetime.now(UTC)
+    words = words or {}
     done, out = [], []
     for q in enq.questions:
         if not q.get("answered_at") and q["key"] in given:
             q = {**q, "answered_at": now.isoformat()}
             done.append(q["key"])
+        if q.get("answered_at") and words.get(q["key"]) and not q.get("answer"):
+            q = {**q, "answer": words[q["key"]][:300]}
         out.append(q)
     enq.questions = out
     return done

@@ -23,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents import runtime
@@ -31,6 +31,7 @@ from app.agents.registry import load_definitions
 from app.config import get_settings
 from app.enquiries import (
     ack,
+    answers,
     dedupe,
     documents,
     families,
@@ -48,6 +49,7 @@ from app.files import store
 from app.models import (
     Contact,
     Enquiry,
+    EnquiryLine,
     InboundEmail,
     Mailbox,
     Message,
@@ -362,24 +364,45 @@ async def _auto_acknowledge(session: AsyncSession, ctx: Any, enq: Enquiry,
 
 async def _reply(session: AsyncSession, ctx: Any, row: InboundEmail, enq: Enquiry,
                  docs: list[Any], company: str, now: datetime) -> None:
-    """The customer wrote again in the enquiry's thread."""
+    """The customer wrote again in the enquiry's thread: what they answer is written
+    into the enquiry and its lines (app/enquiries/answers.py, F1.8)."""
     row.enquiry_id, row.outcome = enq.id, "reply"
     await _message(session, row, enq.id)
     fams = await families.active(session)
+    lines = list(await session.scalars(select(EnquiryLine).where(
+        EnquiryLine.enquiry_id == enq.id, EnquiryLine.removed_at.is_(None))
+        .order_by(EnquiryLine.position)))
     reading = await reader.read(session, ctx, email=_email(row), docs=docs, families=fams,
-                                company=company, today=now.date(), last_try=True)
+                                company=company, today=now.date(), last_try=True,
+                                thread=answers.context(enq, lines))
     row.label, row.label_source = reading.label, reading.source
     row.label_confidence, row.label_reason = reading.confidence, reading.data.get("reason")
-    given = set(reading.data.get("given") or [])
-    answered = ack.mark_answered(enq, given, now)
-    new_lines = reading.data.get("lines") or []
+    if reading.source == "model":
+        found = answers.from_reading(reading.data, lines)
+        given = set(reading.data.get("given") or [])
+    else:
+        found = answers.by_rules(row.body_text or "", enq.questions, now.date())
+        answers.new_lines_by_rules(reading.data, lines, fams, found)
+        given = {"drawing"} & set(reading.data.get("given") or [])
+    applied = answers.apply(enq, lines, found)
+    new_lines = found.new_lines
     if new_lines:
-        start = len(await dedupe._lines(session, enq.id))
+        given.add("product")
+    answered = ack.mark_answered(enq, given | applied.keys, now, applied.words)
+    if new_lines:
+        start = await session.scalar(select(func.max(EnquiryLine.position)).where(
+            EnquiryLine.enquiry_id == enq.id)) or 0
         records.add_lines(session, enq, [{**ln, "source": "email"} for ln in new_lines],
                           source="reply", start=start)
+    if applied.to_check:
+        enq.needs_review = True
+        enq.review_reasons = [*(enq.review_reasons or []),
+                              *[r for r in applied.to_check
+                                if r not in (enq.review_reasons or [])]][-10:]
     await records.event(session, enq, "customer_replied", AGENT, email_id=str(row.id),
-                        answered=answered, lines=len(new_lines), read_by=reading.source)
-    if new_lines:
+                        answered=answered, lines=len(new_lines), read_by=reading.source,
+                        filled=applied.filled, to_check=applied.to_check)
+    if new_lines or any("line" in f for f in applied.filled):
         before = enq.make_ability
         await qualify.check(session, enq, actor=AGENT, ctx=ctx, at=now)
         await qualify.follow_up(session, enq, before, actor=AGENT, ctx=ctx)
@@ -391,7 +414,9 @@ async def _reply(session: AsyncSession, ctx: Any, row: InboundEmail, enq: Enquir
         await routing.notify_people(session, enq, {enq.owner_id},
                                     f"{enq.ref}: the customer replied",
                                     (row.subject or "") + (f" (answered: {', '.join(answered)})"
-                                                           if answered else ""))
+                                                           if answered else "")
+                                    + (f". To check: {applied.to_check[0]}"
+                                       if applied.to_check else ""))
 
 
 async def process(session: AsyncSession, row: InboundEmail, now: datetime | None = None

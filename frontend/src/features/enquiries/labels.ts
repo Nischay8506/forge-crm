@@ -148,6 +148,23 @@ function str(v: unknown): string {
 }
 
 /** One line of history in plain words. */
+const FILLED_NAMES: Record<string, string> = {
+  qty: "quantity", material: "grade", standard: "standard", dimensions: "size",
+  delivery_location: "delivery place", target_date: "date needed", target_date_text: "date needed",
+}
+
+/** "line 1 quantity 40 MT" or "delivery place Patancheru", for what a reply filled in. */
+export function filledText(f: Record<string, unknown>): string {
+  const name = FILLED_NAMES[String(f.field)] ?? String(f.field)
+  let value = String(f.value ?? "")
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (f.field === "target_date" && ymd) {  // the day itself, whatever the viewer's time zone
+    value = new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+      .format(new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])))
+  }
+  return `${typeof f.line === "number" ? `line ${f.line} ` : ""}${name} ${value}`.trim()
+}
+
 export function eventText(ev: EnquiryEvent, names: Record<string, string> = {}): string {
   const d = ev.detail ?? {}
   const who = (id: unknown) => (typeof id === "string" && names[id]) || "someone"
@@ -171,7 +188,14 @@ export function eventText(ev: EnquiryEvent, names: Record<string, string> = {}):
     case "parked": return "Parked: the customer did not answer the reminders"
     case "customer_replied": {
       const a = Array.isArray(d.answered) ? d.answered.length : 0
-      return `The customer replied${a ? ` and answered ${a} ${a === 1 ? "question" : "questions"}` : ""}`
+      const filled = Array.isArray(d.filled) ? (d.filled as Record<string, unknown>[]) : []
+      const check = Array.isArray(d.to_check) ? d.to_check.length : 0
+      const parts = [
+        a ? `answered ${a} ${a === 1 ? "question" : "questions"}` : "",
+        filled.length ? `filled in ${filled.map(filledText).join(", ")}` : "",
+        check ? `${check} ${check === 1 ? "answer" : "answers"} to check` : "",
+      ].filter(Boolean)
+      return `The customer replied${parts.length ? `: ${parts.join("; ")}` : ""}`
     }
     case "message_sent": return "A message was sent"
     case "timer_stopped": return `${STAGE_NAMES[str(d.stage)] ?? str(d.stage)}: ${d.outcome === "met" ? "done in time" : d.outcome === "missed" ? "done late" : "stopped"}`

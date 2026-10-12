@@ -315,6 +315,124 @@ async def test_missing_details_are_asked_and_the_reply_ticks_them_off(client, ct
     assert len(e["emails"]) == 2
 
 
+def test_answers_go_to_the_line_they_name_fill_only_empty_fields_and_flag_the_rest():
+    """F1.8: a customer's answers are written into the lines without re-typing, only
+    where it is clear which line, and never over a value the enquiry already has."""
+    from datetime import date
+    from decimal import Decimal
+
+    from app.enquiries import answers
+    from app.models import EnquiryLine
+
+    def lines(*descs, **known):
+        return [EnquiryLine(position=i, description=d, unsure=["qty"],
+                            original={"description": d}, **known.get(str(i), {}))
+                for i, d in enumerate(descs, 1)]
+
+    asked = [{"key": "qty", "label": "Quantity"}, {"key": "finish", "label": "Finish"},
+             {"key": "delivery_location", "label": "Delivery location"}]
+    today = date(2026, 10, 12)
+    # One line: the answer is for it; the signature's numbers are not quantities.
+    enq = Enquiry(ref="ENQ-1", details={}, questions=[dict(q) for q in asked])
+    ls = lines("MS plates")
+    got = answers.apply(enq, ls, answers.by_rules(
+        "Dear Sir,\nQuantity: 40 MT\nDelivery: Patancheru, Hyderabad\nRequired by 15 Nov 2026\n"
+        "Finish: hot dip galvanised\n\nRegards,\nRavi\nPlot No 5, 98490 12345", asked, today))
+    assert (ls[0].qty, ls[0].unit, ls[0].unsure) == (Decimal("40"), "MT", [])
+    assert ls[0].original["qty"] == "40"  # counts as read, so it is not a "correction"
+    assert enq.details == {"delivery_location": "Patancheru, Hyderabad",
+                           "target_date_text": "Required by 15 Nov 2026",
+                           "target_date": "2026-11-15"}
+    assert {"qty", "delivery_location", "required_date", "finish"} <= got.keys
+    assert got.words["finish"] == "hot dip galvanised" and got.to_check == []
+    # Several lines: a named line gets its answer; an unnamed one waits for a person.
+    enq = Enquiry(ref="ENQ-2", details={}, questions=[])
+    ls = lines("MS plates", "ISMB 200", "ISMC 150")
+    got = answers.apply(enq, ls, answers.by_rules(
+        "Line 2: 12 MT. Item 1 - IS 2062 E350, 25 nos", [], today))
+    assert (ls[0].qty, ls[0].unit, ls[0].standard, ls[0].material) == (
+        Decimal("25"), "nos", "IS 2062 E350", "E350")
+    assert (ls[1].qty, ls[1].unit, ls[2].qty) == (Decimal("12"), "MT", None)
+    got = answers.apply(enq, ls, answers.by_rules("We need 30 MT", [], today))
+    assert ls[2].qty == Decimal("30")  # the only line still without a quantity
+    got = answers.apply(enq, ls, answers.by_rules("Line 2: 15 MT", [], today))
+    assert ls[1].qty == Decimal("12") and got.filled == []
+    assert got.to_check == ["The customer's reply gives line 2 as 15 MT, not 12 MT: "
+                            "check the quantity"]
+    ls = lines("MS plates", "ISMB 200")
+    got = answers.apply(enq, ls, answers.by_rules("Qty 30 MT", [], today))
+    assert [x.qty for x in ls] == [None, None] and "without saying for which line" in \
+        got.to_check[0]
+    # "Delivery: within 3 weeks" is a date, not a place.
+    enq = Enquiry(ref="ENQ-3", details={}, questions=[])
+    answers.apply(enq, lines("HR coil"), answers.by_rules("Delivery: within 3 weeks", [], today))
+    assert enq.details == {"target_date_text": "within 3 weeks"}
+
+
+async def test_a_reply_read_by_the_ai_fills_the_lines_it_answers(client, ctx, ai):
+    h, tid = ctx["h"], ctx["tid"]
+    await _seller(client, ctx)
+    r = ai(reading(lines=[{"description": "MS plates", "dimensions": "10mm", "confidence": 0.8},
+                          {"description": "ISMB 200", "confidence": 0.8}],
+                   given=["product"], target_date=None, target_date_text=None,
+                   delivery_location=None))
+    out = await _mail(client, h)
+    e = await _enquiry(client, h, out["enquiry_id"])
+    ack_msg = next(m for m in e["messages"] if m["direction"] == "out")
+    await send.deliver_due(tid)
+    r.answers.append(reading(
+        lines=[{"description": "ISMB 200", "qty": 12, "unit": "MT"},
+               {"description": "Chequered plate 6mm", "qty": 3, "unit": "MT"}],
+        updates=[{"line": 1, "qty": 40, "unit": "MT", "dimensions": "12mm"}],
+        answers={"qty": "40 MT plates, 12 MT beams", "delivery_location": "Patancheru"},
+        given=["qty", "delivery_location"], delivery_location="Patancheru",
+        target_date=None, target_date_text=None))
+    out2 = await _mail(client, h, subject=f"Re: RFQ [{e['ref']}]", reply_to=ack_msg["id"],
+                       body="Plates 40 MT, beams 12 MT. Also 3 MT chequered plate 6mm. "
+                            "Delivery at Patancheru.")
+    assert out2["outcome"] == "reply"
+    # The model was told the enquiry's lines and the open questions.
+    prompt = r.calls[-1][-1]["content"]
+    assert "<<<EXISTING" in prompt and "MS plates" in prompt and "<<<QUESTIONS" in prompt
+    e = await _enquiry(client, h, e["id"])
+    got = {ln["position"]: ln for ln in e["lines"]}
+    assert float(got[1]["qty"]) == 40 and got[1]["unit"] == "MT"
+    assert got[1]["dimensions"] == "10mm"  # already known: not changed, asked to check
+    assert float(got[2]["qty"]) == 12  # the same item as line 2, not a new line
+    assert len(got) == 3 and got[3]["description"] == "Chequered plate 6mm"
+    assert e["details"]["delivery_location"] == "Patancheru"
+    q = {x["key"]: x for x in e["questions"]}
+    assert q["qty"]["answered_at"] and q["qty"]["answer"] == "40 MT plates, 12 MT beams"
+    assert e["needs_review"] and any("not 10mm" in r for r in e["review_reasons"])
+    ev = next(x for x in e["events"] if x["kind"] == "customer_replied")
+    assert {"line": 1, "field": "qty", "value": "40 MT"} in ev["detail"]["filled"]
+
+
+async def test_without_the_ai_a_reply_still_fills_what_it_answers(client, ctx, ai,
+                                                                   monkeypatch):
+    h, tid = ctx["h"], ctx["tid"]
+    await _seller(client, ctx)
+    ai(reading(lines=[{"description": "MS plates", "confidence": 0.8}], given=["product"],
+               target_date=None, target_date_text=None, delivery_location=None))
+    out = await _mail(client, h)
+    e = await _enquiry(client, h, out["enquiry_id"])
+    ack_msg = next(m for m in e["messages"] if m["direction"] == "out")
+    await send.deliver_due(tid)
+    monkeypatch.setattr(routing, "ROUTES", {})  # no AI from here on: the rules read
+    await _mail(client, h, subject=f"Re: RFQ [{e['ref']}]", reply_to=ack_msg["id"],
+                body="Qty 40 MT, delivery at Patancheru.\nRequired by 15/11/2026\n\n"
+                     "Thanks\nRavi\nMob: 98480 12345")
+    e = await _enquiry(client, h, e["id"])
+    assert len(e["lines"]) == 1  # what is left of the answer is not an item
+    assert float(e["lines"][0]["qty"]) == 40 and e["lines"][0]["unit"] == "MT"
+    assert e["details"]["delivery_location"] == "Patancheru"
+    assert e["details"]["target_date"] == "2026-11-15"
+    assert all(q["answered_at"] for q in e["questions"])
+    assert e["status"] == "open" and e["waiting_on"] == "us"
+    ev = next(x for x in e["events"] if x["kind"] == "customer_replied")
+    assert ev["detail"]["read_by"] == "rules" and len(ev["detail"]["filled"]) == 3
+
+
 async def test_tenders_and_strategic_accounts_are_drafted_for_a_person(client, ctx, ai):
     h, tid = ctx["h"], ctx["tid"]
     await _seller(client, ctx)
@@ -646,6 +764,63 @@ async def test_timers_remind_the_owner_then_tell_the_manager_and_head(client, ct
     async with tenant_session(tid) as s:
         assert await timers.tick(s, tid, start + timedelta(minutes=40)) == {}
 
+
+
+async def test_working_hour_timers_skip_nights_sundays_and_company_holidays(client, ctx):
+    """F1.10: the quote and first-look clocks count only the company's working hours
+    (Monday to Saturday, 09:30 to 18:30 IST by default) and skip its holidays."""
+    from zoneinfo import ZoneInfo
+
+    ist = ZoneInfo("Asia/Kolkata")
+    h, tid = ctx["h"], ctx["tid"]
+    seller, _ = await _seller(client, ctx, "Clock Kiran")
+    s = (await client.get(f"{API}/decisions/settings", headers=h)).json()
+    r = await client.put(f"{API}/decisions/settings", headers=h, json={
+        **s, "holidays": [{"date": "2026-10-20", "name": "Dussehra"}]})
+    assert r.status_code == 200, r.text
+    r = await client.post(E, headers=h, json={
+        "customer": {"company": "Holiday Fabricators"}, "summary": "Angles",
+        "lines": [{"description": "ISA 65x65x6", "qty": 10, "unit": "MT"}]})
+    eid = uuid.UUID(r.json()["id"])
+    mon = datetime(2026, 10, 19, 17, 0, tzinfo=ist)  # Tuesday 20 Oct is the holiday
+    async with tenant_session(tid) as s:
+        enq = await s.get(Enquiry, eid)
+        await timers.stop_all(s, enq, mon, "system:forge")
+        quote = await timers.start(s, enq, "quote", mon)
+        look = await timers.start(s, enq, "first_look", mon)
+        # 1 working day = 9 h: 1.5 h on Monday, none on the holiday, 7.5 h on Wednesday.
+        assert quote.due_at == datetime(2026, 10, 21, 17, 0, tzinfo=ist)
+        assert quote.remind_at == datetime(2026, 10, 21, 14, 45, tzinfo=ist)  # 75%
+        # 2 working hours: 1.5 h on Monday, the last half hour on Wednesday morning.
+        assert look.due_at == datetime(2026, 10, 21, 10, 0, tzinfo=ist)
+    for at, want in ((datetime(2026, 10, 19, 18, 0, tzinfo=ist), {}),  # 1 h used
+                     # The first look's 75% (1.5 h) is reached as Monday closes.
+                     (datetime(2026, 10, 19, 23, 0, tzinfo=ist), {"reminded": 1}),
+                     (datetime(2026, 10, 20, 17, 0, tzinfo=ist), {}),  # the holiday
+                     (datetime(2026, 10, 21, 10, 1, tzinfo=ist), {"missed": 1,
+                                                                   "escalated": 1}),
+                     # The quote's 75%, and twice the first look's time (4 h, at noon).
+                     (datetime(2026, 10, 21, 14, 50, tzinfo=ist), {"reminded": 1,
+                                                                    "escalated_hod": 1})):
+        async with tenant_session(tid) as s:
+            got = await timers.tick(s, tid, at)
+        assert {k: v for k, v in got.items() if k in want or v} == want, at
+    e = await _enquiry(client, h, str(eid))
+    q = next(t for t in e["timers"] if t["stage"] == "quote" and t["running"])
+    assert q["due_at"].startswith("2026-10-21T11:30")  # 17:00 IST
+    # A Saturday evening start skips Sunday: due on Monday.
+    sat = datetime(2026, 10, 24, 18, 0, tzinfo=ist)
+    async with tenant_session(tid) as s:
+        enq = await s.get(Enquiry, eid)
+        await timers.stop_all(s, enq, sat, "system:forge")
+        quote = await timers.start(s, enq, "quote", sat)
+        assert quote.due_at == datetime(2026, 10, 26, 18, 0, tzinfo=ist)
+        # Paused over the weekend while we wait on the customer: no time is used.
+        await timers.pause(s, enq, "quote", sat + timedelta(minutes=10))
+        await timers.resume(s, enq, "quote", datetime(2026, 10, 26, 9, 30, tzinfo=ist))
+        assert quote.used_seconds == 600
+        assert quote.due_at == datetime(2026, 10, 26, 18, 20, tzinfo=ist)
+    assert seller
 
 # Duplicates ----------------------------------------------------------------------------------
 

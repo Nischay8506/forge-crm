@@ -42,6 +42,16 @@ describe("enquiry labels", () => {
     expect(eventText({ kind: "escalated", actor: "system:forge", actor_name: "", at,
       detail: { stage: "quote", level: "head_of_department" } }))
       .toBe("Quote is late: told the head of department")
+    expect(eventText({ kind: "customer_replied", actor: "agent:enquiry", actor_name: "", at,
+      detail: { answered: ["qty", "delivery_location"],
+                filled: [{ line: 1, field: "qty", value: "40 MT" }, { field: "delivery_location", value: "Patancheru" }],
+                to_check: ["The customer's reply gives line 2 as 9 MT, not 8 MT: check the quantity"] } }))
+      .toBe("The customer replied: answered 2 questions; filled in line 1 quantity 40 MT, delivery place Patancheru; 1 answer to check")
+    expect(eventText({ kind: "customer_replied", actor: "agent:enquiry", actor_name: "", at,
+      detail: { answered: ["required_date"], filled: [{ field: "target_date", value: "2026-11-15" }] } }))
+      .toBe("The customer replied: answered 1 question; filled in date needed 15 Nov 2026")
+    expect(eventText({ kind: "customer_replied", actor: "agent:enquiry", actor_name: "", at, detail: { answered: [] } }))
+      .toBe("The customer replied")
   })
 
   it("shows quantities without trailing zeros", () => {

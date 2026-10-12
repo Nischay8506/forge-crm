@@ -196,9 +196,12 @@ function Detail({ e }: { e: EnquiryDetail }) {
               <CardHeader className="pb-2"><CardTitle>Asked of the customer</CardTitle></CardHeader>
               <ul className="px-4 pb-4 space-y-1 text-[13px]">
                 {e.questions.map((q) => (
-                  <li key={q.key} className="flex justify-between gap-2">
-                    <span>{q.label}</span>
-                    {q.answered_at ? <Tag variant="green">Answered</Tag> : <Tag variant="amber">Waiting</Tag>}
+                  <li key={q.key}>
+                    <div className="flex justify-between gap-2">
+                      <span>{q.label}</span>
+                      {q.answered_at ? <Tag variant="green">Answered</Tag> : <Tag variant="amber">Waiting</Tag>}
+                    </div>
+                    {q.answer && <p className="text-[12px] text-ink-500 break-words">“{q.answer}”</p>}
                   </li>
                 ))}
               </ul>
