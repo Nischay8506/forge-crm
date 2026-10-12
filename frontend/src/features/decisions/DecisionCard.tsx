@@ -189,6 +189,7 @@ function CounterForm({ d, busy, onSubmit, onCancel }: {
         <Button type="submit" variant="gold" size="sm" disabled={busy || changed.length === 0}>Approve with this change</Button>
         <Button type="button" variant="secondary" size="sm" onClick={onCancel}>Cancel</Button>
       </div>
+      {changed.length === 0 && <p className="text-[11.5px] text-ink-500">Change a value above to approve a different one.</p>}
     </form>
   )
 }
