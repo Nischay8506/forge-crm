@@ -158,13 +158,13 @@ function RuleBuilder({ catalog, initial, onDone }: { catalog: Catalog; initial: 
                           <label key={ch} className="flex items-center gap-1">
                             <input type="checkbox" checked={(c.value as string[]).includes(ch)}
                               onChange={(e) => setCond(i, { value: e.target.checked ? [...(c.value as string[]), ch] : (c.value as string[]).filter((v) => v !== ch) })} />
-                            {ch}
+                            {f.choice_words?.[ch] ?? ch}
                           </label>
                         ))}
                       </div>
                     ) : (
                       <Select value={String(c.value)} onChange={(e) => setCond(i, { value: e.target.value })}>
-                        {f.choices.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
+                        {f.choices.map((ch) => <option key={ch} value={ch}>{f.choice_words?.[ch] ?? ch}</option>)}
                       </Select>
                     )
                   ) : (

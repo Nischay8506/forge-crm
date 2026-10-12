@@ -84,6 +84,7 @@ export interface FactInfo {
   label: string
   type: "number" | "money" | "choice" | "text"
   choices: string[]
+  choice_words?: Record<string, string>
   ops: string[]
 }
 

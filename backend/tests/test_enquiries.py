@@ -209,6 +209,18 @@ def test_rules_take_the_quantity_not_the_size_or_grade(line, qty, unit):
     assert len(got) == 1 and got[0]["qty"] == qty and got[0]["unit"] == unit
 
 
+def test_rules_read_the_signature_after_the_sign_off():
+    text = ("Hello,\nWe need a quote for:\n1. Fabricated pipe rack - 12 MT\n"
+            "Material IS 2062 E350, IBR approved.\nThanks,\nAnil Varma\nProject Engineer\n"
+            "Deccan Process Plants Pvt Ltd\n98480 11223")
+    got = rules.customer_in(text, "anil@dpp.example.in", "Anil Varma")
+    assert got["designation"] == "Project Engineer"
+    assert got["company"] == "Deccan Process Plants Pvt Ltd"
+    assert got["phone"] == "+919848011223"
+    te = "దయచేసి కోట్ పంపండి\nధన్యవాదాలు,\nరవి\nPurchase Manager\nSri Sai Steels"
+    assert rules.customer_in(te, None, None)["designation"] == "Purchase Manager"
+
+
 def test_the_guard_finds_promises_and_lets_questions_through():
     assert guard.claims("The price is Rs 52,000 per MT") == ["a price"]
     assert guard.claims("We can offer a special discount of 5%") == ["a discount"]

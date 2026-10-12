@@ -1,13 +1,28 @@
-/** Shapes of the M1 Enquiry API (F1.1, F1.5, F1.8, F1.9, F1.10).
+/** Shapes of the M1 Enquiry API (F1.1, F1.4-F1.10).
  *  Mirrors backend app/api/v1/enquiries.py. */
 import type { MessageView } from "@/features/messages/types"
 
 export type EnquiryStatus = "new" | "open" | "waiting_customer" | "parked" | "closed" | "merged"
 
-export type View = "open" | "mine" | "unassigned" | "review" | "duplicates" | "waiting" | "parked" | "closed" | "all"
+export type View = "open" | "mine" | "unassigned" | "review" | "duplicates" | "engineering" | "waiting" | "parked" | "closed" | "all"
+
+export type Sort = "priority" | "newest" | "oldest"
+
+/** Can we make it (F1.6): standard, configurable, needs engineering, no fit. */
+export type MakeAbility = "standard" | "cto" | "eto" | "no_fit"
+
+export type Grade = "High" | "Medium" | "Low"
+
+export interface ScoreReason { text: string; up: boolean }
+
+export interface ScoreSignal { key: string; label: string; points: number; weight: number; text: string }
+
+export interface ScorePart { points: number; grade: Grade; signals: ScoreSignal[] }
+
+export type ScoreParts = Record<"fit" | "intent" | "risk", ScorePart>
 
 export interface Timer {
-  stage: "first_response" | "first_look" | "quote"
+  stage: "first_response" | "first_look" | "quote" | "engineering_review"
   label: string
   clock: "always" | "working"
   target_seconds: number
@@ -50,6 +65,11 @@ export interface EnquiryRow {
   lines: number
   possible_duplicate: DuplicatePair | null
   confidence: string | null
+  make_ability: MakeAbility | null
+  make_label: string
+  score: number | null
+  score_grades: Partial<Record<"fit" | "intent" | "risk", Grade>>
+  score_reasons: ScoreReason[]
   timer: Timer | null
   first_response_at: string | null
   quote_sent_at: string | null
@@ -70,6 +90,9 @@ export interface Line {
   notes: string | null
   confidence: string | null
   unsure: string[]
+  make_ability: MakeAbility | null
+  make_label: string | null
+  make_reasons: string[]
   source: "email" | "attachment" | "person"
   source_ref: string | null
   original: Record<string, unknown> | null
@@ -182,7 +205,36 @@ export interface EnquiryDetail extends Omit<EnquiryRow, "lines"> {
   nudges: number
   waiting_since: string | null
   parked_at: string | null
+  make: { ability: MakeAbility | null; label: string; reasons: string[]; source: "rules" | "model" | "person" | null; checked_at: string | null }
+  score_parts: ScoreParts | null
+  scored_at: string | null
+  review: Review | null
   may: { work: boolean; assign: boolean; send: boolean }
+}
+
+/** The engineering review (P2 A): the lines, files and reasons for the engineering role. */
+export interface Review {
+  id: string
+  status: "open" | "done" | "cancelled"
+  role: string | null
+  assignee_id: string | null
+  assignee: string | null
+  reasons: string[]
+  package: {
+    summary: string | null
+    customer: string | null
+    special_requirements: string | null
+    lines: { position: number; description: string; dimensions: string | null; material: string | null; standard: string | null; qty: string | null; unit: string | null; notes: string | null; make_ability: MakeAbility | null; reasons: string[] }[]
+    files: { filename: string; file_id: string; content_type: string | null }[]
+    reasons: string[]
+  }
+  outcome: "can_make" | "cannot_make" | null
+  outcome_text: string | null
+  notes: string | null
+  opened_at: string
+  taken_at: string | null
+  done_by: string | null
+  done_at: string | null
 }
 
 export type Counts = Record<View | "other_mail" | "failed", number>
@@ -202,11 +254,22 @@ export interface EnquirySettings {
   routing: { steps: string[]; max_open: number; fallback_user_id: string | null }
   timers: { stages: StageSetting[]; reminder_pct: number; manager_pct: number; hod_pct: number }
   intake: { auto_acknowledge: boolean; nudge_days: number[]; park_after_days: number; complaints_role_id: string | null; unsure_below: number }
+  scoring: ScoringSettings
   is_default: boolean
   updated_by: string | null
   updated_at: string | null
   suggestions: { rule: string; label: string; overrides: number; text: string }[]
   step_labels: Record<string, string>
+  signal_labels: Record<"fit" | "intent" | "risk", Record<string, string>>
+}
+
+export interface ScoringSettings {
+  fit: Record<string, number>
+  intent: Record<string, number>
+  risk: Record<string, number>
+  risk_weight: number
+  jump: number
+  export_watch: string[]
 }
 
 export interface Person {
@@ -238,6 +301,10 @@ export interface Family {
   template: string | null
   keywords: string[]
   checklist: ChecklistItem[]
+  make_ability: MakeAbility
+  moq: { qty: number; unit: string } | null
+  sweet_spot: { min?: number; max?: number; unit: string } | null
+  refer_to: string | null
   active: boolean
   updated_by: string | null
   updated_at: string | null
@@ -245,7 +312,7 @@ export interface Family {
 
 export interface FamiliesView {
   families: Family[]
-  templates: { key: string; name: string; keywords: string[]; checklist: ChecklistItem[] }[]
+  templates: { key: string; name: string; keywords: string[]; checklist: ChecklistItem[]; make_ability: MakeAbility }[]
   general: ChecklistItem[]
 }
 
@@ -290,4 +357,29 @@ export interface TestMailResult {
 export interface TestMailRow extends InboundEmailView {
   ref: string | null
   replies: { id: string; subject: string | null; status: string; body: string; feature: string | null; created_at: string }[]
+}
+
+export type LimitKey = "max_diameter_mm" | "max_length_mm" | "max_thickness_mm" | "max_weight_kg"
+
+export interface Process extends Partial<Record<LimitKey, number | null>> {
+  name: string
+  families?: string[]
+  tolerance?: string | null
+  family_templates?: string[]
+}
+
+/** What we make (F1.6, N8 A). */
+export interface Capability {
+  processes: Process[]
+  materials: string[]
+  certifications: string[]
+  excluded_industries: string[]
+  target_industries: string[]
+  engineering_role_id: string | null
+  engineering_role: string | null
+  is_set_up: boolean
+  updated_by: string | null
+  updated_at: string | null
+  limits: Record<LimitKey, string>
+  example: Omit<Capability, "engineering_role_id" | "engineering_role" | "is_set_up" | "updated_by" | "updated_at" | "limits" | "example">
 }

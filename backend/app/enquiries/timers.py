@@ -1,10 +1,13 @@
-"""An enquiry's three timers (F1.10, decision N13 A).
+"""An enquiry's timers (F1.10, decision N13 A; the engineering review from P2 A).
 
   first_response  from the email arriving to the first message we send (the
                   acknowledgement counts), around the clock: 15 minutes
   first_look      from being given to an owner to the owner opening it: 2 working hours
   quote           from arriving to "Quote sent": 1 working day, paused while we wait
                   on the customer's answers
+  engineering_review  from an enquiry needing engineering to the engineer's answer:
+                  1 working day; the reviewer (or, before anyone takes it, everyone in
+                  the engineering role) is reminded, and the reviewer's manager hears
 
 At the reminder share (75%) the owner is reminded; at the deadline the owner's
 manager ("reports to") is told; at twice the time the head of department (the
@@ -26,7 +29,7 @@ from app.sla import engine
 
 SUBJECT = "enquiry"
 LABELS = {"first_response": "first response", "first_look": "owner's first look",
-          "quote": "quote"}
+          "quote": "quote", "engineering_review": "engineering review"}
 
 
 async def _setup(session: AsyncSession, tenant_id: uuid.UUID
@@ -136,6 +139,22 @@ async def escalation_people(session: AsyncSession, enq: Enquiry) -> set[uuid.UUI
     return {uid for uid, p in everyone.items() if ALL in p.permissions}
 
 
+async def _owner(session: AsyncSession, enq: Enquiry, stage: str
+                 ) -> tuple[User | None, set[uuid.UUID]]:
+    """Who the timer is waiting on: the enquiry's owner, or for the engineering review
+    the reviewer who took it (before that, everyone in the engineering role)."""
+    if stage == "engineering_review":
+        from app.enquiries import reviews
+
+        rv = await reviews.current(session, enq)
+        who = await session.get(User, rv.assignee_id) if rv and rv.assignee_id else None
+        if who is not None and who.is_active:
+            return who, {who.id}
+        return None, await reviews.role_people(session, rv.role_id if rv else None)
+    owner = await session.get(User, enq.owner_id) if enq.owner_id else None
+    return owner, {owner.id} if owner is not None and owner.is_active else set()
+
+
 async def _hhmm(session: AsyncSession, enq: Enquiry, at: datetime | None) -> str:
     if at is None:
         return ""
@@ -158,8 +177,7 @@ async def tick(session: AsyncSession, tenant_id: uuid.UUID, now: datetime | None
             continue
         pct = engine.share(t, now, cal)
         what = LABELS.get(t.stage, t.stage)
-        owner = await session.get(User, enq.owner_id) if enq.owner_id else None
-        owner_ids = {owner.id} if owner is not None and owner.is_active else set()
+        owner, owner_ids = await _owner(session, enq, t.stage)
         if t.reminded_at is None and pct >= timers["reminder_pct"]:
             t.reminded_at = now
             due = await _hhmm(session, enq, t.due_at)
@@ -173,17 +191,18 @@ async def tick(session: AsyncSession, tenant_id: uuid.UUID, now: datetime | None
             counts["missed"] = counts.get("missed", 0) + 1
         if t.escalated_at is None and pct >= timers["manager_pct"]:
             t.escalated_at = now
-            manager = await _manager(session, enq.owner_id)
+            manager = await _manager(session, owner.id if owner else None)
             to = {manager.id} if manager else await escalation_people(session, enq)
             who = owner.full_name if owner else "nobody yet"
+            role = "Reviewer" if t.stage == "engineering_review" else "Owner"
             await notify_people(session, enq, to, f"{enq.ref} missed its {what}",
-                                f"Owner: {who}. {enq.summary or ''}".strip())
+                                f"{role}: {who}. {enq.summary or ''}".strip())
             await records.event(session, enq, "escalated", "system:forge", stage=t.stage,
                                 level="manager", to=sorted(str(u) for u in to))
             counts["escalated"] = counts.get("escalated", 0) + 1
         if t.escalated2_at is None and pct >= timers["hod_pct"]:
             t.escalated2_at = now
-            manager = await _manager(session, enq.owner_id)
+            manager = await _manager(session, owner.id if owner else None)
             hod = await _manager(session, manager.id) if manager else None
             to = {hod.id} if hod else await escalation_people(session, enq)
             await notify_people(session, enq, to,

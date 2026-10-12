@@ -38,7 +38,10 @@ ACK_TOOL = "enquiry.acknowledge"
 NUDGE_TOOL = "enquiry.nudge"
 PARK_TOOL = "enquiry.park"
 MERGE_TOOL = "enquiry.merge"
+DECLINE_TOOL = "enquiry.decline"
 TENDER_RULE = "Tenders are always drafted for a person to check and send (decision N7 A)"
+DECLINE_RULE = "A decline is sent only after a person approves it (decision P1 A)"
+MAKE_WORDS = {"cto": "configurable", "eto": "needs engineering", "no_fit": "no fit"}
 
 
 class MessageArgs(BaseModel):
@@ -65,7 +68,9 @@ async def _enquiry(session: AsyncSession, enquiry_id: uuid.UUID) -> Enquiry | No
 
 async def _facts(session: AsyncSession, a: Any) -> dict[str, Any]:
     enq = await _enquiry(session, a.enquiry_id)
-    facts: dict[str, Any] = {"is_tender": "yes" if enq is not None and enq.is_tender else "no"}
+    facts: dict[str, Any] = {"is_tender": "yes" if enq is not None and enq.is_tender else "no",
+                             "make_ability": (enq.make_ability if enq is not None else None)
+                             or "unchecked"}
     if enq is not None and enq.account_id:
         facts["account_tier"] = (await account_tiers(session, [enq.account_id]))[enq.account_id]
     else:
@@ -114,6 +119,20 @@ def _no_promises(facts: dict[str, Any]) -> str | None:
 
 def _tender(facts: dict[str, Any]) -> str | None:
     return TENDER_RULE if facts.get("is_tender") == "yes" else None
+
+
+def _ack_ask(facts: dict[str, Any]) -> str | None:
+    """Tenders, and enquiries the check did not find standard, are drafted for a person
+    (N7 A, P3 A); standard and not-yet-checked ones go on their own."""
+    make = facts.get("make_ability")
+    if make in MAKE_WORDS:
+        return (f"The 'can we make this?' check says {MAKE_WORDS[make]}, so the "
+                "acknowledgement is drafted for a person (decision P3 A)")
+    return _tender(facts)
+
+
+def _always_ask(facts: dict[str, Any]) -> str | None:
+    return DECLINE_RULE
 
 
 async def first_inbound(session: AsyncSession, enq: Enquiry) -> Message | None:
@@ -217,6 +236,40 @@ async def _nudge_run(session: AsyncSession, ctx: AgentContext, a: MessageArgs
     return {"message_id": str(msg.id), "status": msg.status, "enquiry_id": str(enq.id)}
 
 
+async def _decline_describe(session: AsyncSession, a: MessageArgs, facts: dict[str, Any]
+                            ) -> str:
+    return await _describe_message(session, a, facts, "decline (we can't make it)")
+
+
+async def decline(session: AsyncSession, enq: Enquiry, a: MessageArgs, *, actor: str,
+                  run_id: uuid.UUID | None = None, agent_sent: bool = False) -> Message:
+    """Send the decline and close the enquiry as not quoted."""
+    from app.enquiries import intake, records
+
+    if enq.status not in OPEN_STATUSES:
+        raise AppError(f"{enq.ref} is {enq.status}, so it is not declined")
+    found = guard.claims(a.subject, a.body)
+    if found:
+        raise AppError(guard.reason(found))
+    msg = await send_about(session, enq, a, "enquiry.decline", f"enquiry-decline:{enq.id}",
+                           actor=actor, run_id=run_id, ai=True, agent_sent=agent_sent)
+    if msg.status == "blocked":
+        raise AppError(f"The decline was blocked: {msg.reason}")
+    await records.event(session, enq, "declined", actor, message_id=str(msg.id))
+    await intake.close(session, enq, actor, "Declined: not something we make")
+    return msg
+
+
+async def _decline_run(session: AsyncSession, ctx: AgentContext, a: MessageArgs
+                       ) -> dict[str, Any]:
+    enq = await session.get(Enquiry, a.enquiry_id, with_for_update=True)
+    if enq is None:
+        raise AppError("Enquiry not found")
+    msg = await decline(session, enq, a, actor=ctx.approved_by or ctx.actor, run_id=ctx.run_id,
+                        agent_sent=ctx.approved_by is None)
+    return {"message_id": str(msg.id), "status": msg.status, "enquiry_id": str(enq.id)}
+
+
 async def _park_describe(session: AsyncSession, a: EnquiryArgs, facts: dict[str, Any]) -> str:
     enq = await _enquiry(session, a.enquiry_id)
     return f"Park {enq.ref if enq else 'the enquiry'}: no answer from the customer"
@@ -264,10 +317,10 @@ register_tool(ToolDef(
     description="Sends the customer a short thank-you with the enquiry's reference number "
                 "and questions for the details still needed to quote. It never mentions "
                 "prices, discounts, delivery dates or what we can supply.",
-    args=MessageArgs, run=_ack_run, facts=("account_tier", "is_tender"),
+    args=MessageArgs, run=_ack_run, facts=("account_tier", "is_tender", "make_ability"),
     compute_facts=_facts, touches=_touches, describe=_ack_describe,
     evidence_class="customer_money", counter_fields=("subject", "body"),
-    ask_when=_tender, block_when=_no_promises,
+    ask_when=_ack_ask, block_when=_no_promises,
 ))
 register_tool(ToolDef(
     key=NUDGE_TOOL, title="Remind a customer about missing details",
@@ -294,6 +347,17 @@ register_tool(ToolDef(
     compute_facts=_facts, touches=_merge_touches, describe=_merge_describe,
 ))
 
+register_tool(ToolDef(
+    key=DECLINE_TOOL, title="Decline an enquiry we can't make",
+    description="Thanks the customer and says politely that the request is outside what "
+                "we make, naming a company to try when one is set up, then closes the "
+                "enquiry. Always approved by a person first; never for strategic accounts.",
+    args=MessageArgs, run=_decline_run, facts=("account_tier", "is_tender", "make_ability"),
+    compute_facts=_facts, touches=_touches, describe=_decline_describe,
+    evidence_class="customer_money", counter_fields=("subject", "body"),
+    ask_when=_always_ask, block_when=_no_promises,
+))
+
 register_agent(AgentDef(
     key=AGENT_KEY,
     name="Enquiry Agent",
@@ -301,8 +365,10 @@ register_agent(AgentDef(
             "it to the right person. It thanks the customer with a reference number and "
             "asks for the details still needed to quote, reminds them if they do not "
             "answer, parks enquiries that go quiet, and merges the same enquiry sent twice. "
-            "It never promises prices, discounts, delivery dates or what we can supply.",
-    tools=(ACK_TOOL, NUDGE_TOOL, PARK_TOOL, MERGE_TOOL),
+            "It checks each enquiry against what we make, and drafts a polite decline for "
+            "a person to approve when we can't make it. It never promises prices, "
+            "discounts, delivery dates or what we can supply.",
+    tools=(ACK_TOOL, NUDGE_TOOL, PARK_TOOL, MERGE_TOOL, DECLINE_TOOL),
     default_level=L2, max_level=L2,
     triggers=("an email arrives in the connected mailbox", "the Test mailbox",
               "a customer's reply", "the daily nudge and park check"),

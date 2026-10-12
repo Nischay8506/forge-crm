@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { duration, eventText, qtyText, timerText, timerTone } from "./labels"
+import { duration, eventText, gradeTone, priorityTone, qtyText, timerText, timerTone } from "./labels"
 import type { Timer } from "./types"
 
 const timer = (over: Partial<Timer>): Timer => ({
@@ -48,5 +48,30 @@ describe("enquiry labels", () => {
     expect(qtyText("25.000", "MT")).toBe("25 MT")
     expect(qtyText("12.500", null)).toBe("12.5")
     expect(qtyText(null, "nos")).toBe("nos")
+  })
+
+  it("colours grades by what is good: high fit and intent, low risk", () => {
+    expect(gradeTone("fit", "High")).toBe("green")
+    expect(gradeTone("intent", "Low")).toBe("red")
+    expect(gradeTone("risk", "High")).toBe("red")
+    expect(gradeTone("risk", "Low")).toBe("green")
+    expect(gradeTone("risk", "Medium")).toBe("amber")
+    expect(gradeTone("fit", undefined)).toBe("neutral")
+    expect(priorityTone(82)).toBe("green")
+    expect(priorityTone(50)).toBe("teal")
+    expect(priorityTone(20)).toBe("amber")
+    expect(priorityTone(null)).toBe("neutral")
+  })
+
+  it("tells the check, the review and the score in words", () => {
+    const at = "2026-10-12T10:00:00Z"
+    expect(eventText({ kind: "checked", actor: "agent:enquiry", actor_name: "", at,
+      detail: { make_ability: "eto", source: "model" } })).toBe("Can we make it: Needs engineering (with the AI)")
+    expect(eventText({ kind: "review_done", actor: "user:x", actor_name: "", at,
+      detail: { outcome: "cannot_make", notes: "No crane bay" } })).toBe("Engineering review: we can't make it: No crane bay")
+    expect(eventText({ kind: "scored", actor: "system:forge", actor_name: "", at,
+      detail: { score: 72, before: 48, why: "customer replied" } })).toBe("Priority 48 → 72 (customer replied)")
+    expect(eventText({ kind: "scored", actor: "system:forge", actor_name: "", at,
+      detail: { score: 60, before: null, why: "new enquiry" } })).toBe("Priority set to 60 (new enquiry)")
   })
 })

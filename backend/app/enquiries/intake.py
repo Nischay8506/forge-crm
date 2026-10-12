@@ -29,7 +29,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents import runtime
 from app.agents.registry import load_definitions
 from app.config import get_settings
-from app.enquiries import ack, dedupe, documents, families, mime, reader, records, routing, timers
+from app.enquiries import (
+    ack,
+    dedupe,
+    documents,
+    families,
+    mime,
+    qualify,
+    reader,
+    records,
+    routing,
+    scoring,
+    timers,
+)
 from app.enquiries import settings as settings_mod
 from app.enquiries.agent import ACK_TOOL, AGENT_KEY, MERGE_TOOL, NUDGE_TOOL, PARK_TOOL, MessageArgs
 from app.files import store
@@ -317,12 +329,21 @@ async def _open_enquiry(session: AsyncSession, ctx: Any, row: InboundEmail,
             await routing.notify_people(session, other, {other.owner_id} if other.owner_id
                                         else set(), f"{other.ref}: the customer sent it again",
                                         f"{enq.ref} was merged into it ({'; '.join(why)})")
+            await scoring.rescore(session, other, actor=AGENT, why="sent again", now=now)
             return enq
         await dedupe.flag(session, enq, other, score, why)
     elif kind == "flag" and other is not None:
         await dedupe.flag(session, enq, other, score, why)
     await routing.route(session, enq, cfg["routing"], actor=AGENT, now=now)
-    if cfg["intake"]["auto_acknowledge"] and confident:
+    # Can we make it (F1.6), and what follows (P1 A, P2 A); then the score (F1.7).
+    before = enq.make_ability
+    await qualify.check(session, enq, actor=AGENT, ctx=ctx, at=now)
+    await qualify.follow_up(session, enq, before, actor=AGENT, ctx=ctx,
+                            original_subject=row.subject)
+    await scoring.rescore(session, enq, actor=AGENT, why="new enquiry", now=now, notify=False)
+    # A no fit is answered by the decline a person approves, not by an acknowledgement.
+    declined = enq.make_ability == "no_fit" and not await qualify.strategic(session, enq)
+    if cfg["intake"]["auto_acknowledge"] and confident and not declined:
         await _auto_acknowledge(session, ctx, enq, data, row)
     return enq
 
@@ -358,6 +379,11 @@ async def _reply(session: AsyncSession, ctx: Any, row: InboundEmail, enq: Enquir
                           source="reply", start=start)
     await records.event(session, enq, "customer_replied", AGENT, email_id=str(row.id),
                         answered=answered, lines=len(new_lines), read_by=reading.source)
+    if new_lines:
+        before = enq.make_ability
+        await qualify.check(session, enq, actor=AGENT, ctx=ctx, at=now)
+        await qualify.follow_up(session, enq, before, actor=AGENT, ctx=ctx)
+    await scoring.rescore(session, enq, actor=AGENT, why="customer replied", now=now)
     if enq.status in ("waiting_customer", "parked"):
         enq.status, enq.waiting_on, enq.waiting_since, enq.parked_at = "open", "us", None, None
         await timers.resume(session, enq, "quote", now)
@@ -550,6 +576,8 @@ async def followups_all(now: datetime | None = None) -> dict[str, int]:
             async with tenant_session(tid) as s:
                 for k, v in (await followups(s, tid, now)).items():
                     total[k] = total.get(k, 0) + v
+                rescored = await scoring.rescore_open(s, now)  # ERP money, dates (F1.7)
+                total["rescored"] = total.get("rescored", 0) + rescored
         except Exception:
             log.exception("enquiry follow-ups for tenant %s failed", tid)
     return total

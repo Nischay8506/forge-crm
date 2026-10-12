@@ -120,7 +120,7 @@ def display_value(fact_key: str, value: Any) -> str:
         return inr(n)
     if fact.type == "number" and n is not None:
         return f"{n.normalize():f}"
-    return str(value)
+    return dict(fact.words).get(str(value), str(value))
 
 
 async def sentence(session: AsyncSession, rule: PolicyRule) -> str:

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/Field"
 import { Empty } from "@/components/ui/States"
 import { Tag } from "@/components/ui/Tag"
 import { cn } from "@/lib/utils"
-import { qtyText } from "./labels"
+import { MAKE_TONE, qtyText } from "./labels"
 import type { EnquiryDetail, Line } from "./types"
 
 type Draft = { item_ref: string; description: string; material: string; dimensions: string; qty: string; unit: string; standard: string; notes: string }
@@ -131,6 +131,12 @@ export function LinesCard({ e }: { e: EnquiryDetail }) {
                       )}
                       {!l.dimensions && unsure(l, "dimensions") && <span className={cn("ml-1 text-[12px] text-amber-500", CHECK)}>size not read</span>}
                       {l.notes && <div className="text-[12px] text-ink-500">{l.notes}</div>}
+                      {l.make_ability && l.make_ability !== "standard" && (
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11.5px] text-ink-500">
+                          <Tag variant={MAKE_TONE[l.make_ability]}>{l.make_label}</Tag>
+                          {l.make_reasons.filter((r) => !r.endsWith(": needs engineering") && !r.endsWith(": configurable")).join("; ")}
+                        </div>
+                      )}
                       {l.from_ref && <div className="text-[11.5px] text-ink-300">from {l.from_ref}</div>}
                     </td>
                     <td className="py-2 pr-2 text-ink-700">

@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { api } from "@/config/api"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
-import { Input } from "@/components/ui/Field"
+import { Input, Select } from "@/components/ui/Field"
 import { Nameplate } from "@/components/ui/Nameplate"
 import { Empty, ErrorText, Loading } from "@/components/ui/States"
 import { Tag } from "@/components/ui/Tag"
@@ -13,25 +13,36 @@ import { useDebounced } from "@/lib/useDebounced"
 import { cn, formatDateTime } from "@/lib/utils"
 import { usePermissions } from "@/stores/authStore"
 import { useEnquiryCounts } from "./hooks"
-import { STATUS_TONE, VIEWS } from "./labels"
+import { MAKE_TONE, PART_LABELS, STATUS_TONE, VIEWS, gradeTone } from "./labels"
+import { PriorityBadge } from "./ScoreCard"
 import { TimerChip } from "./TimerChip"
-import type { EnquiryRow, View } from "./types"
+import type { EnquiryRow, Sort, View } from "./types"
 
 const PAGE = 100
 
-/** The Enquiry Queue (Design frame 02): every enquiry with what was read, its timer and its owner. */
+const GRADE_TEXT = { green: "text-green-500", amber: "text-amber-500", red: "text-red-500", neutral: "text-ink-300" } as const
+
+const SORTS: { key: Sort; label: string }[] = [
+  { key: "priority", label: "Highest priority first" },
+  { key: "newest", label: "Newest first" },
+  { key: "oldest", label: "Oldest first" },
+]
+
+/** The Enquiry Queue (Design frame 02): every enquiry with its priority, what was read,
+ *  whether we can make it, its timer and its owner. Sorted by priority unless asked (F1.7). */
 export function QueuePage() {
   const perms = usePermissions()
   const canWork = hasPermission(perms, "enquiries.work")
   const [search, setSearch] = useSearchParams()
   const view = (VIEWS.find((v) => v.key === search.get("view"))?.key ?? "open") as View
+  const sort = (SORTS.find((x) => x.key === search.get("sort"))?.key ?? "priority") as Sort
   const [q, setQ] = useState(search.get("q") ?? "")
   const dq = useDebounced(q)
   const [limit, setLimit] = useState(PAGE)
   const counts = useEnquiryCounts()
   const { data, isLoading, error } = useQuery({
-    queryKey: ["enquiries", "list", view, dq, limit],
-    queryFn: async () => (await api.get<EnquiryRow[]>("/enquiries", { params: { view, q: dq || undefined, limit } })).data,
+    queryKey: ["enquiries", "list", view, dq, limit, sort],
+    queryFn: async () => (await api.get<EnquiryRow[]>("/enquiries", { params: { view, q: dq || undefined, limit, sort } })).data,
     placeholderData: keepPreviousData,
     refetchInterval: 15_000,
   })
@@ -41,6 +52,12 @@ export function QueuePage() {
     else next.set("view", v)
     setSearch(next, { replace: true })
     setLimit(PAGE)
+  }
+  const order = (x: Sort) => {
+    const next = new URLSearchParams(search)
+    if (x === "priority") next.delete("sort")
+    else next.set("sort", x)
+    setSearch(next, { replace: true })
   }
 
   return (
@@ -60,6 +77,9 @@ export function QueuePage() {
       <div className="flex flex-wrap items-center gap-2">
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by reference, customer or what is asked"
           className="max-w-[360px]" aria-label="Search enquiries" />
+        <Select value={sort} onChange={(e) => order(e.target.value as Sort)} className="w-auto" aria-label="Order">
+          {SORTS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+        </Select>
         <span className="flex-1" />
         {canWork && <Link to="/enquiries/new"><Button size="sm">+ Manual enquiry</Button></Link>}
       </div>
@@ -70,9 +90,10 @@ export function QueuePage() {
           {data.length === 0 ? (
             <Empty>{dq ? "Nothing matches that search." : view === "open" ? "No open enquiries. New ones appear here as emails come in, or add one with + Manual enquiry." : "Nothing here."}</Empty>
           ) : (
-            <table className="w-full text-[13px] min-w-[860px]">
+            <table className="w-full text-[13px] min-w-[960px]">
               <thead>
                 <tr className="text-left text-ink-500 border-b border-line">
+                  <th className="p-3 font-semibold" title="Priority 0-100 from Fit, Intent and Risk">Priority</th>
                   <th className="p-3 font-semibold">Enquiry</th>
                   <th className="p-3 font-semibold">Source</th>
                   <th className="p-3 font-semibold">Requirement (read)</th>
@@ -99,6 +120,22 @@ function Row({ e }: { e: EnquiryRow }) {
     : `${e.lines} ${e.lines === 1 ? "line" : "lines"} read`
   return (
     <tr className="border-b border-line last:border-0 hover:bg-surface-0 align-top">
+      <td className="p-3 w-[170px]">
+        <PriorityBadge score={e.score} />
+        <div className="mt-1 text-[11.5px] leading-snug">
+          {(["fit", "intent", "risk"] as const).filter((p) => e.score_grades[p]).map((p, i) => (
+            <span key={p}>
+              {i > 0 && <span className="text-ink-300"> · </span>}
+              <span className={GRADE_TEXT[gradeTone(p, e.score_grades[p])]}>{PART_LABELS[p]} {e.score_grades[p]}</span>
+            </span>
+          ))}
+        </div>
+        {e.score_reasons[0] && (
+          <div className="mt-1 text-[11.5px] text-ink-500 leading-snug">
+            {e.score_reasons[0].up ? "▲" : "▼"} {e.score_reasons[0].text}
+          </div>
+        )}
+      </td>
       <td className="p-3">
         <Link to={`/enquiries/${e.id}`} className="hover:opacity-80"><Nameplate id={e.ref} /></Link>
         <div className="mt-1 font-semibold text-ink-900">{e.company ?? e.who}</div>
@@ -114,9 +151,10 @@ function Row({ e }: { e: EnquiryRow }) {
         <div className={cn("mt-0.5 font-mono text-[10.5px]", e.needs_review ? "text-amber-500" : "text-teal-600")}>
           ◆ {read}
         </div>
-        {e.possible_duplicate && (
-          <div className="mt-1"><Tag variant="amber">Possible duplicate · {e.possible_duplicate.score}%</Tag></div>
-        )}
+        <div className="mt-1 flex flex-wrap gap-1">
+          {e.make_ability && <Tag variant={MAKE_TONE[e.make_ability]} title="Can we make it">{e.make_label}</Tag>}
+          {e.possible_duplicate && <Tag variant="amber">Possible duplicate · {e.possible_duplicate.score}%</Tag>}
+        </div>
       </td>
       <td className="p-3">
         {e.timer ? (

@@ -38,6 +38,7 @@ class Fact:
     label: str
     type: str  # number | money | choice | text
     choices: tuple[str, ...] = ()
+    words: tuple[tuple[str, str], ...] = ()  # how a choice is shown to people
 
 
 FACTS: dict[str, Fact] = {f.key: f for f in (
@@ -48,6 +49,10 @@ FACTS: dict[str, Fact] = {f.key: f for f in (
     Fact("linked_records", "Linked records moved", "number"),
     Fact("record_type", "Record type", "choice", ("account", "contact")),
     Fact("is_tender", "Looks like a tender", "choice", ("yes", "no")),
+    Fact("make_ability", "Can we make it", "choice",
+         ("standard", "cto", "eto", "no_fit", "unchecked"),
+         (("standard", "Standard"), ("cto", "Configurable"), ("eto", "Needs engineering"),
+          ("no_fit", "No fit"), ("unchecked", "Not checked yet"))),
 )}
 
 OPS: dict[str, str] = {

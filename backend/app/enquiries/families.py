@@ -46,6 +46,7 @@ WHEN = _q("required_date", "When it is needed",
 TEMPLATES: dict[str, dict[str, Any]] = {
     "steel": {
         "name": "Steel sections and plates",
+        "make_ability": "standard",
         "keywords": ["plate", "plates", "sheet", "coil", "beam", "channel", "angle", "ismb",
                      "ismc", "isa", "hr", "cr", "ms", "tmt", "bar", "rod", "pipe", "tube",
                      "section", "joist", "flat", "chequered", "steel"],
@@ -68,6 +69,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "fabrication": {
         "name": "Fabricated structures",
+        "make_ability": "eto",
         "keywords": ["fabrication", "fabricated", "structure", "structural", "shed", "frame",
                      "platform", "tank", "skid", "welding", "welded", "assembly", "gantry",
                      "truss", "staircase", "railing"],
@@ -91,6 +93,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "machined": {
         "name": "Machined parts",
+        "make_ability": "cto",
         "keywords": ["machined", "machining", "cnc", "turned", "turning", "milled", "milling",
                      "shaft", "flange", "bush", "bushing", "gear", "impeller", "component",
                      "spindle", "coupling", "pin", "sleeve"],
@@ -114,6 +117,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "castings": {
         "name": "Castings",
+        "make_ability": "cto",
         "keywords": ["casting", "castings", "cast", "foundry", "ci", "sg", "ductile",
                      "grey iron", "gray iron", "investment casting", "pattern", "die casting"],
         "checklist": [
@@ -161,10 +165,16 @@ DETAIL_KEYS = sorted({item["key"] for t in TEMPLATES.values() for item in t["che
                      | {item["key"] for item in GENERAL})
 
 
+MAKE_WORDS = {"standard": "Standard", "cto": "Configurable", "eto": "Needs engineering",
+              "no_fit": "No fit"}
+QTY_UNITS = ("MT", "kg", "nos", "m", "sets")
+
+
 def out(f: ProductFamily) -> dict[str, Any]:
     return {"id": str(f.id), "name": f.name, "template": f.template, "keywords": f.keywords,
-            "checklist": f.checklist, "active": f.active, "updated_by": f.updated_by,
-            "updated_at": f.updated_at}
+            "checklist": f.checklist, "make_ability": f.make_ability, "moq": f.moq,
+            "sweet_spot": f.sweet_spot, "refer_to": f.refer_to, "active": f.active,
+            "updated_by": f.updated_by, "updated_at": f.updated_at}
 
 
 async def active(session: AsyncSession) -> list[ProductFamily]:
@@ -172,8 +182,43 @@ async def active(session: AsyncSession) -> list[ProductFamily]:
         ProductFamily.active.is_(True)).order_by(ProductFamily.name)))
 
 
+def _num(v: Any) -> float | None:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f >= 0 else None
+
+
+def _amount(v: Any, keys: tuple[str, ...]) -> dict[str, Any] | None | str:
+    """{"qty": 5, "unit": "MT"} or {"min", "max", "unit"}; None when empty; a problem
+    as text when it does not fit."""
+    if not v:
+        return None
+    if not isinstance(v, dict):
+        return "must be a number and a unit"
+    nums = {k: _num(v.get(k)) for k in keys if v.get(k) not in (None, "")}
+    if not nums:
+        return None
+    if any(n is None for n in nums.values()) or v.get("unit") not in QTY_UNITS:
+        return f"needs numbers and one of these units: {', '.join(QTY_UNITS)}"
+    if "min" in nums and "max" in nums and nums["min"] > nums["max"]:
+        return "the smallest is more than the largest"
+    return {**nums, "unit": v["unit"]}
+
+
 def problems(data: dict[str, Any]) -> list[str]:
     out_: list[str] = []
+    if data.get("make_ability", "standard") not in MAKE_WORDS:
+        out_.append("How it is supplied is standard, configurable, needs engineering or "
+                    "not made")
+    for key, label, keys in (("moq", "The minimum order", ("qty",)),
+                             ("sweet_spot", "The best order size", ("min", "max"))):
+        got = _amount(data.get(key), keys)
+        if isinstance(got, str):
+            out_.append(f"{label} {got}")
+    if len(str(data.get("refer_to") or "")) > 300:
+        out_.append("Who to refer customers to is up to 300 characters")
     name = str(data.get("name") or "").strip()
     if not name or len(name) > 100:
         out_.append("Give the family a name (up to 100 characters)")
@@ -213,6 +258,10 @@ def clean(data: dict[str, Any]) -> dict[str, Any]:
                        "questions": {k: str(v).strip() for k, v in
                                      (it.get("questions") or {}).items() if str(v).strip()}}
                       for it in data["checklist"]],
+        "make_ability": data.get("make_ability") or "standard",
+        "moq": _amount(data.get("moq"), ("qty",)),
+        "sweet_spot": _amount(data.get("sweet_spot"), ("min", "max")),
+        "refer_to": str(data.get("refer_to") or "").strip() or None,
         "active": bool(data.get("active", True)),
     }
 
@@ -241,9 +290,10 @@ async def update(session: AsyncSession, f: ProductFamily, data: dict[str, Any],
                  actor: str) -> ProductFamily:
     from datetime import UTC, datetime
 
-    merged = {"name": f.name, "keywords": f.keywords, "checklist": f.checklist,
-              "active": f.active, **{k: v for k, v in data.items()
-                                     if k in ("name", "keywords", "checklist", "active")}}
+    fields = ("name", "keywords", "checklist", "make_ability", "moq", "sweet_spot",
+              "refer_to", "active")
+    merged = {**{k: getattr(f, k) for k in fields},
+              **{k: v for k, v in data.items() if k in fields}}
     errs = problems(merged)
     if errs:
         raise AppError("; ".join(errs))

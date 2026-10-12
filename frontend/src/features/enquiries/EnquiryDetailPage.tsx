@@ -14,6 +14,9 @@ import { AckComposer } from "./AckComposer"
 import { CustomerCard } from "./CustomerCard"
 import { useEnquiry, usePeople } from "./hooks"
 import { LinesCard } from "./LinesCard"
+import { MakeCard } from "./MakeCard"
+import { ReviewCard } from "./ReviewCard"
+import { ScoreCard } from "./ScoreCard"
 import { MAIL_LABELS, OTHER_LABELS, RULE_LABELS, STATUS_TONE, eventText } from "./labels"
 import { ThreadCard } from "./ThreadCard"
 import { TimerChip } from "./TimerChip"
@@ -144,6 +147,9 @@ function Detail({ e }: { e: EnquiryDetail }) {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4 min-w-0">
+          {/* On a phone, the priority and the check come first; on a wide screen they sit on the right. */}
+          <div className="space-y-4 lg:hidden"><ScoreCard e={e} /><MakeCard e={e} /></div>
+          {e.review && <ReviewCard e={e} />}
           <LinesCard e={e} />
           <ThreadCard e={e} />
           <Card>
@@ -159,6 +165,7 @@ function Detail({ e }: { e: EnquiryDetail }) {
           </Card>
         </div>
         <div className="space-y-4">
+          <div className="hidden lg:block space-y-4"><ScoreCard e={e} /><MakeCard e={e} /></div>
           <Card>
             <CardHeader className="pb-2"><CardTitle>Owner</CardTitle></CardHeader>
             <div className="px-4 pb-4 text-[13px] space-y-1">

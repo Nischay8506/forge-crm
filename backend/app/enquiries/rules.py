@@ -253,8 +253,19 @@ def lines_in(text: str, source: str = "email", source_file: str | None = None
     return out
 
 
+SIGN_OFF = re.compile(
+    r"^(?:thanks?(?: you)?|thanks? (?:&|and) regards|(?:best|warm|kind|with)? ?regards|"
+    r"sincerely|yours (?:truly|faithfully|sincerely)|dhanyavaa?d|धन्यवाद|ధన్యవాదాలు)"
+    r"[\s,.!]*$", re.IGNORECASE)
+
+
 def _signature(text: str) -> list[str]:
+    """The sender's signature: the lines after the last sign-off ("Regards,"), else
+    the last 15 lines."""
     lines = [ln.strip() for ln in own_text(text).splitlines() if ln.strip()]
+    ends = [i for i, ln in enumerate(lines) if SIGN_OFF.match(ln)]
+    if ends and ends[-1] < len(lines) - 1:
+        return lines[ends[-1] + 1:][:15]
     return lines[-15:]
 
 

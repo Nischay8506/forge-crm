@@ -17,7 +17,7 @@ STEP_LABELS = {
     "region": "Someone who looks after the customer's state or city",
     "round_robin": "Next in the team, by fewest open enquiries",
 }
-STAGES = ("first_response", "first_look", "quote")
+STAGES = ("first_response", "first_look", "quote", "engineering_review")
 UNITS = {"minutes": ("always", 60), "hours": ("always", 3600),
          "working_hours": ("working", 3600), "working_days": ("working", None)}
 
@@ -34,6 +34,9 @@ DEFAULTS: dict[str, dict[str, Any]] = {
             {"key": "first_look", "label": "Owner's first look", "target": 2,
              "unit": "working_hours"},
             {"key": "quote", "label": "Quote sent", "target": 1, "unit": "working_days"},
+            # P2 A: an enquiry that needs engineering gets a review with its own timer.
+            {"key": "engineering_review", "label": "Engineering review", "target": 1,
+             "unit": "working_days"},
         ],
         "reminder_pct": 75, "manager_pct": 100, "hod_pct": 200,
     },
@@ -41,6 +44,15 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # person); F1.8: nudge on day 2 and day 5, then park. N5 A: complaints notify a role.
     "intake": {"auto_acknowledge": True, "nudge_days": [2, 5], "park_after_days": 7,
                "complaints_role_id": None, "unsure_below": 0.7},
+    # N15 A: lead scoring v1, weights the company can change (app/enquiries/scoring.py).
+    "scoring": {
+        "fit": {"make": 50, "volume": 25, "industry": 25},
+        "intent": {"formality": 40, "timeline": 30, "seniority": 30},
+        "risk": {"receivables": 50, "geography": 20, "new_entity": 30},
+        "risk_weight": 50,  # how far a high risk lowers the priority, in %
+        "jump": 20,  # a change of this many points tells the owner
+        "export_watch": [],  # countries (two-letter codes) to check for export control
+    },
 }
 
 
@@ -50,12 +62,21 @@ def _merge(base: dict[str, Any], row: dict[str, Any] | None) -> dict[str, Any]:
     return out
 
 
+def _timers(saved: dict[str, Any] | None) -> dict[str, Any]:
+    """Saved timers, with any stage added since they were saved at its default."""
+    out = _merge(DEFAULTS["timers"], saved)
+    have = {st["key"]: st for st in out["stages"]}
+    out["stages"] = [have.get(st["key"], copy.deepcopy(st)) for st in DEFAULTS["timers"]["stages"]]
+    return out
+
+
 async def load(session: AsyncSession, tenant_id: uuid.UUID) -> dict[str, Any]:
     row = await session.get(EnquirySettings, tenant_id)
     return {
         "routing": _merge(DEFAULTS["routing"], row.routing if row else None),
-        "timers": _merge(DEFAULTS["timers"], row.timers if row else None),
+        "timers": _timers(row.timers if row else None),
         "intake": _merge(DEFAULTS["intake"], row.intake if row else None),
+        "scoring": _merge(DEFAULTS["scoring"], row.scoring if row else None),
         "is_default": row is None,
         "updated_by": row.updated_by if row else None,
         "updated_at": row.updated_at if row else None,
@@ -84,7 +105,7 @@ async def problems(session: AsyncSession, part: str, data: dict[str, Any]) -> li
     elif part == "timers":
         stages = data.get("stages") or []
         if [s.get("key") for s in stages] != list(STAGES):
-            out.append("The three stages must all be there, in order")
+            out.append("All the stages must be there, in order")
         for s in stages:
             if s.get("unit") not in UNITS:
                 out.append(f"Unknown unit for {s.get('label')}")
@@ -117,6 +138,25 @@ async def problems(session: AsyncSession, part: str, data: dict[str, Any]) -> li
         ub = data.get("unsure_below")
         if not isinstance(ub, int | float) or not 0.3 <= float(ub) <= 0.95:
             out.append("The 'unsure' level must be between 0.3 and 0.95")
+    elif part == "scoring":
+        for p, sigs in DEFAULTS["scoring"].items():
+            if not isinstance(sigs, dict):
+                continue
+            got = data.get(p) or {}
+            if set(got) != set(sigs) or any(
+                    not isinstance(v, int) or not 0 <= v <= 100 for v in got.values()):
+                out.append(f"Each {p} weight is a whole number from 0 to 100")
+            elif not sum(got.values()):
+                out.append(f"At least one {p} weight must be above 0")
+        rw, jump = data.get("risk_weight"), data.get("jump")
+        if not isinstance(rw, int) or not 0 <= rw <= 90:
+            out.append("How far risk lowers the priority is from 0% to 90%")
+        if not isinstance(jump, int) or not 5 <= jump <= 100:
+            out.append("The jump that tells the owner is from 5 to 100 points")
+        ew = data.get("export_watch") or []
+        if not isinstance(ew, list) or any(
+                not isinstance(c, str) or len(c.strip()) != 2 for c in ew):
+            out.append("Watched countries are two-letter codes, e.g. CN")
     else:
         out.append("Unknown settings part")
     return out
@@ -131,6 +171,9 @@ async def save(session: AsyncSession, tenant_id: uuid.UUID, part: str, data: dic
                               updated_by=actor)
         session.add(row)
     clean = {k: data[k] for k in DEFAULTS[part] if k in data}
+    if part == "scoring":
+        clean["export_watch"] = sorted({c.strip().upper() for c in clean.get("export_watch")
+                                        or []})
     setattr(row, part, _merge(DEFAULTS[part], clean))
     row.updated_by, row.updated_at = actor, datetime.now(UTC)
     await session.flush()

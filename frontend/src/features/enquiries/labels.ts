@@ -1,4 +1,4 @@
-import type { EnquiryEvent, EnquiryStatus, Timer, View } from "./types"
+import type { EnquiryEvent, EnquiryStatus, Grade, MakeAbility, Timer, View } from "./types"
 
 export const VIEWS: { key: View; label: string; hint: string }[] = [
   { key: "open", label: "Open", hint: "New, open and waiting on the customer" },
@@ -6,6 +6,7 @@ export const VIEWS: { key: View; label: string; hint: string }[] = [
   { key: "unassigned", label: "No owner", hint: "No one owns these yet" },
   { key: "review", label: "To check", hint: "What was read needs a person's look" },
   { key: "duplicates", label: "Possible duplicates", hint: "Looks like an earlier enquiry" },
+  { key: "engineering", label: "Engineering", hint: "Waiting on an engineering review" },
   { key: "waiting", label: "Waiting on customer", hint: "We asked the customer something" },
   { key: "parked", label: "Parked", hint: "No answer after the reminders" },
   { key: "closed", label: "Closed", hint: "Closed or merged" },
@@ -19,6 +20,45 @@ export const STATUS_TONE: Record<EnquiryStatus, "teal" | "gold" | "green" | "red
   parked: "neutral",
   closed: "neutral",
   merged: "neutral",
+}
+
+/** Can we make it (F1.6). */
+export const MAKE_LABELS: Record<MakeAbility, string> = {
+  standard: "Standard",
+  cto: "Configurable",
+  eto: "Needs engineering",
+  no_fit: "No fit",
+}
+
+export const MAKE_TONE: Record<MakeAbility, "green" | "teal" | "amber" | "red"> = {
+  standard: "green",
+  cto: "teal",
+  eto: "amber",
+  no_fit: "red",
+}
+
+export const MAKE_SOURCE: Record<string, string> = {
+  rules: "the rules",
+  model: "the rules and the AI",
+  person: "a person",
+}
+
+/** Fit and Intent are good when high; Risk is good when low. */
+export function gradeTone(part: "fit" | "intent" | "risk", g: Grade | undefined): "green" | "amber" | "red" | "neutral" {
+  if (!g) return "neutral"
+  const good = part === "risk" ? g === "Low" : g === "High"
+  const bad = part === "risk" ? g === "High" : g === "Low"
+  return good ? "green" : bad ? "red" : "amber"
+}
+
+export const PART_LABELS = { fit: "Fit", intent: "Intent", risk: "Risk" } as const
+
+/** Priority 0-100: the colour of its number. */
+export function priorityTone(score: number | null | undefined): "green" | "teal" | "amber" | "neutral" {
+  if (score === null || score === undefined) return "neutral"
+  if (score >= 70) return "green"
+  if (score >= 45) return "teal"
+  return "amber"
 }
 
 export const MAIL_LABELS: Record<string, string> = {
@@ -95,6 +135,7 @@ const STAGE_NAMES: Record<string, string> = {
   first_response: "First response",
   first_look: "Owner's first look",
   quote: "Quote",
+  engineering_review: "Engineering review",
 }
 
 const FIELD_NAMES: Record<string, string> = {
@@ -157,6 +198,18 @@ export function eventText(ev: EnquiryEvent, names: Record<string, string> = {}):
     case "line_removed": return `A line was removed${d.description ? `: ${str(d.description)}` : ""}`
     case "customer_added": return "The sender was added to contacts"
     case "received_how": return `Received by ${str(d.how)}`
+    case "checked": {
+      const m = MAKE_LABELS[str(d.make_ability) as MakeAbility] ?? "Not checked"
+      const by = d.source === "person" ? " (engineering review)" : d.source === "model" ? " (with the AI)" : ""
+      return `Can we make it: ${m}${by}`
+    }
+    case "scored": return `Priority ${d.before === null || d.before === undefined ? "set to" : `${String(d.before)} →`} ${String(d.score)}${d.why ? ` (${str(d.why)})` : ""}`
+    case "review_opened": return "Sent for an engineering review"
+    case "review_taken": return "An engineer took the review"
+    case "review_done": return `Engineering review: ${d.outcome === "cannot_make" ? "we can't make it" : "we can make it"}${d.notes ? `: ${str(d.notes)}` : ""}`
+    case "review_cancelled": return "The engineering review was no longer needed"
+    case "declined": return "Declined: the customer was told we can't make it"
+    case "no_fit_escalated": return "Looks like no fit; a strategic account, so its people were told"
     default: return ev.kind.replace(/_/g, " ")
   }
 }

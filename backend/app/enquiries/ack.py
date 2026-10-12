@@ -129,6 +129,52 @@ async def compose_nudge(session: AsyncSession, enq: Enquiry, contact: Contact | 
             "language": lang, "question_keys": [q["key"] for q in open_q]}
 
 
+# A courteous decline for an enquiry we can't supply (F1.6, P1 A: a person approves it
+# before it is sent). Written by Forge; a native speaker should check the Hindi and
+# Telugu before real customers see them.
+DECLINE: dict[str, dict[str, str]] = {
+    "en": {
+        "body": "Thank you for your enquiry {ref} and for thinking of us. We have looked at "
+                "it carefully, but it is outside what we make, so we are not able to quote "
+                "for it this time.",
+        "refer": "For this requirement you could contact {refer_to}.",
+        "later": "We would be glad to help with any other requirement in future.",
+    },
+    "hi": {
+        "body": "आपकी पूछताछ {ref} और हमें याद करने के लिए धन्यवाद। हमने इसे ध्यान से देखा, "
+                "लेकिन यह हमारे उत्पादों की सीमा से बाहर है, इसलिए इस बार हम इसका कोटेशन "
+                "नहीं दे पाएंगे।",
+        "refer": "इस आवश्यकता के लिए आप {refer_to} से संपर्क कर सकते हैं।",
+        "later": "भविष्य में किसी अन्य आवश्यकता में आपकी मदद करके हमें खुशी होगी।",
+    },
+    "te": {
+        "body": "మీ విచారణ {ref} కు మరియు మమ్మల్ని గుర్తుంచుకున్నందుకు ధన్యవాదాలు. మేము దీనిని "
+                "జాగ్రత్తగా పరిశీలించాము, కానీ ఇది మేము తయారు చేసే వాటి పరిధికి వెలుపల ఉంది, "
+                "కాబట్టి ఈసారి కొటేషన్ ఇవ్వలేము.",
+        "refer": "ఈ అవసరానికి మీరు {refer_to} ను సంప్రదించవచ్చు.",
+        "later": "భవిష్యత్తులో ఏదైనా ఇతర అవసరానికి సహాయం చేయడానికి మేము సంతోషిస్తాము.",
+    },
+}
+
+
+async def compose_decline(session: AsyncSession, enq: Enquiry, contact: Contact | None,
+                          original_subject: str | None, refer_to: str | None
+                          ) -> dict[str, Any]:
+    company, name, lang = await _parts(session, enq, contact)
+    t, d = TEXT[lang], DECLINE[lang]
+    body = [t["dear"].format(name=name) if name else t["dear_none"], "",
+            d["body"].format(ref=enq.ref)]
+    if refer_to:
+        body += ["", d["refer"].format(refer_to=refer_to)]
+    body += ["", d["later"], "", t["close"].format(company=company)]
+    subj = (original_subject or "").strip()
+    subj = subj[3:].strip() if subj.lower().startswith("re:") else subj
+    subject = (t["subject"].format(subject=subj[:200], ref=enq.ref) if subj
+               else t["subject_none"].format(ref=enq.ref))
+    return {"subject": subject[:300], "body": "\n".join(body), "language": lang,
+            "question_keys": []}
+
+
 def ask_questions(enq: Enquiry, items: list[dict[str, Any]], keys: list[str],
                   now: datetime | None = None) -> None:
     now = now or datetime.now(UTC)

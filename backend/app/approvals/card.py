@@ -68,6 +68,19 @@ async def account_of(session: AsyncSession, d: Decision) -> uuid.UUID | None:
 async def erp_figures(session: AsyncSession, account_id: uuid.UUID) -> dict[str, Any]:
     """Outstanding, overdue and last-12-months invoiced, per currency, from Forge's
     copy of every ERP the account is linked to, with when that copy was last read."""
+    got = await erp_totals(session, account_id)
+    if not got["linked"]:
+        return got
+    return {
+        "linked": True, "erps": got["erps"], "as_of": got["as_of"], "stale": got["stale"],
+        "figures": [{"currency": cur, "outstanding": money(o, cur), "overdue": money(od, cur),
+                     "invoiced_12m": money(inv, cur)} for cur, o, od, inv in got["rows"]],
+    }
+
+
+async def erp_totals(session: AsyncSession, account_id: uuid.UUID) -> dict[str, Any]:
+    """The same as erp_figures, as numbers: rows of (currency, outstanding, overdue,
+    invoiced in the last 12 months)."""
     links = list(await session.scalars(select(ErpCustomer).where(
         ErpCustomer.account_id == account_id, ErpCustomer.link_status == "linked",
         ErpCustomer.gone_at.is_(None))))
@@ -97,12 +110,8 @@ async def erp_figures(session: AsyncSession, account_id: uuid.UUID) -> dict[str,
                func.coalesce(func.sum(ErpInvoice.grand_total).filter(
                    ErpInvoice.invoice_date >= today - timedelta(days=365)), 0))
         .where(of, *live).group_by(ErpInvoice.currency).order_by(ErpInvoice.currency))).all()
-    return {
-        "linked": True, "erps": sorted(names.get(c, "ERP") for c in conns),
-        "as_of": as_of, "stale": stale,
-        "figures": [{"currency": cur, "outstanding": money(o, cur), "overdue": money(od, cur),
-                     "invoiced_12m": money(inv, cur)} for cur, o, od, inv in rows],
-    }
+    return {"linked": True, "erps": sorted(names.get(c, "ERP") for c in conns),
+            "as_of": as_of, "stale": stale, "rows": [tuple(r) for r in rows]}
 
 
 async def history(session: AsyncSession, d: Decision) -> dict[str, Any]:

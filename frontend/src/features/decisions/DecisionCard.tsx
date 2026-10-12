@@ -143,6 +143,24 @@ function History({ h, now }: { h: CardHistory; now: number }) {
   )
 }
 
+/** A message the agent wants to send (an acknowledgement, a reminder, a decline): the
+ *  person deciding reads exactly what would go out. */
+function MessagePreview({ args }: { args: Record<string, unknown> }) {
+  const [all, setAll] = useState(false)
+  if (typeof args.body !== "string") return null
+  const long = args.body.split("\n").length > 6 || args.body.length > 400
+  return (
+    <div className="py-1 border-b border-dashed border-line text-[12.5px] space-y-0.5">
+      <p className="text-ink-500">The message</p>
+      {typeof args.subject === "string" && <p className="font-semibold text-ink-900">{args.subject}</p>}
+      <p className={cn("whitespace-pre-wrap text-ink-700 bg-surface-2 rounded-md p-2", long && !all && "line-clamp-6")}>{args.body}</p>
+      {long && (
+        <button type="button" className="text-teal-600 hover:underline" onClick={() => setAll(!all)}>{all ? "Show less" : "Show all of it"}</button>
+      )}
+    </div>
+  )
+}
+
 function CounterForm({ d, busy, onSubmit, onCancel }: {
   d: DecisionCard; busy: boolean; onSubmit: (values: Record<string, string>) => void; onCancel: () => void
 }) {
@@ -157,9 +175,14 @@ function CounterForm({ d, busy, onSubmit, onCancel }: {
       <p className="text-[12px] text-ink-700">Approve a changed version. The change is checked by the policy rules again, and may need more approvals.</p>
       {d.counter_fields.map((f) => (
         <label key={f.key} className="block text-[12px]">
-          <span className="text-ink-500">{f.label} (asked: {d.facts.find((x) => x.key === f.key)?.value ?? String(f.value ?? "–")})</span>
-          <Input inputMode={f.type === "money" || f.type === "number" ? "decimal" : undefined} value={values[f.key]}
-            onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))} />
+          <span className="text-ink-500">{f.label}{f.key === "body" ? "" : ` (asked: ${d.facts.find((x) => x.key === f.key)?.value ?? String(f.value ?? "–")})`}</span>
+          {f.key === "body" ? (
+            <textarea value={values[f.key]} rows={8} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+              className="w-full rounded-md border border-input bg-surface-1 px-3 py-2 text-[13px]" />
+          ) : (
+            <Input inputMode={f.type === "money" || f.type === "number" ? "decimal" : undefined} value={values[f.key]}
+              onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))} />
+          )}
         </label>
       ))}
       <div className="flex gap-2">
@@ -322,6 +345,7 @@ export function DecisionCardView({ d, listKey, handedTo, highlight }: {
 
       <div>
         {d.facts.map((f) => <Row key={f.key} k={f.label}>{f.value}</Row>)}
+        <MessagePreview args={d.args} />
         {d.reasons.length > 0 && (d.kind === "alert" || d.kind === "task" || d.reasons.length > 1 ? (
           <div className="py-1 border-b border-dashed border-line text-[12.5px]">
             {approval && <p className="text-ink-500">Why it is asking</p>}

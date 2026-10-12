@@ -9,7 +9,8 @@ import { useEnquirySettings } from "./hooks"
 import { UNIT_LABELS } from "./labels"
 import type { EnquirySettings, StageSetting } from "./types"
 
-/** The three timers (N13 A) and when people are told, plus how Forge handles new mail. */
+/** The timers (N13 A, and the engineering review from P2 A) and when people are told,
+ *  plus how Forge handles new mail. */
 export function TimersSetup({ canManage }: { canManage: boolean }) {
   const { data, isLoading } = useEnquirySettings()
   if (isLoading || !data) return <Loading />
@@ -54,7 +55,7 @@ function TimersCard({ s, canManage }: { s: EnquirySettings; canManage: boolean }
           <Field label="Tell the manager at (%)"><Input value={pct.manager_pct} onChange={(e) => setPct({ ...pct, manager_pct: e.target.value })} inputMode="numeric" disabled={!canManage} /></Field>
           <Field label="Tell the head of department at (%)"><Input value={pct.hod_pct} onChange={(e) => setPct({ ...pct, hod_pct: e.target.value })} inputMode="numeric" disabled={!canManage} /></Field>
         </div>
-        <p className="text-[12px] text-ink-300">People are told in Forge and by email. Changes apply to running timers too.</p>
+        <p className="text-[12px] text-ink-300">People are told in Forge and by email. For the engineering review, the engineer who took it (before that, everyone in the engineering role) is reminded and their manager is told. Changes apply to running timers too.</p>
         {save.error && <p role="alert" className="text-red-500 text-[12.5px]">{errorMessage(save.error, "Could not save")}</p>}
         {save.isSuccess && <p role="status" className="text-green-500 text-[12.5px]">Saved.</p>}
         {canManage && <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>Save timers</Button>}

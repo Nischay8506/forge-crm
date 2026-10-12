@@ -33,11 +33,13 @@ from app.models.channels import (
     ToneGuide,
 )
 from app.models.enquiries import (
+    CapabilityProfile,
     Enquiry,
     EnquiryAssignment,
     EnquiryEvent,
     EnquiryLine,
     EnquiryPair,
+    EnquiryReview,
     EnquirySettings,
     InboundEmail,
     Mailbox,
@@ -109,6 +111,8 @@ __all__ = [
     "EnquiryEvent",
     "EnquiryLine",
     "EnquiryPair",
+    "CapabilityProfile",
+    "EnquiryReview",
     "EnquirySettings",
     "InboundEmail",
     "Mailbox",

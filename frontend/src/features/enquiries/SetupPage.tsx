@@ -2,9 +2,11 @@ import { useSearchParams } from "react-router-dom"
 import { hasPermission } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { usePermissions } from "@/stores/authStore"
+import { CapabilitySetup } from "./CapabilitySetup"
 import { FamiliesSetup } from "./FamiliesSetup"
 import { MailboxSetup } from "./MailboxSetup"
 import { RoutingSetup } from "./RoutingSetup"
+import { ScoringSetup } from "./ScoringSetup"
 import { TimersSetup } from "./TimersSetup"
 
 const TABS = [
@@ -12,6 +14,8 @@ const TABS = [
   { key: "routing", label: "Owners" },
   { key: "timers", label: "Timers and new mail" },
   { key: "families", label: "Product families" },
+  { key: "capability", label: "What we make" },
+  { key: "scoring", label: "Scoring" },
 ] as const
 
 export function SetupPage() {
@@ -34,6 +38,8 @@ export function SetupPage() {
       {tab === "routing" && <RoutingSetup canManage={canManage} />}
       {tab === "timers" && <TimersSetup canManage={canManage} />}
       {tab === "families" && <FamiliesSetup canManage={canManage} />}
+      {tab === "capability" && <CapabilitySetup canManage={canManage} />}
+      {tab === "scoring" && <ScoringSetup canManage={canManage} />}
     </div>
   )
 }

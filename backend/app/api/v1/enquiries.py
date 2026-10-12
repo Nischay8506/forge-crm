@@ -24,7 +24,20 @@ from app.core.deps import CurrentUser, require_permission
 from app.core.errors import AppError, NotFound
 from app.core.permissions import has_permission
 from app.db import get_db
-from app.enquiries import ack, dedupe, families, intake, mime, records, routing, timers
+from app.enquiries import (
+    ack,
+    capability,
+    dedupe,
+    families,
+    intake,
+    mime,
+    qualify,
+    records,
+    reviews,
+    routing,
+    scoring,
+    timers,
+)
 from app.enquiries import settings as settings_mod
 from app.enquiries.agent import MessageArgs, acknowledge
 from app.enquiries.mail import oauth
@@ -38,9 +51,11 @@ from app.models import (
     EnquiryAssignment,
     EnquiryEvent,
     EnquiryLine,
+    EnquiryReview,
     InboundEmail,
     Message,
     ProductFamily,
+    Role,
     StoredFile,
     User,
 )
@@ -58,8 +73,9 @@ LABEL_NAMES = {"enquiry": "Enquiry", "complaint": "Complaint", "payment": "Payme
                "order_status": "Order status", "vendor_mail": "Vendor mail", "spam": "Spam"}
 STATUS_NAMES = {"new": "New", "open": "Open", "waiting_customer": "Waiting on customer",
                 "parked": "Parked", "closed": "Closed", "merged": "Merged"}
-VIEWS = ("open", "mine", "unassigned", "review", "duplicates", "waiting", "parked", "closed",
-         "all")
+VIEWS = ("open", "mine", "unassigned", "review", "duplicates", "engineering", "waiting",
+         "parked", "closed", "all")
+SORTS = ("priority", "newest", "oldest")
 
 
 def _actor(u: CurrentUser) -> str:
@@ -131,6 +147,10 @@ async def _rows(db: AsyncSession, enquiries: list[Enquiry]) -> list[dict[str, An
             "review_reasons": e.review_reasons, "language": e.language,
             "waiting_on": e.waiting_on, "lines": lines.get(e.id, 0),
             "possible_duplicate": dedupe.out_pair(e), "confidence": e.confidence,
+            "make_ability": e.make_ability, "make_label": qualify.words(e.make_ability),
+            "score": e.score, "score_grades": {k: v["grade"] for k, v in
+                                              (e.score_parts or {}).items()},
+            "score_reasons": e.score_reasons,
             "timer": _stage_now(by.get(e.id, []), now, cal),
             "first_response_at": e.first_response_at, "quote_sent_at": e.quote_sent_at,
             "created_at": e.created_at, "last_activity_at": e.last_activity_at})
@@ -146,6 +166,9 @@ def _filter(stmt: Any, view: str, me: uuid.UUID) -> Any:
         "review": stmt.where(Enquiry.status.in_(OPEN_STATUSES), Enquiry.needs_review.is_(True)),
         "duplicates": stmt.where(Enquiry.status.in_(OPEN_STATUSES),
                                  Enquiry.possible_duplicate_of_id.is_not(None)),
+        "engineering": stmt.where(Enquiry.status.in_(OPEN_STATUSES), select(EnquiryReview.id)
+                                  .where(EnquiryReview.enquiry_id == Enquiry.id,
+                                         EnquiryReview.status == "open").exists()),
         "waiting": stmt.where(Enquiry.status == "waiting_customer"),
         "parked": stmt.where(Enquiry.status == "parked"),
         "closed": stmt.where(Enquiry.status.in_(("closed", "merged"))),
@@ -156,10 +179,11 @@ def _filter(stmt: Any, view: str, me: uuid.UUID) -> Any:
 @router.get("")
 async def queue(view: str = Query("open"), q: str | None = None,
                 owner_id: uuid.UUID | None = None, limit: int = Query(100, le=300),
+                sort: str = Query("priority"),
                 current: CurrentUser = Depends(READ),
                 db: AsyncSession = Depends(get_db)) -> list[dict[str, Any]]:
-    if view not in VIEWS:
-        raise AppError("Unknown view")
+    if view not in VIEWS or sort not in SORTS:
+        raise AppError("Unknown view or order")
     stmt = _filter(select(Enquiry).where(Enquiry.erased_at.is_(None)), view, current.user.id)
     if owner_id:
         stmt = stmt.where(Enquiry.owner_id == owner_id)
@@ -169,7 +193,10 @@ async def queue(view: str = Query("open"), q: str | None = None,
                               Enquiry.customer["company"].astext.ilike(like),
                               Enquiry.customer["contact_name"].astext.ilike(like),
                               Enquiry.customer["email"].astext.ilike(like)))
-    rows = list(await db.scalars(stmt.order_by(Enquiry.created_at.desc()).limit(limit)))
+    # Every worklist sorts by priority unless asked otherwise (F1.7).
+    order = {"priority": (Enquiry.score.desc().nulls_last(), Enquiry.created_at.desc()),
+             "newest": (Enquiry.created_at.desc(),), "oldest": (Enquiry.created_at,)}[sort]
+    rows = list(await db.scalars(stmt.order_by(*order).limit(limit)))
     return await _rows(db, rows)
 
 
@@ -195,7 +222,9 @@ def _line(ln: EnquiryLine) -> dict[str, Any]:
             "description": ln.description, "material": ln.material,
             "dimensions": ln.dimensions, "qty": ln.qty, "unit": ln.unit,
             "standard": ln.standard, "notes": ln.notes, "confidence": ln.confidence,
-            "unsure": ln.unsure, "source": ln.source, "source_ref": ln.source_ref,
+            "unsure": ln.unsure, "make_ability": ln.make_ability,
+            "make_label": qualify.words(ln.make_ability) if ln.make_ability else None,
+            "make_reasons": ln.make_reasons, "source": ln.source, "source_ref": ln.source_ref,
             "original": ln.original, "corrected_by": ln.corrected_by,
             "corrected_at": ln.corrected_at}
 
@@ -280,6 +309,11 @@ async def _detail(db: AsyncSession, e: Enquiry, current: CurrentUser) -> dict[st
         "owner_seen_at": e.owner_seen_at, "quote_sent_by": e.quote_sent_by,
         "first_response_by": e.first_response_by, "nudges": e.nudges,
         "waiting_since": e.waiting_since, "parked_at": e.parked_at,
+        "make": {"ability": e.make_ability, "label": qualify.words(e.make_ability),
+                 "reasons": e.make_reasons, "source": e.make_source,
+                 "checked_at": e.make_checked_at},
+        "score_parts": e.score_parts, "scored_at": e.scored_at,
+        "review": await reviews.view(db, await reviews.latest(db, e)),
         "may": {"work": may_work, "assign": has_permission(p, "enquiries.assign"),
                 "send": may_work and has_permission(p, "messages.send")},
     }
@@ -388,6 +422,7 @@ async def manual(body: ManualIn, current: CurrentUser = Depends(WORK),
     if other is not None and kind in ("flag", "merge"):
         await dedupe.flag(db, e, other, score, why)  # a person's enquiry is never merged alone
     await routing.route(db, e, cfg["routing"], actor=actor, now=now)
+    await _recheck(db, e, actor, "new enquiry")
     return await _detail(db, e, current)
 
 
@@ -449,6 +484,7 @@ async def edit(enquiry_id: uuid.UUID, body: EditIn, current: CurrentUser = Depen
         e.updated_at = datetime.now(UTC)
         await records.event(db, e, "edited", actor, changed=changed)
         await records.audit(db, e, "enquiry.edited", actor, fields=sorted(changed))
+        await _recheck(db, e, actor, "details changed")
     return await _detail(db, e, current)
 
 
@@ -461,7 +497,17 @@ async def add_line(enquiry_id: uuid.UUID, body: LineIn, current: CurrentUser = D
     rows = records.add_lines(db, e, [body.model_dump()], source="person", start=last)
     await db.flush()
     await records.event(db, e, "line_added", _actor(current), line_id=str(rows[0].id))
+    await _recheck(db, e, _actor(current), "a line was added")
     return _line(rows[0])
+
+
+async def _recheck(db: AsyncSession, e: Enquiry, actor: str, why: str) -> None:
+    """A new signal: check what we can make by the rules again (F1.6), act on a new
+    stamp, and work out the score again (F1.7)."""
+    before = e.make_ability
+    await qualify.check(db, e, actor=actor)
+    await qualify.follow_up(db, e, before, actor=actor)
+    await scoring.rescore(db, e, actor=actor, why=why)
 
 
 async def _line_of(db: AsyncSession, e: Enquiry, line_id: uuid.UUID) -> EnquiryLine:
@@ -490,6 +536,7 @@ async def correct_line(enquiry_id: uuid.UUID, line_id: uuid.UUID, body: LineIn,
     ln.unsure = []  # a person has checked the whole line
     await records.event(db, e, "line_corrected", _actor(current), line_id=str(ln.id),
                         fields=sorted(k for k in vals if before[k] != vals[k]))
+    await _recheck(db, e, _actor(current), "a line was corrected")
     return _line(ln)
 
 
@@ -502,7 +549,66 @@ async def remove_line(enquiry_id: uuid.UUID, line_id: uuid.UUID,
     ln.removed_at = datetime.now(UTC)
     await records.event(db, e, "line_removed", _actor(current), line_id=str(ln.id),
                         description=ln.description[:100])
+    await _recheck(db, e, _actor(current), "a line was removed")
     return {"removed": True}
+
+
+@router.post("/{enquiry_id}/check")
+async def check_again(enquiry_id: uuid.UUID, current: CurrentUser = Depends(WORK),
+                      db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """'Check again': the rules and, with an AI key, the AI look at the enquiry anew."""
+    from app.agents import runtime
+    from app.enquiries.agent import AGENT_KEY
+
+    e = await _enq(db, enquiry_id, lock=True)
+    if e.status not in OPEN_STATUSES:
+        raise AppError(f"{e.ref} is {e.status}")
+    actor = _actor(current)
+    ctx = await runtime.start_run(db, e.tenant_id, AGENT_KEY, "person", str(e.id))
+    before = e.make_ability
+    await qualify.check(db, e, actor=actor, ctx=ctx)
+    await qualify.follow_up(db, e, before, actor=actor, ctx=ctx)
+    await scoring.rescore(db, e, actor=actor, why="checked again")
+    await runtime.finish_run(db, ctx, summary={"enquiry": e.ref, "make": e.make_ability})
+    return await _detail(db, e, current)
+
+
+class ReviewDoneIn(BaseModel):
+    outcome: Literal["can_make", "cannot_make"]
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+async def _review_of(db: AsyncSession, e: Enquiry, review_id: uuid.UUID) -> EnquiryReview:
+    rv = await db.get(EnquiryReview, review_id, with_for_update=True)
+    if rv is None or rv.enquiry_id != e.id:
+        raise NotFound("Review not found")
+    return rv
+
+
+@router.post("/{enquiry_id}/reviews/{review_id}/take")
+async def take_review(enquiry_id: uuid.UUID, review_id: uuid.UUID,
+                      current: CurrentUser = Depends(WORK),
+                      db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    e = await _enq(db, enquiry_id, lock=True)
+    await reviews.take(db, e, await _review_of(db, e, review_id), current.user.id,
+                       _actor(current))
+    return await _detail(db, e, current)
+
+
+@router.post("/{enquiry_id}/reviews/{review_id}/done")
+async def finish_review(enquiry_id: uuid.UUID, review_id: uuid.UUID, body: ReviewDoneIn,
+                        current: CurrentUser = Depends(WORK),
+                        db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """The engineer's answer (P2 A). "We can't make it" makes the enquiry no fit, and a
+    decline is drafted for a person to approve (P1 A)."""
+    e = await _enq(db, enquiry_id, lock=True)
+    rv = await _review_of(db, e, review_id)
+    actor = _actor(current)
+    await reviews.finish(db, e, rv, body.outcome, body.notes, actor=actor,
+                         user_id=current.user.id)
+    await qualify.after_review(db, e, body.outcome, rv.notes, actor)
+    await scoring.rescore(db, e, actor=actor, why="engineering review")
+    return await _detail(db, e, current)
 
 
 @router.post("/{enquiry_id}/add-customer")
@@ -525,6 +631,7 @@ async def add_customer(enquiry_id: uuid.UUID, current: CurrentUser = Depends(WOR
         Message.enquiry_id == e.id, Message.direction == "in", Message.contact_id.is_(None))
         .values(contact_id=con, account_id=acc))
     await records.event(db, e, "customer_added", _actor(current), account_id=acc, contact_id=con)
+    await scoring.rescore(db, e, actor=_actor(current), why="customer added")
     return await _detail(db, e, current)
 
 
@@ -820,11 +927,13 @@ async def get_settings_(current: CurrentUser = Depends(READ),
     out = await settings_mod.load(db, current.tenant_id)
     out["suggestions"] = await routing.suggestions(db)
     out["step_labels"] = settings_mod.STEP_LABELS
+    out["signal_labels"] = scoring.SIGNALS
     return out
 
 
 @router.put("/setup/settings/{part}")
-async def put_settings(part: Literal["routing", "timers", "intake"], body: dict[str, Any],
+async def put_settings(part: Literal["routing", "timers", "intake", "scoring"],
+                       body: dict[str, Any],
                        current: CurrentUser = Depends(MANAGE),
                        db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     from app.audit import chain
@@ -840,8 +949,11 @@ async def put_settings(part: Literal["routing", "timers", "intake"], body: dict[
                                                     "after": after[part]})
     if part == "timers":
         await timers.apply_settings(db, current.tenant_id)
+    if part == "scoring":  # new weights apply to every open enquiry at once
+        await scoring.rescore_open(db, notify=False)
     after["suggestions"] = await routing.suggestions(db)
     after["step_labels"] = settings_mod.STEP_LABELS
+    after["signal_labels"] = scoring.SIGNALS
     return after
 
 
@@ -912,7 +1024,8 @@ async def list_families(_: CurrentUser = Depends(READ),
     rows = await db.scalars(select(ProductFamily).order_by(ProductFamily.name))
     return {"families": [families.out(f) for f in rows],
             "templates": [{"key": k, "name": t["name"], "keywords": t["keywords"],
-                           "checklist": t["checklist"]} for k, t in families.TEMPLATES.items()],
+                           "checklist": t["checklist"], "make_ability": t["make_ability"]}
+                          for k, t in families.TEMPLATES.items()],
             "general": families.GENERAL}
 
 
@@ -921,6 +1034,10 @@ class FamilyIn(BaseModel):
     name: str | None = Field(default=None, max_length=100)
     keywords: list[str] | None = None
     checklist: list[dict[str, Any]] | None = None
+    make_ability: str | None = None
+    moq: dict[str, Any] | None = None
+    sweet_spot: dict[str, Any] | None = None
+    refer_to: str | None = Field(default=None, max_length=300)
     active: bool | None = None
 
 
@@ -941,6 +1058,46 @@ async def update_family(family_id: uuid.UUID, body: FamilyIn,
         raise NotFound("Product family not found")
     data = {k: v for k, v in body.model_dump().items() if v is not None and k != "template"}
     return families.out(await families.update(db, f, data, _actor(current)))
+
+
+@router.get("/setup/capability")
+async def get_capability(current: CurrentUser = Depends(READ),
+                         db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    p = await capability.load(db, current.tenant_id)
+    return {**capability.out(p, await capability.role_name(db, p)),
+            "limits": capability.LIMITS, "example": capability.EXAMPLE}
+
+
+class CapabilityIn(BaseModel):
+    processes: list[dict[str, Any]] = Field(default_factory=list, max_length=40)
+    materials: list[str] = Field(default_factory=list, max_length=100)
+    certifications: list[str] = Field(default_factory=list, max_length=100)
+    excluded_industries: list[str] = Field(default_factory=list, max_length=100)
+    target_industries: list[str] = Field(default_factory=list, max_length=100)
+    engineering_role_id: uuid.UUID | None = None
+
+
+@router.put("/setup/capability")
+async def put_capability(body: CapabilityIn, current: CurrentUser = Depends(MANAGE),
+                         db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """What we make (F1.6, N8 A). Applies to enquiries checked from now on; 'Check
+    again' on an enquiry applies it there."""
+    from app.audit import chain
+
+    fam_ids = {str(i) for i in await db.scalars(select(ProductFamily.id))}
+    data, problems = capability.clean(body.model_dump(mode="json"), fam_ids)
+    if body.engineering_role_id and await db.get(Role, body.engineering_role_id) is None:
+        problems.append("That role does not exist")
+    if problems:
+        raise AppError("; ".join(problems))
+    before = capability.out(await capability.load(db, current.tenant_id))
+    p = await capability.save(db, current.tenant_id, data, _actor(current))
+    after = capability.out(p, await capability.role_name(db, p))
+    await chain.append(db, current.tenant_id, "enquiry.capability.changed",
+                       actor=_actor(current), data={
+                           "before": {k: v for k, v in before.items() if k != "updated_at"},
+                           "after": {k: v for k, v in after.items() if k != "updated_at"}})
+    return {**after, "limits": capability.LIMITS, "example": capability.EXAMPLE}
 
 
 @router.get("/setup/mailbox")

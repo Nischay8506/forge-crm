@@ -400,6 +400,7 @@ async def policy_catalog(
                     "tools": list(a.tools)} for a in AGENTS.values()],
         "tools": [_tool(t) for t in TOOLS],
         "facts": [{"key": f.key, "label": f.label, "type": f.type, "choices": list(f.choices),
+                   "choice_words": dict(f.words),
                    "ops": list(policy.NUMERIC_OPS if f.type in ("number", "money")
                                else policy.CHOICE_OPS)} for f in FACTS.values()],
         "ops": OPS, "outcomes": policy.OUTCOMES, "account_tiers": list(ACCOUNT_TIERS),
