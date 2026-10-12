@@ -191,6 +191,8 @@ class EnquiryLine(IdMixin, TenantMixin, Base):
     standard: Mapped[str | None] = mapped_column(String(200))
     notes: Mapped[str | None] = mapped_column(String(1000))
     confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    # Fields the reader was not sure of or could not read (left empty, never guessed)
+    unsure: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     source: Mapped[str] = mapped_column(String(12), nullable=False)  # email|reply|person|attachment
     source_ref: Mapped[str | None] = mapped_column(String(100))
     original: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

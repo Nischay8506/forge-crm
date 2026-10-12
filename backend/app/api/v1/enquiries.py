@@ -195,8 +195,9 @@ def _line(ln: EnquiryLine) -> dict[str, Any]:
             "description": ln.description, "material": ln.material,
             "dimensions": ln.dimensions, "qty": ln.qty, "unit": ln.unit,
             "standard": ln.standard, "notes": ln.notes, "confidence": ln.confidence,
-            "source": ln.source, "source_ref": ln.source_ref, "original": ln.original,
-            "corrected_by": ln.corrected_by, "corrected_at": ln.corrected_at}
+            "unsure": ln.unsure, "source": ln.source, "source_ref": ln.source_ref,
+            "original": ln.original, "corrected_by": ln.corrected_by,
+            "corrected_at": ln.corrected_at}
 
 
 def _email(row: InboundEmail, full: bool = True) -> dict[str, Any]:
@@ -486,6 +487,7 @@ async def correct_line(enquiry_id: uuid.UUID, line_id: uuid.UUID, body: LineIn,
         setattr(ln, k, v)
     now = datetime.now(UTC)
     ln.corrected_by, ln.corrected_at, ln.updated_at = _actor(current), now, now
+    ln.unsure = []  # a person has checked the whole line
     await records.event(db, e, "line_corrected", _actor(current), line_id=str(ln.id),
                         fields=sorted(k for k in vals if before[k] != vals[k]))
     return _line(ln)

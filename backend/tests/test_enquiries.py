@@ -484,6 +484,48 @@ async def test_excel_and_pdf_attachments_are_read_and_kept_encrypted(client, ctx
         assert bom[:50] not in file_store().get(f.storage_key)  # encrypted at rest
 
 
+
+async def test_a_drawing_is_read_unreadable_parts_flagged_and_corrections_teach_the_reader(
+        client, ctx, ai):
+    h = ctx["h"]
+    await _seller(client, ctx)
+    model = ai(
+        # The picture model writes out the drawing; the quantity is smudged.
+        "Title block: DRG-114 Rev B\nItem 1: Flange 150 NB, IS 6392, qty unreadable",
+        reading(lines=[{"description": "Flange 150 NB", "standard": "IS 6392", "qty": None,
+                        "unsure": ["qty", "colour"], "confidence": 0.6,
+                        "source": "attachment", "source_file": "drawing.png"}],
+                given=["product", "grade"]),
+        reading())
+    routing.ROUTES["vision"] = [routing.Route("fake", "v1")]
+    out = await _mail(client, h, subject="Enquiry as per drawing",
+                      body="Please quote as per the attached drawing.\nRegards,\nAnil",
+                      files=[{"filename": "drawing.png", "content_type": "image/png",
+                              "data_base64": base64.b64encode(b"\x89PNG\r\n\x1a\nx").decode()}])
+    picture = model.calls[0][0]["content"]
+    assert picture[1]["type"] == "image_url" and "say 'unreadable'" in picture[0]["text"]
+    assert "unreadable" in model.calls[1][1]["content"]  # the transcription is read too
+    e = await _enquiry(client, h, out["enquiry_id"])
+    line = e["lines"][0]
+    assert line["qty"] is None and line["unsure"] == ["qty"]  # left empty, not guessed
+    assert line["source_ref"] == "drawing.png"
+    assert "drawing.png: parts could not be read and were left empty" in e["review_reasons"]
+    assert any("not sure of some details on 1 line" in r for r in e["review_reasons"])
+    # A person corrects it: the line as read stays, and the next reading learns from it.
+    r = await client.patch(f"{E}/{e['id']}/lines/{line['id']}", headers=h, json={
+        "description": "Weld neck flange 150 NB", "standard": "IS 6392", "qty": 40,
+        "unit": "nos"})
+    assert r.status_code == 200 and r.json()["unsure"] == []
+    assert r.json()["original"]["description"] == "Flange 150 NB"
+    await _mail(client, h, sender="meena@kaveri.example.in", name="Meena")
+    user = model.calls[2][1]["content"]
+    assert user.startswith("<<<CORRECTIONS") and "<<<EMAIL" in user
+    learnt = json.loads(user.split("\n")[1])
+    assert learnt == [{"read": {"description": "Flange 150 NB", "standard": "IS 6392"},
+                       "corrected_to": {"description": "Weld neck flange 150 NB",
+                                        "qty": "40.000", "unit": "nos"}}]
+    assert "CORRECTIONS, when there are any" in model.calls[2][0]["content"]
+
 # Routing ----------------------------------------------------------------------------------
 
 async def test_routing_owner_away_product_line_region_and_round_robin(client, ctx, ai):
@@ -863,3 +905,14 @@ async def test_erasing_a_contact_blanks_their_enquiry_emails_and_files(client, c
     assert e["emails"][0]["body"] == "[erased]" and e["emails"][0]["from_address"] is None
     r = await client.get(f"{E}/files/{e['emails'][0]['attachments'][0]['file_id']}", headers=h)
     assert r.status_code == 400
+
+
+def test_the_readers_form_takes_empty_and_odd_quantities_without_failing():
+    from app.enquiries.reader import LineOut
+
+    assert LineOut(description="Plate", qty=None).qty is None
+    assert LineOut(description="Plate", qty="25 MT").qty == 25
+    assert LineOut(description="Plate", qty=-3).qty is None
+    assert LineOut(description="Plate", qty=True).qty is None
+    assert LineOut(description="Plate", unsure=["QTY", "colour", "unit"]).unsure == [
+        "qty", "unit"]

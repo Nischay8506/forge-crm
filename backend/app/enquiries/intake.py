@@ -280,6 +280,12 @@ async def _open_enquiry(session: AsyncSession, ctx: Any, row: InboundEmail,
     for d in docs:
         if d.note and not d.text:
             reasons.append(f"{d.filename}: {d.note}")
+        elif d.text and "unreadable" in d.text.lower():
+            reasons.append(f"{d.filename}: parts could not be read and were left empty")
+    unsure = sum(1 for ln in lines if ln.get("unsure"))
+    if unsure:
+        reasons.append(f"The reader was not sure of some details on {unsure} "
+                       f"line{'s' if unsure > 1 else ''}; they are highlighted")
     account_id, contact_id, how = await records.find_customer(session, data.get("customer")
                                                               or {}, row.from_address)
     confident = auto and reading.source == "model" and reading.label == "enquiry" and \

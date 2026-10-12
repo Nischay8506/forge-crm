@@ -147,8 +147,9 @@ def add_lines(session: AsyncSession, enq: Enquiry, lines: list[dict[str, Any]], 
             continue
         conf = _decimal(ln.get("confidence"))
         src = source if source != "email" or ln.get("source") != "attachment" else "attachment"
+        unsure = sorted({f for f in ln.get("unsure") or [] if f in LINE_FIELDS})
         row = EnquiryLine(tenant_id=enq.tenant_id, enquiry_id=enq.id, position=start + i + 1,
-                          confidence=conf, source=src,
+                          confidence=conf, source=src, unsure=unsure,
                           source_ref=(ln.get("source_file") or None) if src == "attachment"
                           else None,
                           original={k: (str(v) if isinstance(v, Decimal) else v)

@@ -29,14 +29,23 @@ function toBody(d: Draft) {
   }
 }
 
+/** Fields the reader was not sure of, or could not read, until a person corrects the line. */
+function unsure(l: Line, ...fields: string[]): boolean {
+  return !l.corrected_at && fields.some((f) => (l.unsure ?? []).includes(f))
+}
+
+const CHECK = "rounded bg-amber-100 px-1 outline outline-1 outline-amber-500"
+
 function sourceText(l: Line): string {
   if (l.source === "attachment") return l.source_ref ?? "attachment"
   if (l.source === "person") return "added by a person"
   return "email"
 }
 
-/** The items asked for, as read from the email and its files. A person corrects a line
- *  in place; the line as first read is kept, so Forge can learn from the correction. */
+/** The items asked for, as read from the email and its files. Details the reader was
+ *  not sure of, or could not read on a scan, are highlighted (left empty, never guessed).
+ *  A person corrects a line in place; the line as first read is kept, and the latest
+ *  corrections go with the next emails the reader reads, so it learns (F1.4). */
 export function LinesCard({ e }: { e: EnquiryDetail }) {
   const qc = useQueryClient()
   const [editing, setEditing] = useState<string | "new" | null>(null)
@@ -114,23 +123,32 @@ export function LinesCard({ e }: { e: EnquiryDetail }) {
                   <tr key={l.id}><td colSpan={6} className="py-2">{form}</td></tr>
                 ) : (
                   <tr key={l.id} className="border-b border-line last:border-0 align-top">
-                    <td className="py-2 pr-2 text-ink-300">{l.item_ref ?? i + 1}</td>
+                    <td className="py-2 pr-2 text-ink-300"><span className={cn(unsure(l, "item_ref") && CHECK)}>{l.item_ref ?? i + 1}</span></td>
                     <td className="py-2 pr-2">
-                      <span className="text-ink-900">{l.description}</span>
+                      <span className={cn("text-ink-900", unsure(l, "description") && CHECK)}>{l.description}</span>
                       {l.dimensions && !l.description.toLowerCase().includes(l.dimensions.toLowerCase()) && (
-                        <span className="text-ink-500"> · {l.dimensions}</span>
+                        <span className="text-ink-500"> · <span className={cn(unsure(l, "dimensions") && CHECK)}>{l.dimensions}</span></span>
                       )}
+                      {!l.dimensions && unsure(l, "dimensions") && <span className={cn("ml-1 text-[12px] text-amber-500", CHECK)}>size not read</span>}
                       {l.notes && <div className="text-[12px] text-ink-500">{l.notes}</div>}
                       {l.from_ref && <div className="text-[11.5px] text-ink-300">from {l.from_ref}</div>}
                     </td>
-                    <td className="py-2 pr-2 text-ink-700">{[l.material, l.standard].filter(Boolean).join(" · ") || <span className="text-ink-300">–</span>}</td>
+                    <td className="py-2 pr-2 text-ink-700">
+                      <span className={cn(unsure(l, "material", "standard") && CHECK)}>
+                        {[l.material, l.standard].filter(Boolean).join(" · ") || (unsure(l, "material", "standard") ? "not read" : <span className="text-ink-300">–</span>)}
+                      </span>
+                    </td>
                     <td className={cn("py-2 pr-2 text-right font-mono whitespace-nowrap", l.qty === null && "text-amber-500")}>
-                      {l.qty === null ? "not given" : qtyText(l.qty, l.unit)}
+                      <span className={cn(unsure(l, "qty", "unit") && CHECK)}>
+                        {l.qty === null ? (unsure(l, "qty") ? "not read" : "not given") : qtyText(l.qty, l.unit)}
+                      </span>
                     </td>
                     <td className="py-2 pr-2 text-[12px] text-ink-500">
                       {sourceText(l)}
                       {l.corrected_at && <> · <Tag variant="teal">Corrected</Tag></>}
-                      {l.confidence !== null && Number(l.confidence) < 0.7 && !l.corrected_at && <> · <Tag variant="amber">Unsure</Tag></>}
+                      {!l.corrected_at && ((l.confidence !== null && Number(l.confidence) < 0.7) || (l.unsure ?? []).length > 0) && (
+                        <> · <Tag variant="amber" title="Check the highlighted details, then correct the line or leave it">Check</Tag></>
+                      )}
                     </td>
                     <td className="py-2 text-right whitespace-nowrap">
                       {may && editing === null && !l.from_ref && (

@@ -69,6 +69,7 @@ export interface Line {
   standard: string | null
   notes: string | null
   confidence: string | null
+  unsure: string[]
   source: "email" | "attachment" | "person"
   source_ref: string | null
   original: Record<string, unknown> | null
