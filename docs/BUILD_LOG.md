@@ -5,6 +5,70 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-12 (Day 5): M1 Enquiry built for email; M3 questions sent
+
+**Decisions (Nischay):** N1-N13 A and N15 A (06:01Z, 06:12Z); N14 "test only for emails and later will
+add other platforms" (the web form and marketplaces go on the later list with WhatsApp). Documentation
+is updated only after 17:30 IST, never before or while building (06:12Z). P1 A "Draft first", P2 A
+"Review step", P3 A "Standard + unchecked" (08:21Z); "Decline only" (09:01Z). The code also goes to the
+private GitHub repo Nischay8506/forge-crm for a teammate (08:25Z; changes 1A; pushed by a separate
+thread from Claude's bundles). Work paused 09:01Z ("stop execution for now") and resumed 12:46Z.
+
+**Done**
+- **613bdec, the M1 email path** (N1 A): migration 0010 (stored files, mailboxes, inbound emails,
+  enquiries and lines, history, product families, enquiry settings, SLA timers; account owner, users'
+  reports-to and enquiry profile). Mailbox readers for Gmail (API), Microsoft 365 (Graph) and IMAP with
+  OAuth sign-in (N3 A, N4 A), and a Test mailbox. Encrypted file store (N9 A). The reader (AI through
+  the gateway, rules without a key; nothing dropped), Other mail with complaints told to a role (N5 A),
+  duplicates (N11 A), routing with Away (N12 A), the SLA engine and four stage timers with the
+  owner / manager / head ladder (N13 A), the acknowledgement with the missing questions, nudges on
+  days 2 and 5 and parking, and the commitment guard (N7 A). Screens: Queue, one enquiry, manual
+  enquiry, Other mail, Test mailbox, Setup, account owner.
+- **c8a727f, the test set** (N6 A): 200 synthetic emails (English, Hindi, Telugu, mixed, Excel / CSV /
+  PDF BOMs, other mail) and `evals/enquiries.py`. Rules alone: nothing lost, slowest email 2.9 s, the
+  40-line BOM 40/40 lines with 100% of fields, 0 of 140 acknowledgements promising anything, the right
+  language for 99.3%, and 73% exact labels against the 95% target (without the AI every email is kept
+  as an enquiry for a person; the AI is needed, D3).
+- **dc45bc9, the document reader** (F1.4, N10 A): unsure and unreadable fields kept empty and
+  highlighted (migration 0011), the latest five corrections sent to the reader as examples.
+- **ef660dc, "can we make this?" and scoring** (F1.6, F1.7, migration 0012): the What we make profile
+  with starter templates and a sample company; per-line and per-enquiry stamps with reasons; the decline
+  draft a person approves (P1 A); the engineering review with its own timer (P2 A); the automatic
+  acknowledgement only for standard and not-yet-checked enquiries (P3 A); lead scoring v1 with Fit,
+  Intent, Risk, a 0-100 priority and the top three reasons (N15 A); the Queue sorted by priority.
+  Decision cards now show the drafted email and choice facts in words.
+- **e0f86d1**: the Step 5 usability finding is fixed (the counter form says why "Approve with this
+  change" is grey).
+- The M3 CPQ questions, C1-C18, written to `plans/Phase2_M3_CPQ_Questions.md` in the Claude project
+  files and sent to Nischay (12:52Z).
+- Tests: 50 new backend (260 in all, plus 3 live-ERPNext ones) and 6 new frontend (31). Browser checks
+  as an admin, desktop and phone: families from templates, the sample profile, scoring, two test
+  emails read into enquiries, the engineering review, a no-fit enquiry declined through its decision card.
+
+**Problems found and fixed**
+- The rules took a size ("Pipe rack 12m - 5 Nos") or a grade ("SS 304 Sheet") as the quantity; the
+  price check blocked Hindi and Telugu acknowledgements quoting "का रेट" / "ధర" in the subject; the
+  rules read "Material IS 2062 E350…" as the writer's designation (they now read the signature after
+  the sign-off). A null or absurd quantity from the model failed the whole reading.
+- With no setup, every line said "matches none of our product families"; now the enquiry simply says
+  "Not checked: set up what we make". An order below the size we like showed as raising the score.
+- Decision cards showed raw values ("no_fit") and not the email itself.
+- Writing this entry: the file-store comment named a `rotate-file-keys` command that does not exist;
+  `rotate-evidence` already re-wraps the file keys, and the comment now says so. The M1 settings were
+  missing from `backend/.env.example` and are added.
+
+**Not done / next**
+- Nischay: answer C1-C18 (and whether prices live in ERPNext or Excel); on his PC `uv sync`,
+  `uv run alembic upgrade head` (0010-0012) and a try of Enquiries; for M1 to be marked done (N6 A) the
+  D3 keys, about 100 real anonymised enquiry emails with a few real BOMs and drawings, a real test
+  mailbox; CognitBotz's Google and Microsoft app registrations for Gmail and Outlook sign-in; still the
+  Step 5 usability runs, the Step 3 Docker check and the D3 language reviews.
+- Claude: two M1 gaps found while writing this: a customer's answer is not yet written into an existing
+  line's field (F1.8 check 2), and there is no enquiry-timer test across a holiday (F1.10). Then M3 once
+  the answers come.
+
+---
+
 ## 2026-10-11 (Day 4): nothing built; paused by Nischay
 
 Nothing was built or changed in the code today. On 2026-10-10 at 15:35Z Nischay chose to start Phase 2

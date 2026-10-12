@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-11
+Last updated: 2026-10-12
 
 ---
 
@@ -12,13 +12,14 @@ Last updated: 2026-10-11
 
 | What | Where |
 |---|---|
-| This repository | `C:\Users\nisch\OneDrive\Desktop\CognitBotz\Forge Project\forge-crm` (decision 1A: lives in this folder, no GitHub) |
+| This repository | `C:\Users\nisch\OneDrive\Desktop\CognitBotz\Forge Project\forge-crm` (decision 1A). Since 2026-10-12 also on GitHub, in the **private** repo [Nischay8506/forge-crm](https://github.com/Nischay8506/forge-crm), so a teammate can review it (section 3) |
 | Requirements (what to build) | `Forge Project\Forge_CRM_Requirements.txt`: 69 features, 6 phases. Ops (later): `Forge_Ops_Requirements.txt` |
 | Architecture | `Forge Project\Forge_CRM_Architecture_Blueprint.html` (7 sheets) |
 | UI designs | `Forge Project\design.html` (design tokens + 8 screens) |
 | Build guide (source of the requirements) | `Forge Project\Forge_CRM_Developer_Build_Guide.docx` |
 | Old prototype (reference only, never edit) | `Forge Project\CRM\CRM`. Review of it: `CRM_Code_Review.md` in the Claude project files |
 | Phase 1 plan: starting point and flow | `Phase1_Starting_Point_and_Flow.md` in the Claude project files (`plans/`) |
+| Each step's questions and the options Nischay picked | `plans/` in the Claude project files: `Step2_…` to `Step6_…`, `Phase2_M1_Enquiry_Questions.md` (N1-N15), `Phase2_M3_CPQ_Questions.md` (C1-C18, waiting for answers) |
 
 The old prototype's `backend/.env` holds live keys. Do not copy it; use new keys in `backend/.env`.
 
@@ -39,8 +40,13 @@ Phase 1 steps:
 | 5 | F12.3 Human Approval Inbox (Design File frame 05) | **Built 2026-10-09** to H1-H9 and Nischay's Step 5 safeguards; Claude's automated browser check passes (median decision 3 s, section 6). The Done-When stays **waiting for Nischay's usability run** with real people (H8 C, `docs/USABILITY_TEST.md`); the first session ran on his PC on 2026-10-10, results to come |
 | 6 | F12.5 Multilingual & Channel Fabric (email now; WhatsApp and SMS on the later list) | **Email built 2026-10-10** to L1-L11 (section 3). F12.5 check 2 (limits enforced for every sender) is met for email; check 1 (the same message correctly toned in EN / HI / TE) waits for the Gemini key (D3) and native speakers' reviews, 10 per language (L11 A). F12.5 stays open for the WhatsApp half (later list) |
 
-After Phase 1, Phase 2 starts with **M1 Enquiry**: Nischay chose on 2026-10-10 to begin with its questions,
-then paused the work the same minute (section 7). Nothing is built for M1 yet.
+Phase 2 (the money path), in order:
+
+| Module | What | Status |
+|---|---|---|
+| M1 | Enquiry & Lead Management (F1.1-F1.10, Design File frame 02) | **Built for email 2026-10-12** to N1-N15 and P1-P3 (section 3): F1.1, F1.4-F1.10. F1.2 (WhatsApp) and F1.3 (web form, marketplaces) are on the later list (N2 A, N14); F1.1's 95% check and scan reading wait for D3 and real samples (section 6) |
+| M3 | CPQ: configure, price, quote (F3.1-F3.9, frame 04) | **Questions C1-C18 sent 2026-10-12**, waiting for Nischay's answers. Nothing is built until he answers |
+| M4 | Order, contract & ERP handoff (F4.1-F4.5) | Not started |
 
 Phase 1 is done when: all six F12 "Done When" checks pass, ERPNext syncs customers, items, orders
 and invoices, and one test agent runs policy gate → decision card → audit chain end to end.
@@ -130,7 +136,28 @@ recommendation, and record the answer here.
 | L10 A | Speech-to-text: Whisper on Groq through the LLM gateway, with the company's glossary as hints, built as an adapter so Sarvam AI can be added if Telugu quality is poor | 2026-10-10 |
 | L11 A | Built and proved with a simulator first (a test email inbox with receipts, replies, unsubscribe and caps), then real accounts connected as they are created. Done-When: Claude's automated checks, then native speakers review a sample of 10 messages per language; F12.5 stays "waiting for review" until they have | 2026-10-10 |
 | Step 6 Done-When | With WhatsApp on the later list, the email half of F12.5's Done-When is checked now and F12.5 stays open for the WhatsApp half (Nischay chose "Email now, keep open" on the card, 2026-10-10) | 2026-10-10 |
-Still open (section 7): D3 new LLM keys, D4 daily update time.
+| GitHub (changes 1A) | The code and docs also live in the GitHub repo Nischay8506/forge-crm, so a teammate can review it and start their part (Nischay, 2026-10-12 08:25Z). It is meant to be **private** ("make it private"). No `.env` file or key ever goes in. Claude pushes the real history but cannot change the repo's settings (visibility, collaborators); Nischay does those | 2026-10-12 |
+| Docs time | Documentation (this file, BUILD_LOG.md, README and the Build Map) is updated only after 17:30 IST, never before or while building; daytime commits hold code and tests only (Nischay, 2026-10-12) | 2026-10-12 |
+| N1 A | M1 is built as one thin email path first (F1.1 → F1.5 → F1.9 → F1.10 → F1.8, on the Enquiry Queue), then F1.4, F1.6 and F1.7 add to it | 2026-10-12 |
+| N2 A | WhatsApp enquiries (F1.2) wait with WhatsApp; M1 counts as done without them and stays open for them | 2026-10-12 |
+| N3 A | The sales mailbox is read with the Gmail API (Google Workspace) or Microsoft Graph (Microsoft 365), signed in with OAuth, with instant notification plus a check every 60 s; any other provider over IMAP. Only the one sales/RFQ mailbox a company connects, never personal mailboxes | 2026-10-12 |
+| N4 A | CognitBotz registers one Forge app with Google and one with Microsoft; each company's admin approves it. Until Google reviews it, Gmail runs in testing mode (up to 100 users, mailbox sign-in renewed every 7 days) | 2026-10-12 |
+| N5 A | Emails that are not enquiries are labelled and kept in "Other mail"; one click turns one into an enquiry; a changed label is recorded; complaints notify a role the company picks | 2026-10-12 |
+| N6 A | Claude's synthetic test set first (200 emails and BOMs); before an M1 feature is marked done it is measured again on about 100 real anonymised emails and real BOMs and drawings, and tried on Nischay's PC with a real test mailbox | 2026-10-12 |
+| N7 A | The acknowledgement is sent on its own for non-strategic accounts and drafted for a person for strategic accounts and tenders. A hard check blocks any message about an enquiry that promises a price, discount, delivery date or that we can make or have something | 2026-10-12 |
+| N8 A | A setup screen for the capability profile ("What we make") and product families, with starter templates (steel, fabrication, machined parts, castings); a sample steel and fabrication company for tests | 2026-10-12 |
+| N9 A | Raw emails and attachments go through one file-storage interface (a local folder now, an S3-compatible bucket in deployment), encrypted with the company's key, under the same retention and erasure rules; at most 25 MB per email | 2026-10-12 |
+| N10 A | PDFs with a text layer, Excel and CSV are read directly; scans, photos and drawings go to Gemini vision through the LLM gateway (needs D3); unsure fields are highlighted for a person | 2026-10-12 |
+| N11 A | Enquiries merge on their own only on the same email thread, or the same phone with overlapping lines, within 30 days; other look-alikes are flagged for a person, whose answer is remembered; every merge can be undone | 2026-10-12 |
+| N12 A | Owner: the account's owner → a product-family specialist → the customer's region → round-robin by fewest open enquiries; the dealer step waits (Q12); leave uses Forge's Away; a manager reassigns with a reason | 2026-10-12 |
+| N13 A | Each person has a "reports to". Timers: first response 15 minutes around the clock (the automatic acknowledgement counts), owner's first look 2 working hours, quote sent 1 working day; owner reminded at 75%, manager at the deadline, head of department at twice it; app push and email | 2026-10-12 |
+| N14 | "Test only for emails and later will add other platforms": the web form and the marketplaces (F1.3: IndiaMART, TradeIndia, Alibaba) go on the later list; M1 is built and tested for email only | 2026-10-12 |
+| N15 A | Lead scoring v1: rules and weights the company can change, the top 3 reasons in words; v2 (learned from won and lost deals) later, after M2 and M3 | 2026-10-12 |
+| P1 A | A "we can't make this" (no fit) decline is drafted by Forge and goes out only after a person approves it ("Draft first") | 2026-10-12 |
+| P2 A | An enquiry that needs engineering gets a review step for the company's engineering role, with the lines, files and reasons and its own timer ("Review step") | 2026-10-12 |
+| P3 A | The automatic acknowledgement goes to standard and not-yet-checked enquiries; configurable, needs-engineering and no-fit enquiries get a draft for a person ("Standard + unchecked") | 2026-10-12 |
+| Decline only | A no-fit enquiry from a non-strategic account gets only the decline draft, not an acknowledgement draft too, so the customer gets one clear email (Nischay's card, 2026-10-12 09:01Z) | 2026-10-12 |
+Still open (section 7): the M3 questions C1-C18, D3 new LLM keys, D4 daily update time.
 
 ## 4. How to run it
 
@@ -217,6 +244,35 @@ so real promotional email needs Forge at a public https address first (Settings 
 "Draft it for me" (the Writing Assistant) needs `GEMINI_API_KEY` and dictation needs `GROQ_API_KEY`
 (D3); without them those two buttons say so and everything else works.
 
+**Enquiries (Phase 2, M1).** M1 added migrations 0010-0012 and three packages (`pypdf`, `openpyxl`,
+`defusedxml`), so after copying run `uv sync` and `uv run alembic upgrade head` once, then restart the
+API, worker and beat. To try it without a real mailbox, use **Enquiries → Test mailbox**: write an email
+as a customer (with attachments) and watch it become an enquiry on the Queue. Setup first, under
+**Enquiries → Setup**:
+- **Product families**: "Start from a template" (steel, fabrication, machined parts, castings).
+- **What we make**: "Fill in the sample steel and fabrication company" gives processes with their
+  limits, materials, certificates and industries; pick the engineering role here. Without it, the
+  "can we make this?" check says "Not checked".
+- **Owners**: the routing order, and per person "Takes enquiries", product families, regions, a limit
+  and **reports to** (who gets escalations). Accounts get an owner on the account page.
+- **Timers and new mail**, **Scoring**: the defaults in section 6 can be changed here.
+- **Mailbox**: connect the real sales mailbox. **IMAP** works now for any provider (Zoho, Rediff,
+  hosting mail, or Gmail with an app password); the password is stored with
+  `CREDENTIAL_KEYS`. **Gmail** and **Microsoft 365** sign-in need Forge's app registrations (N4 A):
+  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`
+  (`MICROSOFT_TENANT`, default `common`) in `backend/.env`, with the redirect address
+  `<PUBLIC_BASE_URL>/api/v1/public/mail/oauth/gmail/callback` (or `/microsoft/callback`) registered with
+  Google or Microsoft. Without them the Connect button says what is missing. `GMAIL_PUBSUB_TOPIC` is
+  optional (instant notification; Forge checks every `MAIL_POLL_SECONDS`, default 60, anyway).
+Raw emails and attachments are kept encrypted under `FILE_STORE_DIR` (default `backend/var/files`, at
+most `EMAIL_MAX_MB` = 25 per email). Their keys are wrapped with `EVIDENCE_KEYS`, so back that key up as
+before; `rotate-evidence` also re-wraps the file keys. The worker reads waiting emails and runs the
+enquiry timers every 10 seconds, checks the mailbox every 15 seconds (each at most once a minute unless a
+push asks sooner) and sends the nudges and parks quiet enquiries every hour; without it emails wait
+unread and no timer fires. Without the D3 keys the rules reader reads every email and keeps each one as
+an enquiry marked "needs review" (nothing is lost; the label the rules would give is shown), and scans
+and drawings are not read.
+
 To try the ERP connection end to end, start a local ERPNext with `infra/erpnext/README.md`.
 Outside AI tools (MCP, E9) connect to `http://localhost:8000/mcp/` with a token made on Integrations >
 Outside AI tools; set `PUBLIC_BASE_URL` in `backend/.env` when the backend runs at another address.
@@ -254,6 +310,8 @@ cd backend && uv run pytest      # needs Postgres with the forge_test database (
 uv run ruff check .
 uv run python -m evals.duplicates --seed 7 --companies 400   # matching quality report (S4A)
 uv run python -m evals.policy_gate --seed 11 --calls 400      # F12.2 chaos test (over-limit calls)
+uv run python -m evals.enquiries               # M1 test set, rules reader only (N6 A)
+uv run python -m evals.enquiries --pipeline    # the same 200 emails through Forge, in a throwaway company
 # against a real ERPNext (skipped otherwise): set FORGE_ERPNEXT_URL, FORGE_ERPNEXT_KEY, FORGE_ERPNEXT_SECRET
 uv run pytest tests/test_erp_sync.py -k live
 uv run python -m app.integrations.testing.contract erpnext --url ... --key ... --secret ...
@@ -269,6 +327,10 @@ Claude builds and runs the tests in its own cloud workspace, then copies the sou
 `git log` in this folder shows every step. Your machine needs `npm install` / `uv sync` after a copy.
 The bundle used for the copy is left at `.sync/forge-crm-sync.tgz` (git-ignored, overwritten each time).
 If you edit files here yourself, tell Claude before the next session so it starts from your version.
+Since 2026-10-12 the same history also goes to the private GitHub repo (section 1): Claude hands the new
+commits over as a git bundle and they are pushed as they are, never with a `.env` file or a key. A
+teammate works from a clone of that repo, with their own `backend/.env` and `frontend/.env` made from
+the `.env.example` files and their own keys (section 4).
 
 ## 5. Code map and the rules the code follows
 
@@ -292,7 +354,9 @@ backend/
                        account ERP data, create-in-ERP, webhooks, MCP tokens),
                        audit (+retention, legal holds, reveal), privacy (erasure requests),
                        channels (messages, Test inbox, consent, channel and language settings),
-                       public (the unsubscribe page, no login)
+                       enquiries (queue, one enquiry, lines, files, review, Other mail, Test
+                       mailbox, setup), public (the unsubscribe page and the mailbox sign-in
+                       return, no login)
     events/outbox.py   publish() + dispatch_batch() (transactional outbox)
     worker/            Celery app + tasks (outbox delivery every 2 s, CSV import, ERP tick every
                        60 s and the sync / reconcile runs it hands out, audit seal hourly,
@@ -364,6 +428,32 @@ backend/
                        (native-speaker review sampling and report), speech.py (dictation)
     privacy/           erasure.py (what an erasure scrubs, R6) and agent.py (the Privacy agent:
                        L0 only, a second person with "privacy.erase" approves)
+    enquiries/         Phase 2 M1 (start here: intake.py):
+      intake.py          an arrived email -> an enquiry, a reply on one, or Other mail; the 10 s
+                         tick (read waiting emails, timers) and the hourly nudges
+      mail/              the sales mailbox: gmail.py (Gmail API), microsoft.py (Graph), imap.py,
+                         oauth.py (sign-in, N4 A), service.py (connect, check every minute)
+      mime.py            a raw email -> sender, thread, text, attachments, automatic or not
+      reader.py          what kind of mail it is and what an enquiry asks for (the AI through the
+                         gateway); rules.py is the reader without AI
+      documents.py       attachments -> requirement lines (PDF text, Excel, CSV; scans and
+                         drawings to the vision model, N10 A), unsure fields, correction examples
+      records.py         enquiry numbers, history, the customer behind one, manual enquiries
+      dedupe.py          sure duplicates merge (same thread, or phone + lines, 30 days), the rest
+                         are flagged; undo (N11 A)
+      routing.py         who owns it (N12 A); timers.py the four stage timers (N13 A, P2 A)
+      ack.py, guard.py   the acknowledgement, nudges, parking, decline; the commitment guard
+      families.py        product families and the details needed to quote each (N8 A)
+      capability.py      the "What we make" profile; qualify.py "can we make this?" per line and
+                         per enquiry (F1.6); reviews.py the engineering review (P2 A)
+      scoring.py         lead scoring v1: Fit, Intent, Risk, priority and reasons (F1.7, N15 A)
+      settings.py        each company's routing, timer, intake and scoring settings and defaults
+      agent.py           the Enquiry Agent (default L2) and its tools: acknowledge, nudge, park,
+                         merge, decline
+    files/store.py     stored files (raw emails, attachments): encrypted, local folder now,
+                       S3-compatible later (N9 A); rows never deleted, removal blanks the bytes
+    sla/engine.py      the timer engine (F1.10): targets on an "always" or "working" clock,
+                       pause, resume, reminders; later modules reuse it
     integrations/      F12.6 (Step 3; start here: adapter.py, then runner.py):
       contracts.py       the shared contracts (Customer, Item, Price, Order, Invoice, Receipt, Stock)
       adapter.py         the adapter interface, ConnectorError and its causes (for alerts)
@@ -389,9 +479,15 @@ backend/
                        0007 approval inbox, 0008 approval chains, steps, delegations,
                        inbox settings, push subscriptions, 0009 channel fabric: message
                        columns, message events, consents, channel settings, email account,
-                       tone guides, glossary, language reviews)
+                       tone guides, glossary, language reviews), 0010 enquiries (stored files,
+                       mailboxes, inbound emails, enquiries and lines, history, product
+                       families, settings, SLA timers, account owner, users' reports-to),
+                       0011 unsure fields on lines, 0012 capability profiles, the check's
+                       stamps, scores, engineering reviews)
   evals/duplicates.py  synthetic duplicate set and quality report (S4A)
   evals/policy_gate.py chaos test: seeded over-limit calls must all be stopped and escalated
+  evals/enquiries.py   M1 test set: 200 synthetic emails and BOMs (EN, HI, TE, mixed) measured
+                       against the F1.1, F1.4 and F1.8 targets (N6 A)
   tests/               pytest, real Postgres
 frontend/
   src/components/ui    design components (Button, Card, Tag, KpiCard, AgentBadge, Nameplate, Field,
@@ -420,6 +516,11 @@ frontend/
                        quiet hours); ConsentPanel ("Consent" on a contact on the account page)
   src/features/integrations Connections, setup wizard, connection page, Customers and Code lists
                        (mapping studio), Outside AI tools (MCP tokens), AccountErpCard (account page)
+  src/features/enquiries Enquiries (M1): Queue (priority, timers, filters, Engineering view), one
+                       enquiry (lines with unsure fields, thread, customer, priority, "can we make
+                       it", engineering review, acknowledgement), manual enquiry, Other mail,
+                       Test mailbox, Setup (mailbox, owners, timers, product families, what we
+                       make, scoring), AccountOwnerCard (account page)
 infra/                 local Postgres + Redis (Docker); erpnext/ = a local ERPNext 15/16 to test with
 docs/                  this file, BUILD_LOG.md
 ```
@@ -509,13 +610,108 @@ docs/                  this file, BUILD_LOG.md
     always carries its marker in the message's language (R7), checked before sending.
 32. **Native-speaker review samples only text the Writing Assistant wrote**; an agent's AI-written
     message waits for the review, a person's own AI draft does not (the person has read it).
+33. **Nothing Forge sends about an enquiry may promise a price, a discount, a delivery date or that
+    we can make or have something** (N7 A). `app/enquiries/guard.py` checks every acknowledgement,
+    nudge and decline before it is queued, and a hit blocks it with a record; nobody can send it
+    anyway. `test_no_message_about_an_enquiry_may_promise_a_price` checks it. M3's quote cover note
+    will use the same guard for anything beyond the quote itself.
+34. **An enquiry is never silently dropped.** An email that cannot be read, or is read with low
+    confidence, still becomes an enquiry marked "needs review", or waits in Other mail with its reason.
+35. **Stored files keep their row.** Retention and erasure remove the bytes through
+    `app/files/store.remove()`, which records when and why; files are only ever downloaded, never
+    opened inside a page. Erasing a contact also blanks their enquiry emails and files
+    (`test_erasing_a_contact_blanks_their_enquiry_emails_and_files`).
+36. **Timers go through `app/sla/engine.py`**, on the "always" clock (the 15-minute first response) or
+    the company's working calendar; escalation only tells people (as rule 24).
 
-## 6. Current state (end of 2026-10-11)
+## 6. Current state (end of 2026-10-12)
 
-No change on 2026-10-11 (work paused by Nischay). Steps 0 to 5 are built, and Step 6 for email (2026-10-10). Step 5's Done-When waits for Nischay's
-usability run, which he started on 2026-10-10 on his own PC (the first time Forge ran there). Tests: 210
-backend (plus 3 that run only against a live ERPNext; they pass on ERPNext 16.50.0 and 15.122.0), 25
+Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
+first module, **M1 Enquiry, is built for email (2026-10-12)**, and the **M3 CPQ questions** (C1-C18) are
+waiting for Nischay's answers. Tests: 260 backend (plus 3 that run only against a live ERPNext) and 31
 frontend, all passing; every new screen was checked in a browser, on a desktop and at phone width (390 px).
+Nischay's PC needs `uv sync` and `uv run alembic upgrade head` (migrations 0010-0012) after the copy.
+
+### Phase 2, M1 Enquiry: built for email
+Built to N1-N15, P1-P3 and "Decline only" (section 3) in commits 613bdec (the email path and screens),
+c8a727f (test set), dc45bc9 (document reader), ef660dc (can we make this, scoring). Menu **Enquiries**:
+- **Queue** (Design File frame 02): every open enquiry with its priority (0-100, coloured by grade), the
+  "can we make it" stamp, owner, source, the running timer (green, amber, red) and status; views (Open,
+  Mine, No owner, To check, Possible duplicates, Engineering, Waiting on customer, Parked, Closed, All) and sorting by priority (default),
+  newest or oldest. The menu shows how many have no owner.
+- **One enquiry**: the customer (matched to an account and contact, or new), the requirement lines with
+  unsure fields highlighted (click to correct; corrections teach the reader), the email thread and
+  attachments (download only), the questions asked and which the customer answered, the timers, the
+  owner with the rule that chose them (reassign with a reason), "can we make it" per line with reasons
+  and "Check again", the priority with its top three reasons and "How it was worked out", the
+  engineering review when there is one (Take it, We can / can't make it), the acknowledgement (sent, or
+  a draft to edit and send), and the history. Buttons: Acknowledge, Quote sent (until M3 sends quotes), Give to someone else, Not an
+  enquiry, Close, Reopen, and Same enquiry / Different enquiries on a possible duplicate (with undo).
+- **+ Manual enquiry**: for a phone call or a visit; it is routed and timed like an email.
+- **Other mail**: payments, complaints, order status, vendors, spam, with label and confidence; one click
+  makes one an enquiry, a changed label is recorded; complaints tell the chosen role. Emails that could
+  not be read wait here too, with the reason.
+- **Test mailbox**: send Forge an email as a customer (with attachments) without a real mailbox.
+- **Setup**: Mailbox (IMAP now; Gmail and Microsoft 365 once the app registrations exist), Owners
+  (routing order, people, regions, limits, reports to), Timers and new mail, Product families (with
+  templates, how each is supplied, minimum and best order size, the details needed to quote), What we
+  make (processes and limits, materials, certificates, industries, engineering role; sample button),
+  Scoring (weights).
+- **Account page**: the account's owner. **Decisions**: decline drafts and drafted acknowledgements wait
+  here as cards that show the exact email.
+
+Engineering defaults Claude chose inside N1-N15 and P1-P3 (each can be changed under Setup, or by asking):
+- Routing: at most 25 open enquiries per person (a person's own limit overrides it); if no step finds
+  anyone, a fallback person, else the escalation role or admins are told.
+- Timers as N13 A, plus the engineering review: 1 working day. Owner reminded at 75%, manager at 100%,
+  head of department at 200%. "Waiting on customer" pauses the quote timer.
+- Acknowledgement: asks only the missing details from the family's checklist; nudges on day 2 and day 5,
+  parked after day 7; a reply ticks off what it answers and restarts the quote timer. Fields read below
+  70% confidence count as unsure.
+- Reading: the latest 5 corrections go to the reader as examples; a model that cannot be reached is
+  tried 3 times, then the rules read the email. The rules read the signature after the sign-off
+  ("Regards", "धन्यवाद", "ధన్యవాదాలు" …).
+- "Can we make this?": the rules never decline on a limit. Beyond a process limit, an unknown grade or a
+  missing certificate means "needs engineering"; only an excluded industry or a family the company does
+  not make is "no fit". A line below the minimum order is only noted and lowers the score. A line that matches
+  no family is "not checked". With an AI key the model may make a line more demanding, never less, and
+  may call a line the rules could not place "no fit". With no setup at all, enquiries are "Not checked".
+- Scoring v1 weights: Fit = can we make it 50, order size 25, industry 25; Intent = formality 40,
+  timeline 30, seniority 30; Risk = overdue money in the ERP 50, export or watched country 20, new or
+  unknown customer 30. Risk lowers the priority by up to 50%. A change of 20 points tells the owner.
+  Everything is scored again on each new signal and every hour.
+- No fit, non-strategic: only the decline draft (Nischay's "Decline only"). Strategic: never declined;
+  the owner and manager are told and the acknowledgement stays a draft.
+
+M1 Done-When (requirements Section 3). Under N6 A, no M1 feature is marked done until it is measured
+again on Nischay's real samples and tried on his PC; until then the checks below are proved on Claude's
+test set and in tests:
+- **F1.1** under 60 s (slowest 2.9 s) and nothing lost: met on the test set. **≥95% classification: 73%
+  with the rules alone**, because without the AI every email is kept as an enquiry for a person to check
+  (the rules' own label is right 98% of the time and is shown to that person). Needs D3, then the real
+  emails. Replies in the same thread join the same enquiry; low-confidence reading still creates the
+  enquiry marked "needs review": both met in tests.
+- **F1.4** 40-line Excel BOM: 40 of 40 lines, 100% of fields on the test set. A scanned PDF spec needs the
+  vision model (D3); unreadable parts are flagged, never guessed (met with a stand-in model).
+- **F1.5** sure duplicates merge, look-alikes are flagged and a person's answer is remembered: met. "Email
+  and WhatsApp within a day = one enquiry" waits for WhatsApp (F1.2).
+- **F1.6** no fit with the right reason, and strategic accounts never declined: both met in tests.
+- **F1.7** reasons in words and the Enquiry Queue sorted by priority: met (the only worklist so far).
+- **F1.8** on the test set: first response within seconds, 0 of 140 acknowledgements promised anything,
+  the right language for 99.3% (one mixed Telugu-English email was answered in English). **Answers
+  updating the lines**: a reply ticks off the questions it answers and adds any new lines it contains,
+  but an answer is not yet written into an existing line's field (for example the quantity of a line read
+  earlier); still to build.
+- **F1.9** an owner within a minute with the rule that fired: met. The dealer step waits (Q12, Phase 5).
+- **F1.10** the ladder (owner, manager, head of department) and the pause: met in tests. Working-hours
+  timers use the Step 5 calendar, whose holidays are tested there; a test of an enquiry timer across a
+  holiday is still to add.
+- **F1.2** (WhatsApp) and **F1.3** (web form, marketplaces) are on the later list (N2 A, N14).
+
+Gaps: Gmail and Microsoft 365 need CognitBotz's app registrations (N4 A) and were tested against
+stand-ins only; Gmail's instant notification needs a Google Pub/Sub topic; files are stored in a local
+folder (S3-compatible storage comes with deployment); one sales mailbox per company; the synthetic emails
+are cleaner than real mail (N6 A asks for about 100 real ones); account owners are set by hand.
 
 ### Step 6 (F12.5 Multilingual & Channel Fabric): email built, two things to wait for
 Built to L1-L11 (section 3): email only, over SMTP, with WhatsApp and SMS on the later list. What a
@@ -564,7 +760,8 @@ Engineering defaults Claude chose inside L1-L11 (each can be changed on Settings
   the card and cannot approve anything.
 - Until Forge reads the company inbox (F1.1, Phase 2), the unsubscribe link is how a customer stops
   promotional email, and bounces that arrive later by email are not seen; bounces the mail server
-  refuses at once are.
+  refuses at once are. **Since M1 (2026-10-12)**, a connected sales mailbox brings customer replies in
+  through the same path (`send.receive()`, so a STOP reply works) and late bounces become receipts.
 - An erasure keeps consent rows (what was agreed or stopped, and when) but blanks their notes, and
   clears message addresses.
 
@@ -578,8 +775,8 @@ F12.5 Done-When (section 2 of the requirements), email half:
   unsubscribe line, STOP confirmation) also need a native speaker's check.
 - The WhatsApp half waits for WhatsApp (later list, section 7).
 
-Gaps: no reading of the company inbox yet (F1.1), so real customer replies and late bounces do not
-arrive by themselves; one email account per company; no open or read tracking for email (L2 A); a
+Gaps: replies and late bounces arrive only once a sales mailbox is connected (M1, section 4); one email
+account per company; no open or read tracking for email (L2 A); a
 message held for its time is checked again when the time comes, so changed limits apply then.
 
 ### Step 5 (F12.3 Human Approval Inbox): built, waiting for the usability run
@@ -849,9 +1046,9 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 - A stop takes effect at the next action; it does not interrupt an action already running.
 - A pair whose merge was blocked or stopped stays in the review queue; it is tried again only when a
   record changes or someone presses "Check all records again".
-- Approval inbox usability findings so far (Nischay, 2026-10-10), to fix after the runs: on **Counter…**,
-  "Approve with this change" stays grey while the amount still equals what was asked, with nothing
-  saying why (`frontend/src/features/decisions/DecisionCard.tsx`, CounterForm).
+- Approval inbox usability finding (Nischay, 2026-10-10), **fixed 2026-10-12** (e0f86d1): on **Counter…**,
+  "Approve with this change" stayed grey while the amount equalled what was asked, with nothing saying
+  why; the form now says "Change a value above to approve a different one."
 - Approval inbox (Step 5) gaps: approval cards now also go by email with a link (Step 6); decision
   buttons in WhatsApp come with WhatsApp (later list); push on a
   phone needs Forge at an `https://` address; the inbox list does not refresh by itself (the menu
@@ -867,28 +1064,41 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 
 ## 7. Next step and open questions
 
-**Now: Nischay's usability run for Step 5** (`docs/USABILITY_TEST.md`, and the step-by-step guide linked
-in section 4). Forge runs on his PC since 2026-10-10 and the first session (test company `ut-priya`)
-has started. Two or three people, 15 minutes each, on a fresh test company each
-(`uv run python -m app.cli seed-usability --slug ut-<name>`); he fills in the results table at the end
-of the guide. F12.3 is done when the overall median is under 60 seconds and nobody got stuck on a card.
-After the runs, fix what they found (section 6, "usability findings").
-**Step 6 (email) is built** (section 6). To finish its Done-When: the Gemini key (D3), then native
-speakers review 10 AI-written messages each in English, Hindi and Telugu on Messages → Language review
-(give them a role with `languages.review`). To try it on his PC: `uv run alembic upgrade head`, restart
-the API, worker and beat, then Messages → New message, and the Test inbox.
-**Next build: Phase 2, M1 Enquiry, starting with its questions. PAUSED by Nischay.** On 2026-10-10 he chose
-to start the M1 questions now rather than finish Phase 1's checks first (15:35Z), then said "pause for now
-we will continue later" (15:36Z). The questions doc is not written yet. When he says to continue: write
-the M1 questions (lettered options with a recommendation, as for every step), wait for his answers, and
-only then build. All six Phase 1 features are built; their open checks run alongside: the Step 5
-usability run, his Step 3 Docker check, the D3 keys with the Step 6 language reviews, and the F12.1
-re-measure on real data (S5 A). M1's F1.1 (reading the shared inbox) brings real customer replies and
-bounces into the Step 6 path.
-**Also open: Nischay's own check of Step 3** in Docker Desktop with `infra/erpnext/README.md` (connect,
-read, revoke the key, see the alert). His PC now runs Forge (section 4), so this can follow.
+**Now: Nischay answers the M3 CPQ questions.** C1-C18 are in `plans/Phase2_M3_CPQ_Questions.md` in the
+Claude project files, each with a recommended A (answer like "C1 A, C2 A, ..."), plus one question:
+does his first customer keep prices in ERPNext price lists or in Excel? Nothing for M3 is built until he
+answers. Then the first things built are the ones every answer needs: the Quote record with its
+revisions (unchangeable once made), the quote events (M2 needs `quote.sent`) and the Quote Builder
+screen (Design File frame 04).
+
+**M1 on his PC:** after the copy, `uv sync` and `uv run alembic upgrade head` (0010-0012), restart the
+API, worker and beat, then Enquiries → Setup (templates, the sample button under What we make) and
+Enquiries → Test mailbox (section 4).
+
+**For M1 to be marked done (N6 A):** the D3 keys (the ≥95% classification and reading scans need the
+AI), about 100 real anonymised enquiry emails and a few real BOMs and drawings to measure again, and a
+real test mailbox on his PC. Gmail and Microsoft 365 sign-in need CognitBotz's two app registrations
+(N4 A; IMAP works without them). Claude still has to build: writing a customer's answer into an
+existing line (F1.8 check 2) and a test of an enquiry timer across a holiday (F1.10), section 6.
+
+**Still open from Phase 1**, alongside:
+- The Step 5 usability run (`docs/USABILITY_TEST.md` and the guide linked in section 4): two or three
+  people, 15 minutes each, a fresh test company each (`uv run python -m app.cli seed-usability --slug
+  ut-<name>`), results in the table at the end of the guide. F12.3 is done when the overall median is
+  under 60 seconds and nobody got stuck. The first session (`ut-priya`) ran on 2026-10-10 on his phone
+  too; more testers are still needed. Its one finding so far (the counter hint) is fixed.
+- Step 6: the Gemini key (D3), then native speakers review 10 AI-written messages each in English, Hindi
+  and Telugu on Messages → Language review (give them a role with `languages.review`).
+- His own check of Step 3 in Docker Desktop with `infra/erpnext/README.md` (connect, read, revoke the
+  key, see the alert).
+- The F12.1 re-measure on his real customer export (S5 A).
 
 **Later list (agreed, not built yet):**
+- **WhatsApp enquiries (F1.2)** come with WhatsApp (N2 A); M1 stays open for them.
+- **Web form and marketplaces (F1.3)**: the website form, IndiaMART, TradeIndia, Alibaba (N14: email
+  first, other platforms later).
+- **Lead scoring v2** (learned from won and lost deals), after M2 and M3 (N15 A).
+- **The dealer-territory routing step** (F1.9, Q12), with the dealer modules in Phase 5.
 - **WhatsApp** (L3, Nischay 2026-10-10: not now). When it comes: Meta's WhatsApp Cloud API was the
   recommendation (templates, buttons, delivery and read receipts, incoming messages by webhook); it needs a
   Meta Business account, a WhatsApp Business phone number and approved message templates. It plugs into the
@@ -908,6 +1118,7 @@ read, revoke the key, see the alert). His PC now runs Forge (section 4), so this
   periods per record category and applicable law; record who confirmed it on the retention settings screen.
 
 Open questions for Nischay:
+- **M3 C1-C18** (above), and whether his first customer keeps prices in ERPNext or Excel.
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
   rotated, never copied). Meaning match (S2A) and AI code suggestions (V3) start working once set,
   and so do "Draft it for me" (Gemini) and dictation (Groq) from Step 6; F12.5's check 1 needs them.

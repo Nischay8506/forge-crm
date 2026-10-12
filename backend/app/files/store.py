@@ -8,7 +8,7 @@ Every file is encrypted before it reaches the store, with AES-256-GCM under a ke
 of its own. That key is kept in the file's row, itself encrypted ("wrapped") under
 EVIDENCE_KEYS, the same keys as the audit evidence (Step 4), so there is no extra
 key to back up, and rotating the master key only re-wraps the small file keys
-(`uv run python -m app.cli rotate-file-keys`). The file's key and its wrapping are
+(`uv run python -m app.cli rotate-evidence` does both). The file's key and its wrapping are
 bound to its tenant and id, so bytes copied to another file fail to decrypt.
 
 Files are never opened inside a browser page: the API only offers them as a
