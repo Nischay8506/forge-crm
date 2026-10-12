@@ -24,3 +24,9 @@ celerybeat-schedule*
 
 # Redis snapshot when redis-server runs from the repo folder
 dump.rdb
+
+# Stored files (raw emails, attachments) in development: encrypted, never committed
+backend/var/
+
+# TypeScript build cache
+*.tsbuildinfo

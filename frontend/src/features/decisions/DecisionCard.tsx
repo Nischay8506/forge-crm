@@ -30,6 +30,9 @@ function recordLink(d: DecisionCard): { to: string; label: string } | null {
   if (d.tool_key === "steward.merge_records" && typeof cand === "string" && d.status === "pending") {
     return { to: `/steward/review/${cand}`, label: "Compare the two records" }
   }
+  if (d.record_type === "enquiry" && d.record_id) {
+    return { to: `/enquiries/${d.record_id}`, label: d.record_name ?? "Open the enquiry" }
+  }
   if (d.record_type === "account" && d.record_id) {
     return { to: `/accounts/${d.record_id}`, label: d.record_name ?? "Open account" }
   }

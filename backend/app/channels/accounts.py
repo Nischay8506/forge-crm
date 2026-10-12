@@ -51,6 +51,13 @@ async def get(session: AsyncSession) -> EmailAccount | None:
     return await session.scalar(select(EmailAccount))
 
 
+async def our_addresses(session: AsyncSession) -> set[str]:
+    """The addresses our own emails come from (the simulator's and the account's)."""
+    a = await get(session)
+    return {FROM_ADDRESS} | ({a.from_address.lower()} if a is not None and a.from_address
+                             else set())
+
+
 def view(a: EmailAccount | None) -> dict[str, Any] | None:
     if a is None:
         return None

@@ -73,6 +73,9 @@ class Account(IdMixin, TenantMixin, TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String(30), nullable=False, default="manual")
     hygiene_score: Mapped[int | None] = mapped_column(Integer)
     hygiene_details: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # The named-account owner: their enquiries go to this person first (F1.9, N12 A).
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), index=True)
 
 
 class Contact(IdMixin, TenantMixin, TimestampMixin, Base):

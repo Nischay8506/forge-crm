@@ -51,6 +51,12 @@ async def record_name(session: AsyncSession, record_type: str | None,
     if record_type == "erp_connection":
         return await session.scalar(select(ErpConnection.name)
                                     .where(ErpConnection.id == record_id))
+    if record_type == "enquiry":
+        from app.models import Enquiry
+
+        row = (await session.execute(select(Enquiry.ref, Enquiry.summary)
+                                     .where(Enquiry.id == record_id))).first()
+        return f"{row.ref}: {row.summary}" if row and row.summary else (row.ref if row else None)
     return None
 
 

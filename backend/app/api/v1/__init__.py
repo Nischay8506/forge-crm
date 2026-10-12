@@ -7,6 +7,7 @@ from app.api.v1 import (
     auth,
     channels,
     decisions,
+    enquiries,
     integrations,
     privacy,
     public,
@@ -25,4 +26,5 @@ router.include_router(audit.router)
 router.include_router(integrations.router)
 router.include_router(privacy.router)
 router.include_router(channels.router)
+router.include_router(enquiries.router)
 router.include_router(public.router)

@@ -46,6 +46,13 @@ import { MessageDetailPage } from '@/features/messages/MessageDetailPage'
 import { MessagesLayout } from '@/features/messages/MessagesLayout'
 import { MessagesPage } from '@/features/messages/MessagesPage'
 import { TestInboxPage } from '@/features/messages/TestInboxPage'
+import { EnquiriesLayout } from '@/features/enquiries/EnquiriesLayout'
+import { EnquiryDetailPage } from '@/features/enquiries/EnquiryDetailPage'
+import { ManualEnquiryPage } from '@/features/enquiries/ManualEnquiryPage'
+import { OtherMailPage } from '@/features/enquiries/OtherMailPage'
+import { QueuePage } from '@/features/enquiries/QueuePage'
+import { SetupPage } from '@/features/enquiries/SetupPage'
+import { TestMailboxPage } from '@/features/enquiries/TestMailboxPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -60,6 +67,18 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: 'admin/users', element: <UsersPage /> },
+      {
+        path: 'enquiries',
+        element: <EnquiriesLayout />,
+        children: [
+          { index: true, element: <QueuePage /> },
+          { path: 'other-mail', element: <OtherMailPage /> },
+          { path: 'test-mailbox', element: <TestMailboxPage /> },
+          { path: 'setup', element: <SetupPage /> },
+        ],
+      },
+      { path: 'enquiries/new', element: <ManualEnquiryPage /> },
+      { path: 'enquiries/:id', element: <EnquiryDetailPage /> },
       { path: 'accounts', element: <AccountsPage /> },
       { path: 'accounts/new', element: <AccountFormPage /> },
       { path: 'accounts/:id', element: <AccountDetailPage /> },

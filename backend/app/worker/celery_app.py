@@ -29,6 +29,13 @@ celery_app.conf.update(
         "inbox-tick": {"task": "forge.inbox_tick", "schedule": crontab()},
         # F12.5: send due messages (queued, or held until now) every 10 seconds.
         "channels-tick": {"task": "forge.channels_tick", "schedule": 10.0},
+        # M1: read waiting emails and run enquiry timers every 10 seconds, check the
+        # sales mailboxes every 15 seconds (each one at most once a minute unless a push
+        # asked sooner), nudge and park every hour (N3 A, N13 A, F1.8).
+        "enquiry-tick": {"task": "forge.enquiry_tick", "schedule": 10.0},
+        "mail-tick": {"task": "forge.mail_tick", "schedule": 15.0},
+        "enquiry-followups": {"task": "forge.enquiry_followups",
+                              "schedule": crontab(minute=7)},
     },
 )
 celery_app.autodiscover_tasks(["app.worker"], related_name="tasks")

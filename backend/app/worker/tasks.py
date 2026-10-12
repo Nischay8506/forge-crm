@@ -140,3 +140,48 @@ async def _channels_tick() -> dict:
 @celery_app.task(name="forge.channels_tick")
 def channels_tick() -> dict:
     return asyncio.run(_channels_tick())
+
+
+async def _enquiry_tick() -> dict:
+    from app.enquiries.intake import tick_all
+
+    try:
+        return await tick_all()
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.enquiry_tick")
+def enquiry_tick() -> dict:
+    """M1: read waiting emails, run the enquiry timers (F1.1, F1.10)."""
+    return asyncio.run(_enquiry_tick())
+
+
+async def _enquiry_followups() -> dict:
+    from app.enquiries.intake import followups_all
+
+    try:
+        return await followups_all()
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.enquiry_followups")
+def enquiry_followups() -> dict:
+    """M1: nudge customers for missing details, park the quiet ones (F1.8)."""
+    return asyncio.run(_enquiry_followups())
+
+
+async def _mail_tick() -> dict:
+    from app.enquiries.mail.service import check_all
+
+    try:
+        return await check_all()
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.mail_tick")
+def mail_tick() -> dict:
+    """M1: check the connected sales mailboxes (every minute, sooner after a push)."""
+    return asyncio.run(_mail_tick())

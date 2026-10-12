@@ -42,6 +42,7 @@ export interface Account extends AccountSummary {
   country: string
   industry: string | null
   source: string
+  owner_id?: string | null
   hygiene_details: HygieneDetails | null
   created_at: string
   updated_at: string

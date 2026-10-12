@@ -54,6 +54,10 @@ async def account_of(session: AsyncSession, d: Decision) -> uuid.UUID | None:
         c = await session.get(Contact, d.record_id)
         if c is not None:
             return c.account_id
+    if d.record_type == "enquiry" and d.record_id:
+        from app.models import Enquiry
+
+        return await session.scalar(select(Enquiry.account_id).where(Enquiry.id == d.record_id))
     raw = d.args.get("account_id")
     try:
         return uuid.UUID(str(raw)) if raw else None

@@ -64,22 +64,29 @@ async def create_tenant(name: str, slug: str, email: str, full_name: str, passwo
 
 async def rotate_credentials() -> None:
     from app.db import dispose_engine
+    from app.enquiries.mail.service import rotate_all as rotate_mailboxes
     from app.integrations.connections import rotate_all_credentials
 
     counts = await rotate_all_credentials()
+    mailboxes = await rotate_mailboxes()
     await dispose_engine()
     print(f"Re-encrypted {counts['rotated']} stored credential(s) under key "
           f"{counts['current']}; {counts['already']} were already on it.")
+    print(f"Re-encrypted {mailboxes} sales mailbox sign-in(s).")
 
 
 async def rotate_evidence() -> None:
     from app.audit.evidence import rotate_all
     from app.db import dispose_engine
+    from app.files.store import rewrap_all
 
     counts = await rotate_all()
+    files = await rewrap_all()
     await dispose_engine()
     print(f"Re-encrypted {counts['rotated']} audit evidence row(s) under key "
           f"{counts['current']}; {counts['already']} were already on it.")
+    print(f"Re-wrapped the keys of {files['rewrapped']} stored file(s) (emails and "
+          "attachments).")
 
 
 async def seed_usability(slug: str, password: str, refresh_only: bool) -> None:

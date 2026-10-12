@@ -82,7 +82,11 @@ async def evaluate(session: AsyncSession, ctx: AgentContext, tool: ToolDef,
         g.check("policy", True, "Read-only action; no policy needed")
         return g
 
-    # 4. policy rules
+    # 4. policy rules, after the tool's own hard rule (no one can approve past it)
+    built_in_block = tool.block_when(facts) if tool.block_when else None
+    if built_in_block:
+        g.check("policy", False, built_in_block)
+        return _hard_block(g)
     rules = await policy.matching_rules(session, agent.key, tool.key, facts)
     g.rule_ids = [str(r.id) for r in rules]
     sentences = [await policy.sentence(session, r) for r in rules]
@@ -94,6 +98,9 @@ async def evaluate(session: AsyncSession, ctx: AgentContext, tool: ToolDef,
         g.reasons = [s for r, s in zip(rules, sentences, strict=True) if r.outcome == "block"]
         return g
     ask_rules = [s for r, s in zip(rules, sentences, strict=True) if r.outcome == "ask_person"]
+    built_in = tool.ask_when(facts) if tool.ask_when else None
+    if built_in:
+        ask_rules.append(built_in)
     if ask_rules and not approved:
         g.check("policy", False, "; ".join(ask_rules))
         g.outcome, g.reasons = "ask_person", list(ask_rules)

@@ -21,6 +21,7 @@ import { EraseContact } from "@/features/audit/EraseContact"
 import { LegalHoldCard } from "@/features/audit/LegalHoldCard"
 import { MessagesCard } from "@/features/audit/MessagesCard"
 import { ConsentPanel } from "@/features/messages/ConsentPanel"
+import { AccountOwnerCard } from "@/features/enquiries/AccountOwnerCard"
 import { HygieneBreakdown } from "./HygieneBreakdown"
 
 const SHOWN_FIELDS: (keyof Account)[] = [
@@ -182,6 +183,9 @@ export function AccountDetailPage() {
         </div>
 
         <div className="space-y-4">
+          {hasPermission(perms, "enquiries.read") && (
+            <AccountOwnerCard accountId={a.id} ownerId={a.owner_id ?? null} canChange={canWrite && active} />
+          )}
           <Card>
             <CardHeader><CardTitle>Data hygiene</CardTitle></CardHeader>
             <CardContent><HygieneBreakdown details={a.hygiene_details} /></CardContent>

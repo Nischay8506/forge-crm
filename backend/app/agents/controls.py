@@ -75,7 +75,8 @@ async def effective_level(session: AsyncSession, agent: AgentDef,
         return base, "agent level"
     overrides = list(await session.scalars(
         select(AutonomyOverride).where(AutonomyOverride.agent_key == agent.key)))
-    if not overrides:
+    starting = dict(agent.tier_levels)
+    if not overrides and not starting:
         return base, "agent level"
     tiers = await account_tiers(session, ids)
     best: tuple[int, str] | None = None
@@ -90,6 +91,8 @@ async def effective_level(session: AsyncSession, agent: AgentDef,
             level, why = named, "override for this account"
         elif by_tier:
             level, why = by_tier.autonomy_level, f"override for {tier} accounts"
+        elif tier in starting:
+            level, why = starting[tier], f"{agent.name} starts {tier} accounts here"
         else:
             level, why = base, "agent level"
         level = min(level, agent.max_level)

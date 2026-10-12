@@ -44,6 +44,14 @@ PERMISSIONS: dict[str, str] = {
                        "email between the Test inbox and live sending",
     "languages.manage": "Change the tone guides and the glossary",
     "languages.review": "Review the writing of AI-written messages (for native speakers)",
+    # Phase 2, M1 Enquiry (F1.1-F1.10)
+    "enquiries.read": "See the enquiry queue, enquiries, their emails and Other mail",
+    "enquiries.work": "Work on enquiries: correct what was read, acknowledge, mark the quote "
+                      "sent, close, say if two are the same, add manual enquiries, sort Other "
+                      "mail and use the Test mailbox",
+    "enquiries.assign": "Give an enquiry to someone else (with a reason)",
+    "enquiries.manage": "Connect the sales mailbox and set routing, timers, product families "
+                        "and who takes enquiries",
 }
 
 ALL = "*"

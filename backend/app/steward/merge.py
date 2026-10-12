@@ -25,9 +25,11 @@ from app.models import (
     AutonomyOverride,
     Consent,
     Contact,
+    Enquiry,
     ErpCustomer,
     ErpWrite,
     FieldProvenance,
+    InboundEmail,
     KillSwitch,
     LegalHold,
     MatchCandidate,
@@ -60,10 +62,13 @@ REFERENCES: dict[str, list[tuple[type, str]]] = {
         (ErpCustomer, "account_id"), (ErpWrite, "account_id"),
         # A legal hold keeps protecting the surviving account; messages follow it (F12.4).
         (LegalHold, "account_id"), (Message, "account_id"),
+        # Enquiries follow the surviving account and contact (M1).
+        (Enquiry, "account_id"),
     ],
     # Consent follows the surviving contact, so a request to stop made on either
     # record still holds after the merge (F12.5, L9).
-    "contact": [(Message, "contact_id"), (Consent, "contact_id")],
+    "contact": [(Message, "contact_id"), (Consent, "contact_id"), (Enquiry, "contact_id"),
+                (InboundEmail, "contact_id")],
 }
 UUID_FIELDS = frozenset({"parent_id", "account_id", "merged_into_id"})
 LOCATION_FIELDS = ("address_line1", "address_line2", "city", "state", "pincode")

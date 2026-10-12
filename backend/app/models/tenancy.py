@@ -1,7 +1,7 @@
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import Boolean, ForeignKey, SmallInteger, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +26,16 @@ class User(IdMixin, TenantMixin, TimestampMixin, Base):
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(200), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Enquiry routing and escalation (N12 A, N13 A, migration 0010): who this person
+    # reports to (their manager; the manager's manager is the head of department),
+    # whether they are in the enquiry round-robin, the product families and regions
+    # (states or cities) they look after, and how many open enquiries they may hold.
+    reports_to_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"))
+    takes_enquiries: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    product_family_ids: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    regions: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    max_open_enquiries: Mapped[int | None] = mapped_column(SmallInteger)
 
 
 class Role(IdMixin, TenantMixin, TimestampMixin, Base):

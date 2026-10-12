@@ -47,6 +47,7 @@ FACTS: dict[str, Fact] = {f.key: f for f in (
     Fact("match_score", "Match score (0-100)", "number"),
     Fact("linked_records", "Linked records moved", "number"),
     Fact("record_type", "Record type", "choice", ("account", "contact")),
+    Fact("is_tender", "Looks like a tender", "choice", ("yes", "no")),
 )}
 
 OPS: dict[str, str] = {
@@ -88,6 +89,13 @@ class ToolDef:
     # Arguments a person may change when they counter (decision H2), e.g. ("amount",).
     # The changed action goes through the gate again before anything runs.
     counter_fields: tuple[str, ...] = ()
+    # A rule that is part of the tool itself (not a tenant's policy rule): given the
+    # facts, the reason a person must approve, or None. E.g. a tender's
+    # acknowledgement is always drafted for a person (decision N7 A).
+    ask_when: Callable[[dict[str, Any]], str | None] | None = None
+    # A rule no one can approve past, given the facts: the reason it is blocked, or
+    # None. E.g. a message about an enquiry that promises a price (decision N7 A).
+    block_when: Callable[[dict[str, Any]], str | None] | None = None
 
 
 @dataclass(frozen=True)
@@ -104,6 +112,9 @@ class AgentDef:
     charter_prompt: str = ""
     test_only: bool = False
     permissions: tuple[str, ...] = field(default=())
+    # Starting level per account tier, used until the company sets its own override
+    # for that tier on the Agents screen, e.g. (("strategic", L0),) (decision N7 A).
+    tier_levels: tuple[tuple[str, int], ...] = ()
 
     @property
     def actor(self) -> str:
@@ -137,7 +148,8 @@ def register_agent(agent: AgentDef) -> AgentDef:
 
 # Modules that register agents and tools when imported. Add new agents here.
 DEFINITION_MODULES = ("app.steward.agent", "app.agents.sandbox", "app.integrations.agent",
-                      "app.integrations.mcp_tools", "app.privacy.agent", "app.language.agent")
+                      "app.integrations.mcp_tools", "app.privacy.agent", "app.language.agent",
+                      "app.enquiries.agent")
 
 
 def load_definitions() -> None:

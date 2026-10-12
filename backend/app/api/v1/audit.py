@@ -310,7 +310,8 @@ def _message(m: Message, account: str | None, contact: str | None) -> dict[str, 
             "override_by": m.override_by,
             "run_id": str(m.run_id) if m.run_id else None, "created_by": m.created_by,
             "created_at": m.created_at, "status_at": m.status_at, "sent_at": m.sent_at,
-            "sent_by": m.sent_by, "erased_at": m.erased_at}
+            "sent_by": m.sent_by, "erased_at": m.erased_at,
+            "enquiry_id": str(m.enquiry_id) if m.enquiry_id else None}
 
 
 async def _names(db: AsyncSession, m: Message) -> tuple[str | None, str | None]:

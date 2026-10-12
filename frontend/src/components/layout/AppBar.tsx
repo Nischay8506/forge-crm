@@ -4,11 +4,13 @@ import { hasPermission } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { useDecisionCount } from "@/features/decisions/hooks"
 import { useOverview } from "@/features/integrations/hooks"
+import { useEnquiryCounts } from "@/features/enquiries/hooks"
 
 /** Nav items appear only when the user holds the permission (null = everyone).
  *  Add each module's pages here as they are built. */
 const NAV: { name: string; path: string; permission: string | null }[] = [
   { name: "Home", path: "/", permission: null },
+  { name: "Enquiries", path: "/enquiries", permission: "enquiries.read" },
   { name: "Accounts", path: "/accounts", permission: "accounts.read" },
   { name: "Contacts", path: "/contacts", permission: "accounts.read" },
   { name: "Data Steward", path: "/steward", permission: "steward.read" },
@@ -27,6 +29,8 @@ export function AppBar() {
   const waiting = count.data?.waiting ?? 0
   const overview = useOverview(hasPermission(permissions, "integrations.read"))
   const erpBroken = (overview.data?.connections ?? []).some((c) => c.health === "problem")
+  const enquiries = useEnquiryCounts(hasPermission(permissions, "enquiries.read"))
+  const unowned = enquiries.data?.unassigned ?? 0
   const initials = me?.full_name
     ? me.full_name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()
     : "U"
@@ -52,6 +56,9 @@ export function AppBar() {
                 {item.name}
                 {item.path === "/integrations" && erpBroken && (
                   <span className="ml-1.5 w-2 h-2 rounded-full bg-red-500" title="A connection needs attention" />
+                )}
+                {item.path === "/enquiries" && unowned > 0 && (
+                  <span className="ml-1.5 rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5 leading-[16px]" title="Enquiries without an owner">{unowned}</span>
                 )}
                 {item.path === "/decisions" && waiting > 0 && (
                   <span className="ml-1.5 rounded-full bg-gold-500 text-ink-900 text-[10px] font-bold px-1.5 leading-[16px]">{waiting}</span>

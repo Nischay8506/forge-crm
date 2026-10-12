@@ -159,6 +159,9 @@ class Message(IdMixin, TenantMixin, Base):
     user_id: Mapped[uuid.UUID | None] = mapped_column(UUIDCol, ForeignKey("users.id"))
     attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     checks: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    # M1 (migration 0010): the enquiry this message belongs to.
+    enquiry_id: Mapped[uuid.UUID | None] = mapped_column(UUIDCol, ForeignKey("enquiries.id"),
+                                                         index=True)
 
 
 class ErasedIdentifier(TenantMixin, Base):

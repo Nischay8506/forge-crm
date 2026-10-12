@@ -77,3 +77,78 @@ async def unsubscribe(token: str) -> HTMLResponse:
                  f"<p>{html.escape(tenant.name)} will not send you promotional emails any "
                  "more. Emails about your orders, invoices and replies to you will still "
                  "reach you.</p>")
+
+
+# The sales mailbox (M1, decisions N3 A, N4 A) ---------------------------------------
+
+@router.get("/mail/oauth/{provider}/callback")
+async def mail_oauth_callback(provider: str, code: str | None = None, state: str | None = None,
+                              error: str | None = None):
+    """Google or Microsoft sends the person back here after they sign in."""
+    from urllib.parse import quote
+
+    from fastapi.responses import RedirectResponse
+
+    from app.config import get_settings
+    from app.enquiries.mail import oauth
+    from app.enquiries.mail import service as mail
+    from app.enquiries.mail.base import MailError
+
+    back = get_settings().app_base_url.rstrip("/") + "/enquiries/setup?tab=mailbox"
+    if provider not in ("gmail", "microsoft"):
+        return RedirectResponse(f"{back}&error=" + quote("Unknown provider"), 303)
+    who = oauth.read_state(state or "", provider)
+    if who is None:
+        return RedirectResponse(f"{back}&error=" + quote(
+            "The sign-in link ran out or was not started here; press Connect again"), 303)
+    if error or not code:
+        return RedirectResponse(f"{back}&error=" + quote(
+            "The sign-in was cancelled or not allowed"), 303)
+    tenant_id, user_id = who
+    try:
+        async with tenant_session(tenant_id) as s:
+            await mail.finish_oauth(s, tenant_id, user_id, provider, code)
+    except MailError as e:
+        return RedirectResponse(f"{back}&error=" + quote(str(e)[:200]), 303)
+    return RedirectResponse(f"{back}&connected={provider}", 303)
+
+
+@router.post("/mail/push/gmail", status_code=204)
+async def mail_push_gmail(body: dict) -> None:
+    """Google Pub/Sub: mail arrived for an address. Only makes Forge check sooner."""
+    import base64
+    import json
+
+    from app.enquiries.mail import service as mail
+
+    try:
+        data = json.loads(base64.b64decode(body["message"]["data"]))
+        address = str(data["emailAddress"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    await mail.pushed_gmail(address)
+    return None
+
+
+@router.post("/mail/push/microsoft/{tenant_id}")
+async def mail_push_microsoft(tenant_id: str, body: dict | None = None,
+                              validationToken: str | None = None):  # noqa: N803
+    """Microsoft Graph: new mail in a subscribed inbox. When a subscription starts, Graph
+    first checks this address by sending a token to echo back."""
+    import uuid as _uuid
+
+    from fastapi.responses import PlainTextResponse, Response
+
+    from app.enquiries.mail import service as mail
+
+    if validationToken:
+        return PlainTextResponse(validationToken[:500])
+    try:
+        tid = _uuid.UUID(tenant_id)
+    except ValueError:
+        return Response(status_code=202)
+    for n in (body or {}).get("value") or []:
+        if isinstance(n, dict):
+            await mail.pushed_microsoft(tid, str(n.get("subscriptionId") or ""),
+                                        str(n.get("clientState") or ""))
+    return Response(status_code=202)

@@ -45,15 +45,19 @@ from app.models import (
     Consent,
     Contact,
     Decision,
+    Enquiry,
+    EnquiryLine,
     ErasedIdentifier,
     FieldProvenance,
     ImportBatch,
+    InboundEmail,
     LanguageReview,
     MatchCandidate,
     MergeEvent,
     Message,
     OutboxEvent,
     RecordTakeover,
+    StoredFile,
     SyncDeadLetter,
     SyncRun,
 )
@@ -243,6 +247,48 @@ async def erase_contact(session: AsyncSession, tenant_id: uuid.UUID, contact_id:
         r.comment = sc.text(r.comment) if r.comment else None
         r.original_body = ERASED if r.original_body else None
     done["language_reviews"] = len(reviews)
+    # Enquiries (M1): the person's details go from the enquiry and its lines; the emails
+    # they sent are blanked and the raw emails and attachments removed from the file
+    # store (enquiry events and assignments hold no customer text).
+    from app.files import store as file_store
+
+    erased_at = datetime.now(UTC)
+    addresses = {e.lower() for e in emails}
+    mail_where = InboundEmail.contact_id.in_(ids)
+    if addresses:
+        mail_where = or_(mail_where, func.lower(InboundEmail.from_address).in_(addresses))
+    mails = list(await session.scalars(select(InboundEmail).where(mail_where)))
+    files = 0
+    for r in mails:
+        r.body_text, r.subject, r.from_name, r.from_address = ERASED, None, None, None
+        r.to_addresses, r.cc_addresses = [], []
+        r.label_reason, r.erased_at = None, erased_at
+        for fid in [r.raw_file_id, *[a.get("file_id") for a in r.attachments]]:
+            f = await session.get(StoredFile, uuid.UUID(str(fid))) if fid else None
+            if f is not None and await file_store.remove(session, f,
+                                                         "erasure of a contact's personal data"):
+                files += 1
+        r.attachments = [{**{k: v for k, v in a.items() if k != "filename"},
+                          "filename": "[erased]"} for a in r.attachments]
+    done["emails"], done["email_files"] = len(mails), files
+    enq_where = Enquiry.contact_id.in_(ids)
+    if sc.like:
+        enq_where = or_(enq_where, sc.mentions(Enquiry.customer), sc.mentions(Enquiry.summary),
+                        Enquiry.id.in_({r.enquiry_id for r in mails if r.enquiry_id}))
+    enqs = list(await session.scalars(select(Enquiry).where(enq_where)))
+    for e in enqs:
+        whose = e.contact_id in ids or any(r.enquiry_id == e.id for r in mails)
+        e.customer = ({k: (ERASED if v and k in ("contact_name", "designation", "phone",
+                                                 "email") else v)
+                       for k, v in e.customer.items()} if whose else sc.json(e.customer))
+        e.summary = sc.text(e.summary) if e.summary else None
+        e.close_reason = sc.text(e.close_reason) if e.close_reason else None
+        e.details = sc.json(e.details)
+    done["enquiries"] = len(enqs)
+    if enqs:
+        done["enquiry_lines"] = await _scrub_rows(
+            session, EnquiryLine, ["description", "notes", "original"],
+            EnquiryLine.enquiry_id.in_([e.id for e in enqs]), sc)
     # Consent records stay (they prove what the customer asked for, and that it was
     # honoured); their free text goes. They hold no other personal data.
     consents = list(await session.scalars(select(Consent).where(Consent.contact_id.in_(ids))))

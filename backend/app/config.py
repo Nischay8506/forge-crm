@@ -79,6 +79,22 @@ class Settings(BaseSettings):
     app_base_url: str = "http://localhost:5173"
     channels_stuck_sending_minutes: int = 10
 
+    # M1 (Phase 2): where raw emails and attachments are kept (N9 A), the most an
+    # email may bring (25 MB), and Forge's own app registrations with Google and
+    # Microsoft for reading a company's mailbox (N3 A, N4 A). Without a client id the
+    # matching "Connect" button says what is missing; IMAP and the Test mailbox
+    # always work. Pub/Sub topic: Gmail's instant notifications (optional; Forge also
+    # checks every minute).
+    file_store_dir: str = "var/files"
+    email_max_mb: int = 25
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    gmail_pubsub_topic: str | None = None
+    microsoft_client_id: str | None = None
+    microsoft_client_secret: str | None = None
+    microsoft_tenant: str = "common"
+    mail_poll_seconds: int = 60
+
     outbox_batch_size: int = 100
     outbox_max_attempts: int = 8
 

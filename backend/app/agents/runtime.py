@@ -340,24 +340,41 @@ async def supersede(session: AsyncSession, dedupe_key: str, actor: str, why: str
 
 # Model calls (R2) -----------------------------------------------------------------
 
+def _for_trail(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The prompt as kept in the trail: pictures sent to a vision model are named by
+    size, not copied (the file itself is kept in the file store)."""
+    out = []
+    for m in messages:
+        content = m.get("content")
+        if isinstance(content, list):
+            content = [p if p.get("type") != "image_url" else
+                       {"type": "image", "bytes": len(str(p.get("image_url", {}).get("url", "")))
+                        * 3 // 4}
+                       for p in content]
+        out.append({**m, "content": content})
+    return out
+
+
 async def ask_model(session: AsyncSession, ctx: AgentContext, *, task: str,
-                    messages: list[dict[str, str]], record_type: str | None = None,
-                    record_id: Any = None, **kwargs: Any) -> Any:
+                    messages: list[dict[str, Any]], record_type: str | None = None,
+                    record_id: Any = None, tier: str | None = None, **kwargs: Any) -> Any:
     """Every model call an agent makes goes through here: the gateway picks the model
     (budget, fallback, cost log), and the trail keeps the full prompt, anything the
-    agent was given for it (ctx.saw) and the answer, under the run's id."""
+    agent was given for it (ctx.saw) and the answer, under the run's id. `tier`
+    replaces the agent's own tier for one call (e.g. "vision" for a scanned drawing)."""
     from app.llm import gateway
 
     if not ctx.agent.model_tier:
         raise AppError(f"{ctx.agent.name} has no model tier, so it cannot call a model")
+    tier = tier or ctx.agent.model_tier
     kw = {"actor": ctx.actor, "agent_key": ctx.agent.key, "run_id": ctx.run_id,
           "record_type": record_type, "record_id": record_id}
     given = ctx.take_seen()
-    base = {"task": task, "tier": ctx.agent.model_tier, "agent_version": ctx.agent_version,
-            "messages": messages, "inputs": given,
+    base = {"task": task, "tier": tier, "agent_version": ctx.agent_version,
+            "messages": _for_trail(messages), "inputs": given,
             "settings": {k: v for k, v in kwargs.items() if isinstance(v, str | int | float)}}
     try:
-        res = await gateway.complete(session, ctx.tenant_id, task=task, tier=ctx.agent.model_tier,
+        res = await gateway.complete(session, ctx.tenant_id, task=task, tier=tier,
                                      messages=messages, trace_id=str(ctx.run_id), **kwargs)
     except Exception as exc:
         await chain.append(session, ctx.tenant_id, "model.failed", **kw,

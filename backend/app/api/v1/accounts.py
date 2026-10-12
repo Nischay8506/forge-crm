@@ -73,6 +73,7 @@ class AccountOut(AccountSummary):
     country: str
     industry: str | None
     source: str
+    owner_id: uuid.UUID | None = None  # whose enquiries these are first (N12 A)
     hygiene_details: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime

@@ -135,6 +135,13 @@ async def draft(session: AsyncSession, tenant_id: uuid.UUID, *, purpose: str, su
         account_id = c.account_id if c else None
     found = detect(body)
     now = datetime.now(UTC)
+    # A reply in an enquiry's conversation belongs to that enquiry (M1), and a reply to
+    # something written in the Test inbox or the Test mailbox stays in the Test inbox.
+    original = (await session.execute(select(Message.enquiry_id, Message.provider).where(
+        Message.id == in_reply_to_id))).first() if in_reply_to_id else None
+    enquiry_id = original.enquiry_id if original else None
+    if original is not None and original.provider in ("simulator", "test"):
+        simulator_only = True
     msg = Message(tenant_id=tenant_id, channel=channel, direction="out", status=st.DRAFT,
                   purpose=purpose, subject=subject, body=body, created_by=created_by,
                   contact_id=contact_id, account_id=account_id, user_id=user_id,
@@ -142,7 +149,7 @@ async def draft(session: AsyncSession, tenant_id: uuid.UUID, *, purpose: str, su
                   ai_generated=ai_generated, disclosure=disclosure, run_id=run_id,
                   feature=feature, in_reply_to_id=in_reply_to_id,
                   idempotency_key=idempotency_key, status_at=now, attempts=0, checks=[],
-                  provider="simulator" if simulator_only else None)
+                  provider="simulator" if simulator_only else None, enquiry_id=enquiry_id)
     session.add(msg)
     await session.flush()
     await event(session, msg, st.DRAFT, "person" if created_by.startswith("user:") else "forge",
@@ -315,6 +322,10 @@ async def _record(tenant_id: uuid.UUID, message_id: uuid.UUID, result: SendResul
             await event(s, msg, st.SENT, source, detail=detail)
             await _audit(s, msg, "message.sent", SYSTEM, provider=msg.provider,
                          attempt=msg.attempts)
+            if msg.enquiry_id:
+                from app.enquiries.intake import on_message_sent
+
+                await on_message_sent(s, msg, now)
             return "sent"
         if result.outcome == RETRY or (result.outcome == FAILED and result.account_problem):
             if msg.attempts < MAX_TRIES:
