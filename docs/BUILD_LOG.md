@@ -44,6 +44,13 @@ thread from Claude's bundles). Work paused 09:01Z ("stop execution for now") and
 - Tests: 50 new backend (260 in all, plus 3 live-ERPNext ones) and 6 new frontend (31). Browser checks
   as an admin, desktop and phone: families from templates, the sample profile, scoring, two test
   emails read into enquiries, the engineering review, a no-fit enquiry declined through its decision card.
+- **f66dcfe, the two M1 gaps found while writing this entry** (evening): a customer's reply now fills
+  the enquiry's lines and details without re-typing (F1.8 check 2, `enquiries/answers.py`): only empty
+  fields, a different value or an answer without a line is flagged for a person, the customer's words
+  are kept with each question, and the history says what was filled in. A test now runs the quote and
+  first-look timers across a night, a Sunday and a company holiday (F1.10). 264 backend tests; browser
+  check on desktop and phone: a person adds the line and acknowledges (no AI key), the customer replies
+  "Qty 40 MT, delivery at Patancheru, required by 15/11/2026", and all three land in the enquiry.
 
 **Problems found and fixed**
 - The rules took a size ("Pipe rack 12m - 5 Nos") or a grade ("SS 304 Sheet") as the quantity; the
@@ -53,6 +60,8 @@ thread from Claude's bundles). Work paused 09:01Z ("stop execution for now") and
 - With no setup, every line said "matches none of our product families"; now the enquiry simply says
   "Not checked: set up what we make". An order below the size we like showed as raising the score.
 - Decision cards showed raw values ("no_fit") and not the email itself.
+- The rules turned an answer like "Qty 40 MT, delivery at Patancheru." into a new item line; a reply
+  read by the rules now adds a line only when it matches a product family (f66dcfe).
 - Writing this entry: the file-store comment named a `rotate-file-keys` command that does not exist;
   `rotate-evidence` already re-wraps the file keys, and the comment now says so. The M1 settings were
   missing from `backend/.env.example` and are added.
@@ -63,9 +72,7 @@ thread from Claude's bundles). Work paused 09:01Z ("stop execution for now") and
   D3 keys, about 100 real anonymised enquiry emails with a few real BOMs and drawings, a real test
   mailbox; CognitBotz's Google and Microsoft app registrations for Gmail and Outlook sign-in; still the
   Step 5 usability runs, the Step 3 Docker check and the D3 language reviews.
-- Claude: two M1 gaps found while writing this: a customer's answer is not yet written into an existing
-  line's field (F1.8 check 2), and there is no enquiry-timer test across a holiday (F1.10). Then M3 once
-  the answers come.
+- Claude: M3 once the answers come (the two M1 gaps found while writing this are fixed, f66dcfe).
 
 ---
 

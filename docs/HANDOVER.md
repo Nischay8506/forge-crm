@@ -443,6 +443,8 @@ backend/
                          are flagged; undo (N11 A)
       routing.py         who owns it (N12 A); timers.py the four stage timers (N13 A, P2 A)
       ack.py, guard.py   the acknowledgement, nudges, parking, decline; the commitment guard
+      answers.py         a reply's answers into the enquiry and its lines, only where it is clear
+                         and never over a known value (F1.8)
       families.py        product families and the details needed to quote each (N8 A)
       capability.py      the "What we make" profile; qualify.py "can we make this?" per line and
                          per enquiry (F1.6); reviews.py the engineering review (P2 A)
@@ -628,7 +630,7 @@ docs/                  this file, BUILD_LOG.md
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
 first module, **M1 Enquiry, is built for email (2026-10-12)**, and the **M3 CPQ questions** (C1-C18) are
-waiting for Nischay's answers. Tests: 260 backend (plus 3 that run only against a live ERPNext) and 31
+waiting for Nischay's answers. Tests: 264 backend (plus 3 that run only against a live ERPNext) and 31
 frontend, all passing; every new screen was checked in a browser, on a desktop and at phone width (390 px).
 Nischay's PC needs `uv sync` and `uv run alembic upgrade head` (migrations 0010-0012) after the copy.
 
@@ -699,13 +701,16 @@ test set and in tests:
 - **F1.7** reasons in words and the Enquiry Queue sorted by priority: met (the only worklist so far).
 - **F1.8** on the test set: first response within seconds, 0 of 140 acknowledgements promised anything,
   the right language for 99.3% (one mixed Telugu-English email was answered in English). **Answers
-  updating the lines**: a reply ticks off the questions it answers and adds any new lines it contains,
-  but an answer is not yet written into an existing line's field (for example the quantity of a line read
-  earlier); still to build.
+  updating the lines**: met in tests and in the browser (f66dcfe). A reply's answers go into the lines
+  and the enquiry without re-typing (`enquiries/answers.py`): a quantity, size, grade or standard into
+  the line it names (or the only line, or the only line still missing it), the delivery place and date
+  into the enquiry. Only empty fields are filled; a different value, or an answer that does not say
+  which line, is flagged for a person ("check what was read"). Each question keeps the customer's words,
+  and the history says what was filled in. Without the AI the rules do the same and add a new line only
+  when it matches a product family.
 - **F1.9** an owner within a minute with the rule that fired: met. The dealer step waits (Q12, Phase 5).
-- **F1.10** the ladder (owner, manager, head of department) and the pause: met in tests. Working-hours
-  timers use the Step 5 calendar, whose holidays are tested there; a test of an enquiry timer across a
-  holiday is still to add.
+- **F1.10** the ladder (owner, manager, head of department) and the pause: met in tests, including the
+  quote and first-look timers across a night, a Sunday and a company holiday (f66dcfe).
 - **F1.2** (WhatsApp) and **F1.3** (web form, marketplaces) are on the later list (N2 A, N14).
 
 Gaps: Gmail and Microsoft 365 need CognitBotz's app registrations (N4 A) and were tested against
@@ -1078,8 +1083,8 @@ Enquiries → Test mailbox (section 4).
 **For M1 to be marked done (N6 A):** the D3 keys (the ≥95% classification and reading scans need the
 AI), about 100 real anonymised enquiry emails and a few real BOMs and drawings to measure again, and a
 real test mailbox on his PC. Gmail and Microsoft 365 sign-in need CognitBotz's two app registrations
-(N4 A; IMAP works without them). Claude still has to build: writing a customer's answer into an
-existing line (F1.8 check 2) and a test of an enquiry timer across a holiday (F1.10), section 6.
+(N4 A; IMAP works without them). The two gaps found while writing the 12 Oct notes (answers into
+existing lines, F1.8; an enquiry timer across a holiday, F1.10) were fixed the same evening (f66dcfe).
 
 **Still open from Phase 1**, alongside:
 - The Step 5 usability run (`docs/USABILITY_TEST.md` and the guide linked in section 4): two or three
