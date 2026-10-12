@@ -17,7 +17,8 @@ CHECKS: tuple[tuple[str, re.Pattern[str]], ...] = (
         rf"\b(?:price|rate|cost|quoted?)\s+(?:is|of|will be|would be|comes to|at)\s+"
         rf"(?:rs|inr|₹)?\s*{_NUM}|"
         rf"\bper\s+(?:kg|mt|tonne|ton|piece|pc|nos?|unit)\b.*{_NUM}|"
-        r"कीमत\s*\S*\s*\d|रेट\s*\S*\s*\d|दाम\s*\S*\s*\d|ధర\s*\S*\s*\d|రేటు\s*\S*\s*\d)",
+        # 'रेट 52000', 'कीमत: रु. 52000', 'ధర రూ. 52000'; not 'का रेट [ENQ-2026-00012]'
+        r"(?:कीमत|रेट|दाम|ధర|రేటు)\s*(?:[:=-]|है|होगा|रहेगा)?\s*(?:₹|रु\.?|రూ\.?|rs\.?)?\s*\d)",
         re.IGNORECASE)),
     ("a discount", re.compile(
         rf"(\bdiscount|\b{_NUM}\s*%\s*off\b|\bspecial (?:price|rate|offer)\b|"

@@ -42,12 +42,14 @@ KEYWORDS: dict[str, tuple[str, ...]] = {
     "vendor_mail": (
         "we are pleased to introduce", "we are a leading", "company profile", "our products",
         "we offer", "we would like to offer", "our catalogue", "our catalog", "introduce our",
-        "manufacturers and suppliers of", "dealers in",
+        "manufacturers and suppliers of", "dealers in", "vendor registration",
+        "approved vendor", "vendor list", "revised price list", "book your orders",
     ),
     "spam": (
         "lottery", "you have won", "bitcoin", "crypto", "seo services", "click here",
         "increase your ranking", "dear friend", "unsubscribe", "limited time offer",
-        "work from home", "loan approved",
+        "work from home", "loan approved", "lucky draw", "claim your", "b2b leads",
+        "verified leads",
     ),
 }
 
@@ -167,13 +169,16 @@ def _number(v: str) -> float | None:
 def _line_from_cells(cells: list[str]) -> dict[str, Any] | None:
     """A table row: 'S.No | Item | Size | Grade | Qty | Unit'."""
     qty, unit, rest = None, None, []
+    # A number with the unit in the next cell is the quantity; a cell like '12m' is
+    # only taken when there is no such pair (it is more often the size).
+    pair = next((i for i, c in enumerate(cells[:-1]) if NUMBER.match(c)
+                 and cells[i + 1].lower().strip(". ") in UNITS), None)
     for i, c in enumerate(cells):
-        if qty is None and NUMBER.match(c) and i + 1 < len(cells) and \
-                cells[i + 1].lower().strip(". ") in UNITS:
+        if i == pair:
             qty, unit = _number(c), UNITS[cells[i + 1].lower().strip(". ")]
             cells[i + 1] = ""
             continue
-        m = QTY_UNIT.fullmatch(c.strip()) if qty is None else None
+        m = QTY_UNIT.fullmatch(c.strip()) if qty is None and pair is None else None
         if m:
             qty, unit = _number(m.group(1)), UNITS[m.group(2).lower()]
             continue
@@ -202,6 +207,26 @@ def _line(desc: str, qty: float | None, unit: str | None) -> dict[str, Any] | No
             "notes": None, "confidence": 0.5}
 
 
+def _qty_in(line: str) -> re.Match[str] | None:
+    """The quantity in a line of text. A number that is part of a size ('30m x 15m') or
+    of a grade ('SS 304 Sheet') is not one. When there are several, the one after a
+    dash or 'Qty' wins, then one that is not a length ('Pipe rack 12m - 5 Nos'), then
+    the first."""
+    names = [g.span() for g in (*GRADE.finditer(line), *STANDARD.finditer(line))]
+    found = [m for m in QTY_UNIT.finditer(line)
+             if not re.search(r"[xX×*]\s*$", line[:m.start()])
+             and not re.match(r"\s*[xX×*]", line[m.end():])
+             and not any(a < m.end(1) and m.start(1) < b for a, b in names)]
+    if len(found) < 2:
+        return found[0] if found else None
+
+    def rank(m: re.Match[str]) -> int:
+        marked = re.search(r"(?:[-–:=]|\bqty\.?|\bquantity)\s*$", line[:m.start()],
+                           re.IGNORECASE)
+        return 2 * bool(marked) + (UNITS[m.group(2).lower()] != "m")
+    return max(found, key=rank)  # max keeps the first of equals
+
+
 def lines_in(text: str, source: str = "email", source_file: str | None = None
              ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
@@ -214,7 +239,7 @@ def lines_in(text: str, source: str = "email", source_file: str | None = None
         if len(cells) >= 3:
             found = _line_from_cells(cells)
         if found is None:
-            m = QTY_UNIT.search(line)
+            m = _qty_in(line)
             if m:
                 desc = (line[:m.start()] + " " + line[m.end():]).strip()
                 desc = re.sub(r"\b(?:qty|quantity)\s*[:\-]?\s*$", "", desc, flags=re.IGNORECASE)

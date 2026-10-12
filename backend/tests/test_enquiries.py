@@ -197,6 +197,18 @@ def test_rules_read_hindi_and_telugu_requests_as_enquiries():
     assert pay["label"] == "payment" and pay["lines"] == []
 
 
+@pytest.mark.parametrize(("line", "qty", "unit"), [
+    ("Pipe rack 12m - 5 Nos", 5, "nos"),  # a length is the size, not the quantity
+    ("Shed structure 30m x 15m - 25 Sets", 25, "sets"),
+    ("SS 304 Sheet 2mm 10 Pcs", 10, "nos"),  # 304 is the grade
+    ("1 | Pipe rack | 12m | - | 4 | Pcs", 4, "nos"),
+    ("We need 20 MT HR Coil 3mm x 1250", 20, "MT"),
+])
+def test_rules_take_the_quantity_not_the_size_or_grade(line, qty, unit):
+    got = rules.lines_in(line)
+    assert len(got) == 1 and got[0]["qty"] == qty and got[0]["unit"] == unit
+
+
 def test_the_guard_finds_promises_and_lets_questions_through():
     assert guard.claims("The price is Rs 52,000 per MT") == ["a price"]
     assert guard.claims("We can offer a special discount of 5%") == ["a discount"]
@@ -204,6 +216,11 @@ def test_the_guard_finds_promises_and_lets_questions_through():
         "a delivery date", "that we can make or supply it"]
     assert guard.claims("The material is in stock") == ["that we can make or supply it"]
     assert guard.claims("कीमत 52000 रुपये है") == ["a price"]
+    assert guard.claims("रेट: रु. 52000 प्रति टन") == ["a price"]
+    assert guard.claims("ధర రూ. 52000") == ["a price"]
+    # A customer's subject quoted back with the reference is not a price
+    assert guard.claims("Re: MS Angle का रेट [ENQ-2026-00012]") == []
+    assert guard.claims("Re: MS Plate ధర [ENQ-2026-00012]") == []
     ok = ("Thank you for your enquiry. Your reference is ENQ-2026-00001. Where should it be "
           "delivered (city and pincode)? By when do you need it? How much do you need?")
     assert guard.claims(ok) == []
