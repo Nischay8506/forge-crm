@@ -5,6 +5,15 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-13 (Day 6): nothing built; waiting on the M3 answers
+
+Nothing was built or changed in the code today. Waiting on Nischay: his answers to the M3 CPQ questions
+C1-C18 and whether his first customer keeps prices in ERPNext or Excel (nothing for M3 is built before
+them); "push" in the GitHub upload thread (its bundle is refreshed to include this entry). His PC was offline from the evening of 12 Oct; f66dcfe, df01860 and this entry were
+copied to it when it came back on 13 Oct.
+
+---
+
 ## 2026-10-12 (Day 5): M1 Enquiry built for email; M3 questions sent
 
 **Decisions (Nischay):** N1-N13 A and N15 A (06:01Z, 06:12Z); N14 "test only for emails and later will

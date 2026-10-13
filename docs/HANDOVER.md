@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-12
+Last updated: 2026-10-13
 
 ---
 
@@ -626,7 +626,7 @@ docs/                  this file, BUILD_LOG.md
 36. **Timers go through `app/sla/engine.py`**, on the "always" clock (the 15-minute first response) or
     the company's working calendar; escalation only tells people (as rule 24).
 
-## 6. Current state (end of 2026-10-12)
+## 6. Current state (end of 2026-10-13; nothing changed on 13 Oct)
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
 first module, **M1 Enquiry, is built for email (2026-10-12)**, and the **M3 CPQ questions** (C1-C18) are
