@@ -5,6 +5,70 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-14 (Day 7): M3 answers in; F3.1 configurator built; F3.2 groundwork built
+
+**Decisions (Nischay):** C1-C18 at 07:10Z: C1 B (build in the guide's order, one feature at a time:
+F3.1, F3.2, F3.3 ...), C2-C5 A, C6 "companies have their own, so a sample template for the
+demonstration", C7 A "with person approval included", C8 A "dependent on the type of product", C9 B,
+C10-C16 A, C17 B "we will modify it as per requirement", C18 A ("we don't have customers yet; a
+prototype that can be modified later"). Cards: "Keep public" for the GitHub repo (07:13Z), "Sample data"
+(07:27Z: a feature is done when its checks pass on sample data and Nischay has tried it on his PC;
+checks that need real use are marked "measure with the first customer"), "Start F3.2 now" (07:42Z:
+the cost engine is built while he tries F3.1; fixes from his try come first), "Answer each" (10:47Z) on
+taking all the K recommendations. K1-K9 at 12:50Z: K1 D (his own freight design, section 3 of the
+handover) and K2-K9 A; at 12:55Z he added K10-K13 (incomplete costs reviewed, BOM history kept and
+changes flagged, canonical units, rates and cost models managed by authorized people with history and
+audit) and chose a Decisions card for the K10 review (12:57Z). All recorded in section 3 of HANDOVER.md.
+
+**Done**
+- **63e34fb, F3.1 product configurator** (C4 A, migration 0013): each product family can have options
+  and rules (needs, rules out, only when). The rules are checked before saving: conflicts, options that
+  can never be chosen, optional attributes the rules always need, repeated rules and a variant-code
+  pattern that leaves an attribute out are refused with reasons. Each save is a new version that can't
+  be changed. "Configure" on an enquiry line offers only choices that still lead to a valid product, and
+  each greyed-out choice says which rule rules it out. A valid product gets a variant code
+  (FL-150-300-F316-RF). A new version marks configurations on open enquiries "configure again"; an
+  ERPNext item change marks those using the item "reprice recommended". Sample family: Flanges.
+- **fe7d159, F3.2 groundwork** (migration 0014):
+  - Quotes (C12 A, C14 A): "Start a quote" on an enquiry makes Q/2026-27/0001 R1 with the enquiry's
+    lines and configured products, valid 15 days. One quote per enquiry; changes are revisions (F3.7).
+    Draft lines, validity and the delivery place can be changed; a sent revision never changes. Costs
+    are shown with the `costs.view` permission (C17 B).
+  - Material and machine-hour rates that apply from a date and are never edited (C3 A). A correction
+    is a new row on the same date. Saving one lists the open quotes costed with the old rate, and
+    ERPNext workstations win over Forge's own machine rates.
+  - The formula checker for cost models (`app/cpq/formula.py`): exact decimal maths, Excel-like
+    `if()`, `lookup(table, keys...)`, and errors in words; never Python's eval.
+  - ERPNext workstations and submitted BOMs (items and operations) are read, off until a connection
+    turns them on. Quotes follow the surviving account on a merge.
+  - Screens: Quotes menu (list, one quote, Material rates, Machine-hour rates).
+- The F3.2 questions K1-K9 (`plans/Phase2_M3_F3.2_Cost_Questions.md`) and, after K1 D, the freight
+  follow-up G1-G7 (`plans/Phase2_M3_F3.2_Freight_Questions.md`), both in the Claude project files.
+- Tests: 27 new backend (291 in all, plus 3 that run only against a live ERPNext) and 6 new frontend
+  (37), all passing.
+  Browser checks as an admin on desktop and phone: the flanges template, a rule conflict caught, a
+  line configured; two material rates (one dated ahead) with history, a machine rate, a quote started
+  from an enquiry, lines changed and added, delivery place set.
+
+**Problems found and fixed**
+- The migration's backfill of sync flows for existing ERP connections inserted nothing, because row
+  security applies to the table owner too; it now runs with the system flag on.
+- New quotes referenced accounts without being registered for merges; `test_steward` caught it and
+  quotes now follow a merge (rule 9).
+- My reply to Nischay wrongly put the dealer check under "measure with the first customer"; it is
+  checked with the Phase 5 dealer portal, and the message was corrected.
+- The session hit its usage limit at 07:57Z and resumed at 10:22Z when Nischay wrote "continue".
+
+**Not done / next**
+- Nischay: try F3.1 on his PC (after this copy, `uv run alembic upgrade head` for 0013 and 0014,
+  then Enquiries → Setup → Product families → Flanges template, and "Configure" on a line); answer
+  G1-G7.
+- Claude: the cost engine with K2-K13 (cost models with tables, material cost with yield and scrap,
+  operations at machine-hour rates, factory overhead, packing, tooling as a one-time line, the source
+  order, "why this cost", rate-change alerts), then freight once G1-G7 are answered.
+
+---
+
 ## 2026-10-13 (Day 6): nothing built; waiting on the M3 answers
 
 Nothing was built or changed in the code today. Waiting on Nischay: his answers to the M3 CPQ questions

@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-13
+Last updated: 2026-10-14
 
 ---
 
@@ -12,14 +12,14 @@ Last updated: 2026-10-13
 
 | What | Where |
 |---|---|
-| This repository | `C:\Users\nisch\OneDrive\Desktop\CognitBotz\Forge Project\forge-crm` (decision 1A). Since 2026-10-12 also on GitHub, in the **private** repo [Nischay8506/forge-crm](https://github.com/Nischay8506/forge-crm), so a teammate can review it (section 3) |
+| This repository | `C:\Users\nisch\OneDrive\Desktop\CognitBotz\Forge Project\forge-crm` (decision 1A). Since 2026-10-12 also on GitHub, in the repo [Nischay8506/forge-crm](https://github.com/Nischay8506/forge-crm), so a teammate can review it. The repo is **public** by Nischay's choice since 2026-10-14 (section 3) |
 | Requirements (what to build) | `Forge Project\Forge_CRM_Requirements.txt`: 69 features, 6 phases. Ops (later): `Forge_Ops_Requirements.txt` |
 | Architecture | `Forge Project\Forge_CRM_Architecture_Blueprint.html` (7 sheets) |
 | UI designs | `Forge Project\design.html` (design tokens + 8 screens) |
 | Build guide (source of the requirements) | `Forge Project\Forge_CRM_Developer_Build_Guide.docx` |
 | Old prototype (reference only, never edit) | `Forge Project\CRM\CRM`. Review of it: `CRM_Code_Review.md` in the Claude project files |
 | Phase 1 plan: starting point and flow | `Phase1_Starting_Point_and_Flow.md` in the Claude project files (`plans/`) |
-| Each step's questions and the options Nischay picked | `plans/` in the Claude project files: `Step2_…` to `Step6_…`, `Phase2_M1_Enquiry_Questions.md` (N1-N15), `Phase2_M3_CPQ_Questions.md` (C1-C18, waiting for answers) |
+| Each step's questions and the options Nischay picked | `plans/` in the Claude project files: `Step2_…` to `Step6_…`, `Phase2_M1_Enquiry_Questions.md` (N1-N15), `Phase2_M3_CPQ_Questions.md` (C1-C18), `Phase2_M3_F3.2_Cost_Questions.md` (K1-K9), `Phase2_M3_F3.2_Freight_Questions.md` (G1-G7, waiting for answers) |
 
 The old prototype's `backend/.env` holds live keys. Do not copy it; use new keys in `backend/.env`.
 
@@ -45,7 +45,7 @@ Phase 2 (the money path), in order:
 | Module | What | Status |
 |---|---|---|
 | M1 | Enquiry & Lead Management (F1.1-F1.10, Design File frame 02) | **Built for email 2026-10-12** to N1-N15 and P1-P3 (section 3): F1.1, F1.4-F1.10. F1.2 (WhatsApp) and F1.3 (web form, marketplaces) are on the later list (N2 A, N14); F1.1's 95% check and scan reading wait for D3 and real samples (section 6) |
-| M3 | CPQ: configure, price, quote (F3.1-F3.9, frame 04) | **Questions C1-C18 sent 2026-10-12**, waiting for Nischay's answers. Nothing is built until he answers |
+| M3 | CPQ: configure, price, quote (F3.1-F3.9, frame 04) | Answered 2026-10-14 (C1-C18, K1-K9). Built one feature at a time in the guide's order (C1 B). **F3.1 configurator built 2026-10-14**, waiting for Nischay's try on his PC. **F3.2 cost engine in progress**: the quote record, dated rates, formula checker and ERPNext BOMs are built; the costing itself is next, and freight waits on G1-G7 |
 | M4 | Order, contract & ERP handoff (F4.1-F4.5) | Not started |
 
 Phase 1 is done when: all six F12 "Done When" checks pass, ERPNext syncs customers, items, orders
@@ -157,7 +157,25 @@ recommendation, and record the answer here.
 | P2 A | An enquiry that needs engineering gets a review step for the company's engineering role, with the lines, files and reasons and its own timer ("Review step") | 2026-10-12 |
 | P3 A | The automatic acknowledgement goes to standard and not-yet-checked enquiries; configurable, needs-engineering and no-fit enquiries get a draft for a person ("Standard + unchecked") | 2026-10-12 |
 | Decline only | A no-fit enquiry from a non-strategic account gets only the decline draft, not an acknowledgement draft too, so the customer gets one clear email (Nischay's card, 2026-10-12 09:01Z) | 2026-10-12 |
-Still open (section 7): the M3 questions C1-C18, D3 new LLM keys, D4 daily update time.
+| GitHub public | The GitHub repo is public by Nischay's choice ("push to git even though the repo is public", "Keep public" on the card). Pushes are fast-forwards of `main` from Claude's bundle after a scan for keys, and only when Nischay asks for a push | 2026-10-14 |
+| C1 B | M3 is built in the guide's order, one feature at a time, each finished before the next: F3.1 configurator, F3.2 cost engine, F3.3 pricing and floor, F3.4 discount approvals, F3.5 the quote document, F3.6 tracking and follow-up, F3.7 revisions, F3.8 engineer-to-order, F3.9 tenders. No thin path first | 2026-10-14 |
+| C2 A | A line's price comes from a valid customer-specific ERPNext price, else the item's ERPNext price-list rate, else cost-plus (the F3.2 cost at the family's target margin); then the tier discount, quantity breaks and the rep's ask. The floor (a minimum margin % per family) is checked per line and for the whole quote; a line whose cost isn't known goes to approval. Dealer prices wait for Phase 5 | 2026-10-14 |
+| C3 A | Costs: a rate card per family (cost per kg or per unit), material rates with dates, packing and a freight table, plus a full cost model per family (weight formulas, operations at machine-hour rates, tooling, overheads) that reads BOMs, routings and machine-hour rates from ERPNext where kept there. Both in F3.2 | 2026-10-14 |
+| C4 A | Configurator rules: needs, rules out, only when; Forge's own checker; a variant code per configuration; flanges as the sample family | 2026-10-14 |
+| C5 A | A "Discount approvals" screen with dated versions on the Step 5 inbox. Sample rules the company edits: off-list discount above 5% → sales manager; above 10% or below the family floor → sales manager then head of sales; quote above ₹25 lakh adds a director; longer payment terms than usual add finance; changed standard terms → head of sales. Deadline 4 working hours | 2026-10-14 |
+| C6 | "Companies have their own [quote template], so we will use a sample template for demonstration": one sample template now, each company's own later (the template is swappable per company) | 2026-10-14 |
+| C7 A | The cover note and headings in the customer's language, "with person approval included": a person approves the translation before sending | 2026-10-14 |
+| C8 A | GST "dependent on the type of product offered": the rate comes from the product (item tax template / HSN); CGST + SGST within the state, IGST across states | 2026-10-14 |
+| C9 B | The quote goes out as a PDF and a secure web link that records views, with an "Accept this quote" button | 2026-10-14 |
+| C10-C16 A | As recommended in `Phase2_M3_CPQ_Questions.md`. Among them: C11 A the Quote agent prepares and a person sends; C12 A quote numbers Q/2026-27/0001 per company and financial year, revisions R1, R2 on the same number, valid 15 days by default, rupees (other currencies at a dated rate frozen on the quote); C13 A a delivery period from a lead-time table per family, never a fixed date; C14 A a quote belongs to an enquiry and its account (a quote without an enquiry gets a "direct" enquiry), and sending it closes M1's quote timer | 2026-10-14 |
+| C17 B | "We will modify it as per requirement": everyone in sales sees costs. It is a permission (`costs.view`) so it can be changed per role | 2026-10-14 |
+| C18 A | "We don't have customers yet; we are building a prototype which can be modified later to the customers' needs": sample data only | 2026-10-14 |
+| Sample data | M1 and M3 features are done when their checks pass on sample data and Nischay has tried them on his PC; checks that need real use (reply times, win rates, real users) are marked "measure with the first customer" (card) | 2026-10-14 |
+| Start F3.2 now | The cost engine is built while Nischay tries the configurator; fixes from his try come first (card) | 2026-10-14 |
+| K1 D | Freight, in Nischay's words: "Hybrid logistics-zone mapping. Use India Post PIN and LGD state/district reference data; tenant-specific freight zones; exact ship-to/PIN/locality overrides, PIN clusters, district then state fallback; origin-plant and carrier-specific lanes; effective-dated rates per tonne, minimum charge and volumetric weight; conflict checks, manual review and immutable quote freight snapshots. Full-truck pricing may be added later." Details G1-G7 asked | 2026-10-14 |
+| K2-K9 A | ("remaining go with A"). K2: Ex-works and FOR destination for India, FOB, CIF and DAP for exports; freight only where the terms include it. K3: tooling as a separate one-time line, or spread over the quantity if the family says so. K4: yield % per material and a scrap credit at a dated scrap rate. K5: material rates typed in Forge per material and grade, ₹/kg with a date; ERPNext's last purchase and valuation rates shown for reference only. K6: operations × machine-hour rate (ERPNext workstations first), one factory overhead % per family on material + conversion, packing % or per unit; admin and selling overheads sit in the margin (F3.3). K7: a line's cost comes from the family's cost model, else the item's default ERPNext BOM and routing, else the family's rate card, else "not known" (it can be priced but goes to approval); the breakdown says which. K8: each cost model has its own tables, edited on screen and pasted from Excel, used as `lookup(table, keys...)`. K9: draft quotes recompute at once, sent open quotes get "cost changed: reprice recommended", the person who changed the rate sees the affected quotes, and each owner gets one email a day | 2026-10-14 |
+| K10-K13 A | Nischay's safeguards for costs (12:55Z). K10: missing or invalid cost components make the costing incomplete and need an authorized review. K11: ERPNext BOM and routing changes keep historical snapshots and flag the draft and open quotes they affect. K12: canonical units, validated conversions, and the source's original units kept. K13: only authorized people manage material rates and cost models, with version history and audit records (already so for rates). The review is a card in Decisions for people with `costs.manage` ("manage it as card in decision", 12:57Z); the quote waits for it | 2026-10-14 |
+Still open (section 7): the freight details G1-G7, D3 new LLM keys, D4 daily update time.
 
 ## 4. How to run it
 
@@ -327,7 +345,7 @@ Claude builds and runs the tests in its own cloud workspace, then copies the sou
 `git log` in this folder shows every step. Your machine needs `npm install` / `uv sync` after a copy.
 The bundle used for the copy is left at `.sync/forge-crm-sync.tgz` (git-ignored, overwritten each time).
 If you edit files here yourself, tell Claude before the next session so it starts from your version.
-Since 2026-10-12 the same history also goes to the private GitHub repo (section 1): Claude hands the new
+Since 2026-10-12 the same history also goes to the GitHub repo (section 1): Claude hands the new
 commits over as a git bundle and they are pushed as they are, never with a `.env` file or a key. A
 teammate works from a clone of that repo, with their own `backend/.env` and `frontend/.env` made from
 the `.env.example` files and their own keys (section 4).
@@ -355,8 +373,8 @@ backend/
                        audit (+retention, legal holds, reveal), privacy (erasure requests),
                        channels (messages, Test inbox, consent, channel and language settings),
                        enquiries (queue, one enquiry, lines, files, review, Other mail, Test
-                       mailbox, setup), public (the unsubscribe page and the mailbox sign-in
-                       return, no login)
+                       mailbox, setup), products (configurator, F3.1), quotes, costs (rates),
+                       public (the unsubscribe page and the mailbox sign-in return, no login)
     events/outbox.py   publish() + dispatch_batch() (transactional outbox)
     worker/            Celery app + tasks (outbox delivery every 2 s, CSV import, ERP tick every
                        60 s and the sync / reconcile runs it hands out, audit seal hourly,
@@ -452,6 +470,18 @@ backend/
       settings.py        each company's routing, timer, intake and scoring settings and defaults
       agent.py           the Enquiry Agent (default L2) and its tools: acknowledge, nudge, park,
                          merge, decline
+    cpq/               Phase 2 M3 (start here: configurator.py, then quotes.py):
+      configurator.py    options and rules (needs, rules out, only when), the checker that refuses
+                         conflicts and dead ends, the valid choices, variant codes (F3.1, C4 A)
+      products.py        each family's option model (a new version per save), configurations on
+                         enquiry lines, the "configure again" and "reprice recommended" marks
+      samples.py         the Flanges sample family
+      formula.py         the cost-model formula checker: exact decimals, if(), lookup(table, ...),
+                         errors in words; never Python's eval (F3.2)
+      rates.py           material and machine-hour rates with dates (never edited), the RateBook
+                         for one day (ERPNext workstations win), the open quotes a rate affects
+      quotes.py          quote numbers per financial year, starting a quote from an enquiry, a
+                         draft revision's lines (C12 A, C14 A)
     files/store.py     stored files (raw emails, attachments): encrypted, local folder now,
                        S3-compatible later (N9 A); rows never deleted, removal blanks the bytes
     sla/engine.py      the timer engine (F1.10): targets on an "always" or "working" clock,
@@ -485,7 +515,9 @@ backend/
                        mailboxes, inbound emails, enquiries and lines, history, product
                        families, settings, SLA timers, account owner, users' reports-to),
                        0011 unsure fields on lines, 0012 capability profiles, the check's
-                       stamps, scores, engineering reviews)
+                       stamps, scores, engineering reviews, 0013 product models and
+                       configurations, 0014 ERPNext workstations and BOMs, material and machine
+                       rates, cost models, quotes, revisions and lines)
   evals/duplicates.py  synthetic duplicate set and quality report (S4A)
   evals/policy_gate.py chaos test: seeded over-limit calls must all be stopped and escalated
   evals/enquiries.py   M1 test set: 200 synthetic emails and BOMs (EN, HI, TE, mixed) measured
@@ -523,6 +555,11 @@ frontend/
                        it", engineering review, acknowledgement), manual enquiry, Other mail,
                        Test mailbox, Setup (mailbox, owners, timers, product families, what we
                        make, scoring), AccountOwnerCard (account page)
+  src/features/products Configurator (on an enquiry line) and OptionsEditor (a family's options and
+                       rules, with the checker's problems shown live) (F3.1)
+  src/features/quotes  Quotes (M3): list, one quote (lines, cost per unit and "why this cost" for
+                       costs.view, validity and delivery place, revisions), Material rates and
+                       Machine-hour rates (RatesPage)
 infra/                 local Postgres + Redis (Docker); erpnext/ = a local ERPNext 15/16 to test with
 docs/                  this file, BUILD_LOG.md
 ```
@@ -625,14 +662,64 @@ docs/                  this file, BUILD_LOG.md
     (`test_erasing_a_contact_blanks_their_enquiry_emails_and_files`).
 36. **Timers go through `app/sla/engine.py`**, on the "always" clock (the 15-minute first response) or
     the company's working calendar; escalation only tells people (as rule 24).
+37. **Rates and cost models are never edited.** A new rate is a new row from a date (on the same date
+    the later row wins); a cost model change is a new version. The app role has no UPDATE or DELETE
+    on `material_rates`, `machine_rates` and `cost_models` (only `cost_models.current` can move), so
+    a quote's cost can always name the rate it used.
+38. **Formulas only through `app/cpq/formula.py`**: a whitelist of operators and functions with exact
+    decimals, never `eval`. `tests/test_quotes.py` checks that anything else is refused with a reason.
+39. **Costs are shown only with `costs.view`** (C17 B): `quotes.line_out()` leaves out the unit cost and
+    breakdown otherwise. A sent quote revision never changes (`quotes.must_be_draft()`).
 
-## 6. Current state (end of 2026-10-13; nothing changed on 13 Oct)
+## 6. Current state (end of 2026-10-14)
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
-first module, **M1 Enquiry, is built for email (2026-10-12)**, and the **M3 CPQ questions** (C1-C18) are
-waiting for Nischay's answers. Tests: 264 backend (plus 3 that run only against a live ERPNext) and 31
-frontend, all passing; every new screen was checked in a browser, on a desktop and at phone width (390 px).
-Nischay's PC needs `uv sync` and `uv run alembic upgrade head` (migrations 0010-0012) after the copy.
+first module, **M1 Enquiry, is built for email (2026-10-12)**. **M3 CPQ** is being built one feature at a
+time (C1 B): **F3.1 is built** and waits for Nischay's try, and **F3.2 is in progress**. Tests: 291
+backend (plus 3 that run only against a live ERPNext) and 37 frontend, all passing; every new screen was
+checked in a browser, on a desktop and at phone width (390 px). Nischay's PC needs
+`uv run alembic upgrade head` (migrations 0013 and 0014) after the copy, or enquiry pages fail.
+
+### Phase 2, M3 CPQ: F3.1 built, F3.2 in progress
+Built to C1-C18, "Sample data", "Start F3.2 now" and K1-K9 (section 3), in commits 63e34fb (F3.1) and
+fe7d159 (F3.2 groundwork).
+- **F3.1 configurator** (C4 A). Enquiries → Setup → Product families → a family's **Options and rules**:
+  attributes and options with "needs", "rules out" and "only when" rules and a variant-code pattern
+  (FL-{size}-{class}-{material}-{facing}). The checker refuses conflicts, options that can never be
+  chosen, optional attributes the rules always need, repeated rules and a pattern that leaves an
+  attribute out, each with a reason; every save is a new version. On an enquiry line, **Configure**
+  offers only choices that still lead to a valid product (a greyed-out choice says which rule rules it
+  out; the API refuses an invalid one too) and gives the variant code. A new version marks open
+  enquiries' configurations it no longer allows "configure again"; an ERPNext item change marks
+  configurations using it "reprice recommended". Sample family: the Flanges template (size, pressure
+  class, material, facing; e.g. Class 900 and above need a ring-type joint face). Done-When: checks pass
+  on sample data; waiting for Nischay's try on his PC ("Sample data").
+- **F3.2 so far.** Menu **Quotes**:
+  - **Quotes** list (Open, Mine, All) and **one quote** (Design File frame 04): number, revision,
+    status, customer, the enquiry it came from; the lines with quantity, and for `costs.view` the cost
+    per unit with "why this cost"; validity and the delivery place; revisions. "Start a quote" on an
+    enquiry makes Q/2026-27/0001 R1 from its lines and configurations, valid 15 days; the enquiry then
+    shows "Open quote Q/...". A sent revision never changes.
+  - **Material rates** and **Machine-hour rates**: each rate applies from a date and is never edited;
+    current, next change and history per material or machine; saving a rate lists the open quotes
+    costed with the old one. ERPNext workstations show here read-only and win over Forge's own rate.
+  - ERPNext **workstations** and submitted **BOMs** (items, operations) are read into Forge, off until
+    a connection turns those two flows on (the API user then also needs the Manufacturing User role).
+  - Not built yet: the costing itself (cost models with tables, material with yield and scrap,
+    operations, overhead, packing, tooling, the source order, recomputing and the rate-change alerts,
+    K2-K9 A), and freight (K1 D, details G1-G7). The cost breakdown shape the quote page shows is
+    provisional until then.
+
+Engineering defaults Claude chose inside C1-C18 (ask Nischay if one looks wrong):
+- One quote per enquiry; a second "Start a quote" is refused with the existing number, and changes are
+  revisions (F3.7). Quote lines are copied from the enquiry when the quote starts and then belong to
+  the quote.
+- Permissions `quotes.read`, `quotes.work`, `costs.view` (C17 B) and `costs.manage` (rates and cost
+  models). Roles get them on the Users page; nothing gives them out by default except full access.
+- Changing a line, the validity or the delivery place clears that line's or revision's cost, so it has
+  to be worked out again.
+- Material rate units: kg, m, nos, l, m2. A rate can apply from at most a year ahead.
+- The "Quote sent" button on an enquiry stays until F3.5 sends quotes from Forge.
 
 ### Phase 2, M1 Enquiry: built for email
 Built to N1-N15, P1-P3 and "Decline only" (section 3) in commits 613bdec (the email path and screens),
@@ -1069,12 +1156,21 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 
 ## 7. Next step and open questions
 
-**Now: Nischay answers the M3 CPQ questions.** C1-C18 are in `plans/Phase2_M3_CPQ_Questions.md` in the
-Claude project files, each with a recommended A (answer like "C1 A, C2 A, ..."), plus one question:
-does his first customer keep prices in ERPNext price lists or in Excel? Nothing for M3 is built until he
-answers. Then the first things built are the ones every answer needs: the Quote record with its
-revisions (unchangeable once made), the quote events (M2 needs `quote.sent`) and the Quote Builder
-screen (Design File frame 04).
+**Now: Claude builds the F3.2 cost engine** to K2-K9 A (section 3): cost models per family with their
+own tables (pasted from Excel), material cost with yield and a dated scrap credit, operations at
+machine-hour rates, the factory overhead %, packing, tooling as a one-time line, the source order
+(cost model → ERPNext BOM and routing → rate card → "not known"), "why this cost", recomputing draft
+quotes and the rate-change alerts with the owners' daily email, with Nischay's K10-K13: incomplete costs
+reviewed, BOM versions kept and changes flagged, canonical units with checked conversions, cost models
+versioned and audited. **Freight** (K1 D) follows once Nischay
+answers **G1-G7** in `plans/Phase2_M3_F3.2_Freight_Questions.md` in the Claude project files (reference
+data loading, which mapping wins, origin plant, carriers, manual review, export terms, shipments).
+Then F3.3 pricing and the floor (C2 A).
+
+**Nischay's try of F3.1 on his PC** ("Sample data"): after the copy, `uv run alembic upgrade head`
+(0013, 0014), restart the API and worker, then Enquiries → Setup → Product families → "+ Flanges" →
+"Options and rules", and "Configure" on an enquiry line. Fixes from his try come before more F3.2 work
+("Start F3.2 now").
 
 **M1 on his PC:** after the copy, `uv sync` and `uv run alembic upgrade head` (0010-0012), restart the
 API, worker and beat, then Enquiries → Setup (templates, the sample button under What we make) and
@@ -1123,7 +1219,7 @@ existing lines, F1.8; an enquiry timer across a holiday, F1.10) were fixed the s
   periods per record category and applicable law; record who confirmed it on the retention settings screen.
 
 Open questions for Nischay:
-- **M3 C1-C18** (above), and whether his first customer keeps prices in ERPNext or Excel.
+- **G1-G7** freight details (above).
 - **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
   rotated, never copied). Meaning match (S2A) and AI code suggestions (V3) start working once set,
   and so do "Draft it for me" (Gemini) and dictation (Groq) from Step 6; F12.5's check 1 needs them.
