@@ -5,7 +5,7 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
-## 2026-10-14 (Day 7): M3 answers in; F3.1 configurator built; F3.2 groundwork built
+## 2026-10-14 (Day 7): M3 answers in; F3.1 configurator built; F3.2 cost engine built (freight to come)
 
 **Decisions (Nischay):** C1-C18 at 07:10Z: C1 B (build in the guide's order, one feature at a time:
 F3.1, F3.2, F3.3 ...), C2-C5 A, C6 "companies have their own, so a sample template for the
@@ -42,13 +42,48 @@ audit) and chose a Decisions card for the K10 review (12:57Z). All recorded in s
   - ERPNext workstations and submitted BOMs (items and operations) are read, off until a connection
     turns them on. Quotes follow the surviving account on a merge.
   - Screens: Quotes menu (list, one quote, Material rates, Machine-hour rates).
+- **2adb0a2, F3.2 cost engine** (K2-K13 A, migration 0015), built in the evening after the notes
+  above were first written:
+  - **Units (K12 A)**, `app/cpq/units.py`: canonical units (kg, m, m², m³, nos, hour) and a checked
+    conversion table (tonne, quintal, g, mm, ft, inch, litre, sq ft, minute, ...; not "ton", which
+    differs between the US and the UK). A material rate can be typed in any of them;
+    Forge keeps the rate as typed next to the canonical one (₹62,000 per tonne is kept and costs at
+    ₹62/kg). An unknown unit or conversion makes the cost incomplete.
+  - **Cost models (K6 A, K8 A)**, `app/cpq/costmodel.py`: per family, named values (e.g. the finished
+    weight from a pasted table), materials with a quantity formula, operations in minutes on a
+    machine, tooling (one-time or spread over the quantity, K3 A), the factory overhead % on material
+    + conversion, packing as a % or per unit, the packed weight and volume, and a rate card (cost per
+    kg or unit). Saving checks every configuration the family allows (593 for the sample flanges)
+    and refuses the model with reasons if any fails; each save is a new version with an audit record
+    (K13 A). Screen: Quotes → Cost models, with tables pasted from Excel and a "try it" preview.
+  - **The calculation (K4, K6, K7 A)**, `app/cpq/costing.py`: material = bought quantity (net × 100 /
+    yield) × rate, less the scrap credit; conversion = minutes / 60 × the machine-hour rate (ERPNext
+    workstations first); then overhead, packing and tooling. The source order is the family's cost
+    model, then the item's default ERPNext BOM (sub-assemblies opened up, loops caught), then the
+    rate card, then "not known". Each line keeps its breakdown ("why this cost"): the parts, the
+    rates with their dates, the BOM versions, the unit conversions.
+  - **Review cards (K10 A, "manage it as card in decision")**, `app/cpq/agent.py`: the Cost Engine
+    agent puts an incomplete or unknown cost on a Decisions card for people with `costs.manage`. They
+    use the cost as worked out, counter with a unit cost, or send it back. A card names exactly the
+    cost it reviewed; if the cost changes, the card closes and a new one asks again.
+  - **Changes (K9 A, K11 A)**: a new rate, a cost model save, an ERPNext BOM change or the hourly
+    check (for rates dated ahead) works out draft quotes again and marks sent quotes "reprice
+    recommended" with the reason. Every BOM version Forge reads is kept (`erp_bom_versions`). The
+    person saving a rate sees which quotes it changed; each quote owner gets one email a day at
+    09:00 IST. Quotes list: a "Reprice recommended" view.
+  - **Sample (C18 A)**: "Use the sample" on the Flanges cost model adds sample rates (marked "Sample
+    rate") and a model: forging weight by size and class, turning, drilling, a ring groove and a ring
+    gauge for RTJ faces, 12% overhead, 2% packing. 150 mm Class 300 F316 RF works out at ₹10,557.59.
 - The F3.2 questions K1-K9 (`plans/Phase2_M3_F3.2_Cost_Questions.md`) and, after K1 D, the freight
   follow-up G1-G7 (`plans/Phase2_M3_F3.2_Freight_Questions.md`), both in the Claude project files.
-- Tests: 27 new backend (291 in all, plus 3 that run only against a live ERPNext) and 6 new frontend
-  (37), all passing.
+- Tests: 37 new backend (301 in all, plus 3 that run only against a live ERPNext) and 11 new frontend
+  (42), all passing.
   Browser checks as an admin on desktop and phone: the flanges template, a rule conflict caught, a
   line configured; two material rates (one dated ahead) with history, a machine rate, a quote started
   from an enquiry, lines changed and added, delivery place set.
+  For the cost engine: the sample Flanges model started, the weight table shown, a bad paste reported,
+  a quote line costed at ₹10,557.59, a review card for a line nothing covers, a rate typed per tonne
+  shown per kg with yield and scrap.
 
 **Problems found and fixed**
 - The migration's backfill of sync flows for existing ERP connections inserted nothing, because row
@@ -58,14 +93,18 @@ audit) and chose a Decisions card for the K10 review (12:57Z). All recorded in s
 - My reply to Nischay wrongly put the dealer check under "measure with the first customer"; it is
   checked with the Phase 5 dealer portal, and the message was corrected.
 - The session hit its usage limit at 07:57Z and resumed at 10:22Z when Nischay wrote "continue".
+- Cost engine: tiny quantities showed as "0 m³" (now shown to 4 significant figures); the agents
+  screen test assumed the Sandbox agent came first (agents sort by name, so "Cost Engine" now does).
+  The session hit its usage limit again at 13:35Z and resumed at 15:23Z.
 
 **Not done / next**
-- Nischay: try F3.1 on his PC (after this copy, `uv run alembic upgrade head` for 0013 and 0014,
-  then Enquiries → Setup → Product families → Flanges template, and "Configure" on a line); answer
-  G1-G7.
-- Claude: the cost engine with K2-K13 (cost models with tables, material cost with yield and scrap,
-  operations at machine-hour rates, factory overhead, packing, tooling as a one-time line, the source
-  order, "why this cost", rate-change alerts), then freight once G1-G7 are answered.
+- Nischay: after this copy, `uv run alembic upgrade head` (0013 to 0015) and restart the API, worker
+  and beat. Try F3.1 (Enquiries → Setup → Product families → Flanges template, "Configure" on a line)
+  and the cost engine (Quotes → Cost models → Flanges → "Use the sample", then "Work out costs" on a
+  quote). Answer G1-G7 (freight) and J1-J4 (`plans/Phase2_M3_F3.2_Cost_Defaults_Questions.md`: yield
+  on BOMs, sub-assemblies, overhead for items without a family, the email time).
+- Claude: fixes from his tries first; then freight once G1-G7 are answered, and any J changes; then
+  F3.3 pricing and the floor.
 
 ---
 
