@@ -23,6 +23,7 @@ from app.approvals.calendar import calendar
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import AppError, NotFound
 from app.core.permissions import has_permission
+from app.cpq import products
 from app.db import get_db
 from app.enquiries import (
     ack,
@@ -46,6 +47,7 @@ from app.enquiries.mail.base import MailError
 from app.files import store
 from app.models import (
     Account,
+    Configuration,
     Contact,
     Enquiry,
     EnquiryAssignment,
@@ -217,8 +219,9 @@ async def counts(current: CurrentUser = Depends(READ),
 
 # One enquiry -----------------------------------------------------------------------
 
-def _line(ln: EnquiryLine) -> dict[str, Any]:
+def _line(ln: EnquiryLine, cfg: Configuration | None = None) -> dict[str, Any]:
     return {"id": str(ln.id), "position": ln.position, "item_ref": ln.item_ref,
+            "configuration": products.config_out(cfg),
             "description": ln.description, "material": ln.material,
             "dimensions": ln.dimensions, "qty": ln.qty, "unit": ln.unit,
             "standard": ln.standard, "notes": ln.notes, "confidence": ln.confidence,
@@ -227,6 +230,30 @@ def _line(ln: EnquiryLine) -> dict[str, Any]:
             "make_reasons": ln.make_reasons, "source": ln.source, "source_ref": ln.source_ref,
             "original": ln.original, "corrected_by": ln.corrected_by,
             "corrected_at": ln.corrected_at}
+
+
+async def _line_products(db: AsyncSession, lines: list[EnquiryLine],
+                         fallback: ProductFamily | None
+                         ) -> tuple[dict[Any, Configuration], dict[uuid.UUID, dict[str, Any]]]:
+    """Each line's configured product (F3.1) and the family it belongs to: the family
+    it was configured in, else the one its words point to (as in F1.6)."""
+    ids = [ln.configuration_id for ln in lines if ln.configuration_id]
+    cfgs = {c.id: c for c in await db.scalars(
+        select(Configuration).where(Configuration.id.in_(ids)))} if ids else {}
+    fams = await families.active(db)
+    by_id = {f.id: f for f in fams}
+    models = await products.with_models(db)
+    out: dict[uuid.UUID, dict[str, Any]] = {}
+    for ln in lines:
+        cfg = cfgs.get(ln.configuration_id)
+        f = by_id.get(cfg.family_id) if cfg else None
+        if f is None:
+            text = " ".join(x for x in (ln.description, ln.dimensions, ln.material,
+                                        ln.standard, ln.notes) if x)
+            f = families.match(text, fams) or fallback
+        if f is not None:
+            out[ln.id] = {"id": str(f.id), "name": f.name, "has_options": f.id in models}
+    return cfgs, out
 
 
 def _email(row: InboundEmail, full: bool = True) -> dict[str, Any]:
@@ -274,6 +301,7 @@ async def _detail(db: AsyncSession, e: Enquiry, current: CurrentUser) -> dict[st
     into = await db.get(Enquiry, e.merged_into_id) if e.merged_into_id else None
     p = current.permissions
     may_work = has_permission(p, "enquiries.work")
+    cfgs, line_family = await _line_products(db, lines, family)
     return {
         **row, "customer": e.customer, "details": e.details, "questions": e.questions,
         "account": {"id": str(account.id), "name": account.name, "tier": account.tier,
@@ -284,7 +312,9 @@ async def _detail(db: AsyncSession, e: Enquiry, current: CurrentUser) -> dict[st
         "product_family": {"id": str(family.id), "name": family.name} if family else None,
         "checklist": [{"key": i["key"], "label": i.get("label"), "required": i.get("required")}
                       for i in items],
-        "lines": [{**_line(ln), "from_ref": None if ln.enquiry_id == e.id else
+        "lines": [{**_line(ln, cfgs.get(ln.configuration_id)),
+                   "family": line_family.get(ln.id),
+                   "from_ref": None if ln.enquiry_id == e.id else
                    next((m.ref for m in merged_in if m.id == ln.enquiry_id), None)}
                   for ln in lines],
         "merged_in": [{"id": str(m.id), "ref": m.ref, "merged_at": m.merged_at,
@@ -1046,6 +1076,7 @@ async def create_family(body: FamilyIn, current: CurrentUser = Depends(MANAGE),
                         db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     data = {k: v for k, v in body.model_dump().items() if v is not None and k != "template"}
     f = await families.create(db, current.tenant_id, data, _actor(current), body.template)
+    await products.add_sample(db, f, _actor(current))  # flanges come with sample options
     return families.out(f)
 
 

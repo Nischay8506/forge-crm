@@ -1,12 +1,15 @@
 import { useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { api, errorMessage } from "@/config/api"
+import { api, errorMessage, errorProblems } from "@/config/api"
 import { Button } from "@/components/ui/Button"
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Field"
 import { Empty } from "@/components/ui/States"
 import { Tag } from "@/components/ui/Tag"
+import { hasPermission } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
+import { usePermissions } from "@/stores/authStore"
+import { Configurator } from "@/features/products/Configurator"
 import { MAKE_TONE, qtyText } from "./labels"
 import type { EnquiryDetail, Line } from "./types"
 
@@ -52,6 +55,8 @@ export function LinesCard({ e }: { e: EnquiryDetail }) {
   const [draft, setDraft] = useState<Draft>(empty)
   const [err, setErr] = useState<string | null>(null)
   const may = e.may.work && !["closed", "merged"].includes(e.status)
+  const canConfigure = may && hasPermission(usePermissions(), "products.configure")
+  const [configuring, setConfiguring] = useState<string | null>(null)
   const done = () => {
     setEditing(null)
     setErr(null)
@@ -74,7 +79,16 @@ export function LinesCard({ e }: { e: EnquiryDetail }) {
     onSuccess: done,
     onError: (x) => setErr(errorMessage(x, "Could not remove the line")),
   })
-  const start = (id: string | "new", d: Draft) => { setEditing(id); setDraft(d); setErr(null) }
+  const configure = useMutation({
+    mutationFn: async ({ line, values }: { line: Line; values: Record<string, string> }) =>
+      api.post("/products/configurations", { family_id: line.family?.id, values, enquiry_line_id: line.id }),
+    onSuccess: () => { setConfiguring(null); done() },
+  })
+  const configError = configure.error
+    ? (errorProblems(configure.error).join("; ") || errorMessage(configure.error, "Could not save the configuration"))
+    : null
+  const openConfigurator = (id: string | null) => { configure.reset(); setConfiguring(id) }
+  const start = (id: string | "new", d: Draft) => { setEditing(id); setDraft(d); setErr(null); setConfiguring(null) }
   const set = (k: keyof Draft) => (ev: React.ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, [k]: ev.target.value })
 
   const form = (
@@ -137,6 +151,13 @@ export function LinesCard({ e }: { e: EnquiryDetail }) {
                           {l.make_reasons.filter((r) => !r.endsWith(": needs engineering") && !r.endsWith(": configurable")).join("; ")}
                         </div>
                       )}
+                      {l.configuration && (
+                        <div className="mt-1 text-[12px]">
+                          <span className="font-mono font-semibold text-ink-900">{l.configuration.variant_code}</span>
+                          <span className="text-ink-500"> · {l.configuration.labels.map((x) => x.text).join(" · ")}</span>
+                          {l.configuration.reprice_reason && <div className="text-amber-600">{l.configuration.reprice_reason}</div>}
+                        </div>
+                      )}
                       {l.from_ref && <div className="text-[11.5px] text-ink-300">from {l.from_ref}</div>}
                     </td>
                     <td className="py-2 pr-2 text-ink-700">
@@ -157,6 +178,11 @@ export function LinesCard({ e }: { e: EnquiryDetail }) {
                       )}
                     </td>
                     <td className="py-2 text-right whitespace-nowrap">
+                      {canConfigure && editing === null && configuring === null && !l.from_ref && l.family?.has_options && (
+                        <button type="button" className="text-[12px] text-teal-600 hover:underline mr-2" onClick={() => openConfigurator(l.id)}>
+                          {l.configuration ? "Change configuration" : "Configure"}
+                        </button>
+                      )}
                       {may && editing === null && !l.from_ref && (
                         <>
                           <button type="button" className="text-[12px] text-teal-600 hover:underline mr-2" onClick={() => start(l.id, toDraft(l))}>Correct</button>
@@ -172,6 +198,20 @@ export function LinesCard({ e }: { e: EnquiryDetail }) {
           </div>
         )}
         {editing === "new" && form}
+        {configuring && (() => {
+          const l = e.lines.find((x) => x.id === configuring)
+          if (!l?.family) return null
+          return (
+            <div className="space-y-1">
+              <p className="text-[12.5px] text-ink-500">Line {l.item_ref ?? e.lines.indexOf(l) + 1}: {l.description}</p>
+              <Configurator familyId={l.family.id}
+                initial={l.configuration?.family_id === l.family.id ? l.configuration.values : undefined}
+                busy={configure.isPending} error={configError}
+                onUse={(values) => configure.mutate({ line: l, values })}
+                onCancel={() => openConfigurator(null)} />
+            </div>
+          )
+        })()}
         {err && editing === null && <p className="text-red-500 text-[12.5px]">{err}</p>}
       </div>
     </Card>

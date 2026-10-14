@@ -214,6 +214,9 @@ class EnquiryLine(IdMixin, TenantMixin, Base):
     unsure: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     make_ability: Mapped[str | None] = mapped_column(String(10))
     make_reasons: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    # The configured product, for a line in a family with options (F3.1)
+    configuration_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDCol, ForeignKey("configurations.id"))
     source: Mapped[str] = mapped_column(String(12), nullable=False)  # email|reply|person|attachment
     source_ref: Mapped[str | None] = mapped_column(String(100))
     original: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

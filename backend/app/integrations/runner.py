@@ -149,6 +149,15 @@ async def _finish(tenant_id: uuid.UUID, flow_id: uuid.UUID, run_id: uuid.UUID,
             details["linking"] = await linking.process_changed(
                 s, conn, changed[Entity.customer], trigger=f"sync:{run.kind}")
             run.details = dict(details)
+        if entity == Entity.item and changed[Entity.item]:
+            # F3.1: configurations whose options point to a changed item get "reprice
+            # recommended" (the ECN flag).
+            from app.cpq import products
+
+            marked = await products.items_changed(s, changed[Entity.item])
+            if marked:
+                details["reprice_flagged"] = marked
+                run.details = dict(details)
         if any(changed.values()):
             await mapping.discover(s, conn, entity)
         await sync_dead_letter_task(s, flow, conn)

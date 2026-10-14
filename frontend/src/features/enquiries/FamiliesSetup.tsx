@@ -6,6 +6,10 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Field, Input, Select } from "@/components/ui/Field"
 import { Loading } from "@/components/ui/States"
 import { Tag } from "@/components/ui/Tag"
+import { hasPermission } from "@/lib/permissions"
+import { usePermissions } from "@/stores/authStore"
+import { useProductFamilies } from "@/features/products/hooks"
+import { OptionsEditor } from "@/features/products/OptionsEditor"
 import { useFamilies } from "./hooks"
 import { MAKE_LABELS, MAKE_TONE, qtyText } from "./labels"
 import type { ChecklistItem, Family, MakeAbility } from "./types"
@@ -35,9 +39,17 @@ export function FamiliesSetup({ canManage }: { canManage: boolean }) {
   const qc = useQueryClient()
   const { data, isLoading } = useFamilies()
   const [editing, setEditing] = useState<string | null>(null)
+  const [optionsOf, setOptionsOf] = useState<string | null>(null)
+  const perms = usePermissions()
+  const seeOptions = hasPermission(perms, "products.configure")
+  const manageOptions = hasPermission(perms, "products.manage")
+  const summaries = useProductFamilies(seeOptions).data?.families
   const add = useMutation({
     mutationFn: async (template: string) => (await api.post<Family>("/enquiries/setup/families", { template })).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["enquiries", "families"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["enquiries", "families"] })
+      qc.invalidateQueries({ queryKey: ["products"] })
+    },
   })
   if (isLoading || !data) return <Loading />
   const used = new Set(data.families.map((f) => f.template))
@@ -65,9 +77,23 @@ export function FamiliesSetup({ canManage }: { canManage: boolean }) {
               <span className="font-semibold text-ink-900">{f.name}</span>
               <Tag variant={MAKE_TONE[f.make_ability]} title={MAKE_HINTS[f.make_ability]}>{MAKE_LABELS[f.make_ability]}</Tag>
               {!f.active && <Tag>Not used</Tag>}
+              {(() => {
+                const o = summaries?.find((x) => x.id === f.id)?.options
+                return o ? <Tag variant="teal" title={`Variant code ${o.code_pattern}`}>{o.attributes} options · {o.rules} rules</Tag> : null
+              })()}
               <span className="flex-1" />
+              {seeOptions && f.active && (
+                <Button size="sm" variant="ghost" aria-expanded={optionsOf === f.id} onClick={() => setOptionsOf(optionsOf === f.id ? null : f.id)}>
+                  {optionsOf === f.id ? "Hide options" : "Options and rules"}
+                </Button>
+              )}
               {canManage && <Button size="sm" variant="ghost" onClick={() => setEditing(f.id)}>Edit</Button>}
             </div>
+            {optionsOf === f.id && (
+              <div className="rounded-md border border-line p-3">
+                <OptionsEditor familyId={f.id} canManage={manageOptions} />
+              </div>
+            )}
             <p className="text-ink-500"><span className="text-ink-700">Words:</span> {f.keywords.join(", ") || "–"}</p>
             {(f.moq || f.sweet_spot) && (
               <p className="text-ink-500">

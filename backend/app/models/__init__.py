@@ -32,6 +32,7 @@ from app.models.channels import (
     MessageEvent,
     ToneGuide,
 )
+from app.models.cpq import Configuration, ProductModel
 from app.models.enquiries import (
     CapabilityProfile,
     Enquiry,
@@ -131,6 +132,7 @@ __all__ = [
     "CodeMapHistory",
     "ErpConnection",
     "ErpCustomer",
+    "Configuration",
     "ErpInvoice",
     "ErpItem",
     "ErpOrder",
@@ -145,6 +147,7 @@ __all__ = [
     "SyncRun",
     "LlmCall",
     "OutboxEvent",
+    "ProductModel",
     "Role",
     "Tenant",
     "TenantLlmBudget",

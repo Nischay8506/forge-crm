@@ -75,6 +75,11 @@ describe("enquiry labels", () => {
 
   it("tells the check, the review and the score in words", () => {
     const at = "2026-10-12T10:00:00Z"
+    expect(eventText({ kind: "line_configured", actor: "user:x", actor_name: "", at,
+      detail: { line: 1, family: "Flanges", variant_code: "FL-150-300-F316-RF" } })).toBe("Line 1 configured: FL-150-300-F316-RF (Flanges)")
+    expect(eventText({ kind: "line_reprice", actor: "system:forge", actor_name: "", at,
+      detail: { line: 2, reason: "ERP item RM-F316 changed on 14 Oct 2026: reprice recommended" } }))
+      .toBe("Line 2: ERP item RM-F316 changed on 14 Oct 2026: reprice recommended")
     expect(eventText({ kind: "checked", actor: "agent:enquiry", actor_name: "", at,
       detail: { make_ability: "eto", source: "model" } })).toBe("Can we make it: Needs engineering (with the AI)")
     expect(eventText({ kind: "review_done", actor: "user:x", actor_name: "", at,

@@ -93,6 +93,10 @@ class FakeERPNext(httpx.AsyncBaseTransport):
         self._clock += timedelta(seconds=seconds)
         return self.local(self._clock)
 
+    def catch_up(self) -> None:
+        """Move the fake clock to now, for changes compared with Forge's own clock."""
+        self._clock = max(self._clock, datetime.now(UTC))
+
     def local(self, at: datetime) -> str:
         local = at.astimezone(self.tz).replace(tzinfo=None)
         return local.isoformat(sep=" ", timespec="microseconds")

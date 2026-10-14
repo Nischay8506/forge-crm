@@ -1,6 +1,7 @@
 /** Shapes of the M1 Enquiry API (F1.1, F1.4-F1.10).
  *  Mirrors backend app/api/v1/enquiries.py. */
 import type { MessageView } from "@/features/messages/types"
+import type { Configuration } from "@/features/products/types"
 
 export type EnquiryStatus = "new" | "open" | "waiting_customer" | "parked" | "closed" | "merged"
 
@@ -99,6 +100,9 @@ export interface Line {
   corrected_by: string | null
   corrected_at: string | null
   from_ref: string | null
+  /** The configured product (F3.1), and the family the line belongs to. */
+  configuration: Configuration | null
+  family: { id: string; name: string; has_options: boolean } | null
 }
 
 export interface Attachment {

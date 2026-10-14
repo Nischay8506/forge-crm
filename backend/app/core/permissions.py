@@ -52,6 +52,10 @@ PERMISSIONS: dict[str, str] = {
     "enquiries.assign": "Give an enquiry to someone else (with a reason)",
     "enquiries.manage": "Connect the sales mailbox and set routing, timers, product families "
                         "and who takes enquiries",
+    # Phase 2, M3 CPQ (F3.1-F3.9)
+    "products.configure": "Use the product configurator and see each family's options and "
+                          "rules",
+    "products.manage": "Set up a product family's options, rules and variant code pattern",
 }
 
 ALL = "*"

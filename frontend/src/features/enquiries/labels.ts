@@ -220,6 +220,8 @@ export function eventText(ev: EnquiryEvent, names: Record<string, string> = {}):
     case "line_added": return "A line was added"
     case "line_corrected": return `A line was corrected${Array.isArray(d.fields) ? ` (${d.fields.join(", ")})` : ""}`
     case "line_removed": return `A line was removed${d.description ? `: ${str(d.description)}` : ""}`
+    case "line_configured": return `Line ${String(d.line ?? "")} configured: ${str(d.variant_code)}${d.family ? ` (${str(d.family)})` : ""}`
+    case "line_reprice": return `Line ${String(d.line ?? "")}: ${str(d.reason)}`
     case "customer_added": return "The sender was added to contacts"
     case "received_how": return `Received by ${str(d.how)}`
     case "checked": {

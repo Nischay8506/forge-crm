@@ -145,6 +145,38 @@ TEMPLATES: dict[str, dict[str, Any]] = {
             WHEN, LOCATION,
         ],
     },
+    # F3.1 (C4 A): the sample configurable family; it comes with sample options and
+    # rules (app/cpq/samples.py) that the company edits.
+    "flanges": {
+        "name": "Flanges",
+        "make_ability": "cto",
+        "keywords": ["flange", "flanges", "weld neck", "slip on", "blind flange", "wnrf",
+                     "sorf", "rtj", "raised face", "a105", "f304", "f316", "lf2",
+                     "class 150", "class 300", "class 600", "pn16", "ansi b16.5", "asme b16.5"],
+        "checklist": [
+            _q("size", "Size",
+               "Which size do you need (nominal bore, or in inches)?",
+               "आपको कौन सा साइज़ चाहिए (नॉमिनल बोर या इंच में)?",
+               "మీకు ఏ సైజు కావాలి (నామినల్ బోర్ లేదా అంగుళాల్లో)?"),
+            _q("pressure_class", "Pressure class",
+               "Which pressure class do you need (for example Class 150 or 300)?",
+               "आपको कौन सी प्रेशर क्लास चाहिए (जैसे Class 150 या 300)?",
+               "మీకు ఏ ప్రెషర్ క్లాస్ కావాలి (ఉదాహరణకు Class 150 లేదా 300)?"),
+            _q("grade", "Material",
+               "Which material do you need (for example ASTM A105 or A182 F316)?",
+               "आपको कौन सा मटेरियल चाहिए (जैसे ASTM A105 या A182 F316)?",
+               "మీకు ఏ మెటీరియల్ కావాలి (ఉదాహరణకు ASTM A105 లేదా A182 F316)?"),
+            _q("facing", "Facing",
+               "Which facing do you need: raised face, flat face or ring-type joint?",
+               "आपको कौन सा फेसिंग चाहिए: रेज़्ड फेस, फ्लैट फेस या रिंग-टाइप जॉइंट?",
+               "మీకు ఏ ఫేసింగ్ కావాలి: రెయిజ్డ్ ఫేస్, ఫ్లాట్ ఫేస్ లేదా రింగ్-టైప్ జాయింట్?"),
+            _q("qty", "Quantity",
+               "How many pieces do you need?",
+               "आपको कितने पीस चाहिए?",
+               "మీకు ఎన్ని పీస్‌లు కావాలి?"),
+            WHEN, LOCATION,
+        ],
+    },
 }
 
 # When no family fits the enquiry.
