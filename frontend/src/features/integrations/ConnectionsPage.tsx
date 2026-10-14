@@ -83,7 +83,7 @@ export function ConnectionsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-[12.5px] text-ink-500 max-w-[720px]">
-          Forge reads customers, items, prices, orders, invoices, payments and stock from each ERP every few
+          Forge reads customers, items, prices, orders, invoices, payments, stock, workstations and BOMs from each ERP every few
           minutes, checks the login every minute and compares everything once a night. Problems show here and in
           Decisions.
         </p>

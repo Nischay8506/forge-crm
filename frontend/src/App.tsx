@@ -53,6 +53,10 @@ import { OtherMailPage } from '@/features/enquiries/OtherMailPage'
 import { QueuePage } from '@/features/enquiries/QueuePage'
 import { SetupPage } from '@/features/enquiries/SetupPage'
 import { TestMailboxPage } from '@/features/enquiries/TestMailboxPage'
+import { QuoteDetailPage } from '@/features/quotes/QuoteDetailPage'
+import { QuotesLayout } from '@/features/quotes/QuotesLayout'
+import { QuotesPage } from '@/features/quotes/QuotesPage'
+import { MachineRatesPage, MaterialRatesPage } from '@/features/quotes/RatesPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -79,6 +83,16 @@ const router = createBrowserRouter([
       },
       { path: 'enquiries/new', element: <ManualEnquiryPage /> },
       { path: 'enquiries/:id', element: <EnquiryDetailPage /> },
+      {
+        path: 'quotes',
+        element: <QuotesLayout />,
+        children: [
+          { index: true, element: <QuotesPage /> },
+          { path: 'materials', element: <MaterialRatesPage /> },
+          { path: 'machines', element: <MachineRatesPage /> },
+        ],
+      },
+      { path: 'quotes/:id', element: <QuoteDetailPage /> },
       { path: 'accounts', element: <AccountsPage /> },
       { path: 'accounts/new', element: <AccountFormPage /> },
       { path: 'accounts/:id', element: <AccountDetailPage /> },

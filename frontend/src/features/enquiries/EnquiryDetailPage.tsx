@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { api, errorMessage } from "@/config/api"
 import { Button } from "@/components/ui/Button"
@@ -58,6 +58,15 @@ function Detail({ e }: { e: EnquiryDetail }) {
   const check = useMutation({
     mutationFn: async () => (await api.patch<EnquiryDetail>(`/enquiries/${e.id}`, { checked: true })).data,
     onSuccess: (data) => { qc.setQueryData(["enquiry", e.id], data); qc.invalidateQueries({ queryKey: ["enquiries"] }) },
+  })
+  const navigate = useNavigate()
+  const startQuote = useMutation({
+    mutationFn: async () => (await api.post<{ id: string }>("/quotes", { enquiry_id: e.id })).data,
+    onSuccess: (q) => {
+      qc.invalidateQueries({ queryKey: ["enquiry", e.id] })
+      qc.invalidateQueries({ queryKey: ["quotes"] })
+      navigate(`/quotes/${q.id}`)
+    },
   })
   const open = ["new", "open", "waiting_customer", "parked"].includes(e.status)
   const acked = e.events.some((ev) => ev.kind === "acknowledged")
@@ -122,12 +131,21 @@ function Detail({ e }: { e: EnquiryDetail }) {
 
       {act.error && <p role="alert" className="text-red-500 text-[13px]">{errorMessage(act.error, "That did not work")}</p>}
       {check.error && <p role="alert" className="text-red-500 text-[13px]">{errorMessage(check.error, "That did not work")}</p>}
+      {startQuote.error && <p role="alert" className="text-red-500 text-[13px]">{errorMessage(startQuote.error, "Could not start the quote")}</p>}
 
       <div className="flex flex-wrap gap-2">
         {open && e.may.send && (
           <Button size="sm" variant={acked ? "secondary" : "default"} onClick={() => setPanel(panel === "ack" ? null : "ack")}>
             {acked ? "Send another acknowledgement" : "Acknowledge the customer"}
           </Button>
+        )}
+        {e.quote && e.may.see_quotes && (
+          <Link to={`/quotes/${e.quote.id}`} className="inline-flex items-center rounded-md border border-teal-500 px-3 h-8 text-xs font-semibold text-teal-600 hover:bg-teal-100">
+            Open quote {e.quote.number}
+          </Link>
+        )}
+        {open && !e.quote && e.may.quote && (
+          <Button size="sm" onClick={() => startQuote.mutate()} disabled={startQuote.isPending}>Start a quote</Button>
         )}
         {open && e.may.work && !e.quote_sent_at && (
           <Button size="sm" variant="secondary" onClick={() => act.mutate({ path: "quote-sent" })} title="Until quotations are built (M3), mark it here">Quote sent</Button>

@@ -308,7 +308,8 @@ def enqueue(what: str, tenant_id: uuid.UUID, flow_id: uuid.UUID, trigger: str) -
 
 DOCTYPE_ENTITY = {"Customer": "customer", "Address": "customer", "Item": "item",
                   "Item Price": "price", "Sales Order": "order", "Sales Invoice": "invoice",
-                  "Payment Entry": "receipt", "Bin": "stock", "Stock Ledger Entry": "stock"}
+                  "Payment Entry": "receipt", "Bin": "stock", "Stock Ledger Entry": "stock",
+                  "Workstation": "workstation", "BOM": "bom"}
 
 
 @router.post("/webhooks/{conn_id}", status_code=202)

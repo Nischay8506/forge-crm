@@ -24,6 +24,8 @@ CHILD_OF = {
     "Sales Order Item": ("Sales Order", "items"),
     "Sales Invoice Item": ("Sales Invoice", "items"),
     "Payment Entry Reference": ("Payment Entry", "references"),
+    "BOM Item": ("BOM", "items"),
+    "BOM Operation": ("BOM", "operations"),
 }
 FAULTS = ("offline", "timeout", "server_error", "rate_limited", "not_json")
 

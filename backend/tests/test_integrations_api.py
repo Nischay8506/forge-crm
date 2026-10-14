@@ -70,7 +70,8 @@ async def _sync(s, conn_id: str) -> None:
     async with tenant_session(s["tid"]) as db:
         flows = list(await db.scalars(select(SyncFlow).where(
             SyncFlow.connection_id == uuid.UUID(conn_id))))
-    order = ["customer", "item", "price", "order", "invoice", "receipt", "stock"]
+    order = ["customer", "item", "price", "order", "invoice", "receipt", "stock", "workstation",
+             "bom"]
     for f in sorted(flows, key=lambda f: order.index(f.entity)):
         await run_sync(s["tid"], f.id, sleep=no_sleep)
 
@@ -89,7 +90,7 @@ async def test_wizard_connect_sync_and_see_health(client, setup):
     raw = json.dumps(conn)
     assert s["fake"].api_secret not in raw and s["fake"].api_key not in raw
     assert conn["key_hint"] == secrets.hint(s["fake"].api_key)
-    assert conn["health"] in ("ok", "problem") and len(conn["flows"]) == 7
+    assert conn["health"] in ("ok", "problem") and len(conn["flows"]) == 9
     assert all(f["run_requested_at"] for f in conn["flows"])  # first sync asked for
 
     await _sync(s, conn["id"])

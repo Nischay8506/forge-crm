@@ -264,6 +264,28 @@ class ErpStock(ErpRecordMixin, Base):
     uom: Mapped[str | None] = mapped_column(String(50))
 
 
+class ErpWorkstation(ErpRecordMixin, Base):
+    """A workstation and its hour rate (F3.2)."""
+
+    __tablename__ = "erp_workstations"
+
+    code: Mapped[str] = mapped_column(String(200), nullable=False)
+    name: Mapped[str] = mapped_column(String(300), nullable=False)
+    hour_rate: Mapped[Decimal] = mapped_column(QTY, nullable=False)
+
+
+class ErpBom(ErpRecordMixin, Base):
+    """A submitted BOM (F3.2); its items and operations are in `data`."""
+
+    __tablename__ = "erp_boms"
+
+    code: Mapped[str] = mapped_column(String(200), nullable=False)
+    item_code: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    quantity: Mapped[Decimal] = mapped_column(QTY, nullable=False)
+    uom: Mapped[str | None] = mapped_column(String(50))
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
 class ErpWrite(IdMixin, TenantMixin, TimestampMixin, ConnectionMixin, Base):
     """A write Forge made (or tried to make) in an ERP (decision E3: only "create
     customer in ERPNext" for now). The idempotency key stops the same request being
@@ -360,4 +382,6 @@ ERP_RECORD_MODELS: dict[str, type[ErpRecordMixin]] = {
     "invoice": ErpInvoice,
     "receipt": ErpReceipt,
     "stock": ErpStock,
+    "workstation": ErpWorkstation,
+    "bom": ErpBom,
 }

@@ -57,6 +57,7 @@ from app.models import (
     InboundEmail,
     Message,
     ProductFamily,
+    Quote,
     Role,
     StoredFile,
     User,
@@ -302,6 +303,7 @@ async def _detail(db: AsyncSession, e: Enquiry, current: CurrentUser) -> dict[st
     p = current.permissions
     may_work = has_permission(p, "enquiries.work")
     cfgs, line_family = await _line_products(db, lines, family)
+    quote = await db.scalar(select(Quote).where(Quote.enquiry_id == e.id))
     return {
         **row, "customer": e.customer, "details": e.details, "questions": e.questions,
         "account": {"id": str(account.id), "name": account.name, "tier": account.tier,
@@ -344,8 +346,12 @@ async def _detail(db: AsyncSession, e: Enquiry, current: CurrentUser) -> dict[st
                  "checked_at": e.make_checked_at},
         "score_parts": e.score_parts, "scored_at": e.scored_at,
         "review": await reviews.view(db, await reviews.latest(db, e)),
+        "quote": {"id": str(quote.id), "number": quote.number, "status": quote.status}
+        if quote else None,
         "may": {"work": may_work, "assign": has_permission(p, "enquiries.assign"),
-                "send": may_work and has_permission(p, "messages.send")},
+                "send": may_work and has_permission(p, "messages.send"),
+                "quote": has_permission(p, "quotes.work"),
+                "see_quotes": has_permission(p, "quotes.read")},
     }
 
 

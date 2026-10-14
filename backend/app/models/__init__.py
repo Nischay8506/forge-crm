@@ -32,7 +32,7 @@ from app.models.channels import (
     MessageEvent,
     ToneGuide,
 )
-from app.models.cpq import Configuration, ProductModel
+from app.models.cpq import Configuration, CostModel, MachineRate, MaterialRate, ProductModel
 from app.models.enquiries import (
     CapabilityProfile,
     Enquiry,
@@ -60,6 +60,7 @@ from app.models.golden import (
 from app.models.integrations import (
     CodeMap,
     CodeMapHistory,
+    ErpBom,
     ErpConnection,
     ErpCustomer,
     ErpInvoice,
@@ -68,6 +69,7 @@ from app.models.integrations import (
     ErpPrice,
     ErpReceipt,
     ErpStock,
+    ErpWorkstation,
     ErpWrite,
     ForgeCode,
     McpClient,
@@ -77,6 +79,7 @@ from app.models.integrations import (
 )
 from app.models.llm import LlmCall, TenantLlmBudget
 from app.models.outbox import OutboxEvent
+from app.models.quotes import Quote, QuoteLine, QuoteRevision
 from app.models.tenancy import Role, Tenant, User, UserRole
 
 __all__ = [
@@ -130,15 +133,18 @@ __all__ = [
     "MergeEvent",
     "CodeMap",
     "CodeMapHistory",
+    "ErpBom",
     "ErpConnection",
     "ErpCustomer",
     "Configuration",
+    "CostModel",
     "ErpInvoice",
     "ErpItem",
     "ErpOrder",
     "ErpPrice",
     "ErpReceipt",
     "ErpStock",
+    "ErpWorkstation",
     "ErpWrite",
     "ForgeCode",
     "McpClient",
@@ -147,7 +153,12 @@ __all__ = [
     "SyncRun",
     "LlmCall",
     "OutboxEvent",
+    "MachineRate",
+    "MaterialRate",
     "ProductModel",
+    "Quote",
+    "QuoteLine",
+    "QuoteRevision",
     "Role",
     "Tenant",
     "TenantLlmBudget",

@@ -178,7 +178,7 @@ export function ConnectionWizardPage() {
         <CardContent>
           <ol className="list-decimal pl-4 space-y-2 text-[12.5px] text-ink-700">
             <li>In ERPNext, open <b>User</b> and add a user for Forge (for example forge@yourcompany.com).</li>
-            <li>Give it the roles <b>Sales User</b>, <b>Accounts User</b>, <b>Stock User</b> and <b>Sales Master Manager</b>.</li>
+            <li>Give it the roles <b>Sales User</b>, <b>Accounts User</b>, <b>Stock User</b>, <b>Sales Master Manager</b> and <b>Manufacturing User</b> (for BOMs and workstations).</li>
             <li>Open that user, go to <b>Settings › API Access</b> and click <b>Generate Keys</b>.</li>
             <li>Copy the API key and the API secret into this form. ERPNext shows the secret only once.</li>
             <li>Click <b>Test connection</b>. If something is missing, Forge says what to fix.</li>

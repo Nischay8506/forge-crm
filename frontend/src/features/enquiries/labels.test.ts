@@ -75,6 +75,8 @@ describe("enquiry labels", () => {
 
   it("tells the check, the review and the score in words", () => {
     const at = "2026-10-12T10:00:00Z"
+    expect(eventText({ kind: "quote_started", actor: "user:x", actor_name: "", at, detail: { number: "Q/2026-27/0001" } }))
+      .toBe("Quote Q/2026-27/0001 started")
     expect(eventText({ kind: "line_configured", actor: "user:x", actor_name: "", at,
       detail: { line: 1, family: "Flanges", variant_code: "FL-150-300-F316-RF" } })).toBe("Line 1 configured: FL-150-300-F316-RF (Flanges)")
     expect(eventText({ kind: "line_reprice", actor: "system:forge", actor_name: "", at,

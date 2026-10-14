@@ -31,7 +31,7 @@ from app.models import ErpConnection, SyncFlow
 KINDS: dict[str, type[ERPNextAdapter]] = {"erpnext": ERPNextAdapter}
 # Customers first, so orders and invoices find their account on the first sync.
 ENTITY_ORDER = (Entity.customer, Entity.item, Entity.price, Entity.order, Entity.invoice,
-                Entity.receipt, Entity.stock)
+                Entity.receipt, Entity.stock, Entity.workstation, Entity.bom)
 SETTING_KEYS = ("time_zone", "company", "host_header")
 
 # Plain words for alert titles, and what a person can do about each cause.
@@ -50,7 +50,7 @@ CAUSE_FIXES = {
     "auth_rejected": "In ERPNext open the integration user, generate a new API key and secret "
                      "(API Access), and enter them on this connection's Settings and login tab.",
     "permission_denied": "Give the integration user the roles Sales User, Accounts User, Stock "
-                         "User and Sales Master Manager in ERPNext.",
+                         "User, Sales Master Manager and Manufacturing User in ERPNext.",
     "unreachable": "Check that ERPNext is running and that the address on this connection is "
                    "right.",
     "timeout": "Check that ERPNext is running normally; Forge keeps retrying.",

@@ -207,6 +207,7 @@ export function eventText(ev: EnquiryEvent, names: Record<string, string> = {}):
     case "merge_undone": return d.other_ref ? `${str(d.other_ref)} was taken out again` : "The merge was undone"
     case "not_duplicate": return `Marked as different from ${str(d.other_ref)}`
     case "owner_opened": return "The owner opened it"
+    case "quote_started": return `Quote ${str(d.number)} started`
     case "quote_sent": return "Quote marked as sent"
     case "closed": return "Closed"
     case "reopened": return "Reopened"

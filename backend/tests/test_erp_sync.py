@@ -31,10 +31,12 @@ from app.models import (
     CodeMap,
     CodeMapHistory,
     Decision,
+    ErpBom,
     ErpConnection,
     ErpCustomer,
     ErpItem,
     ErpOrder,
+    ErpWorkstation,
     ErpWrite,
     FieldProvenance,
     SyncDeadLetter,
@@ -205,6 +207,18 @@ async def test_full_sync_fills_every_table_and_then_reads_only_changes(erp):
     assert await _scalar(erp, select(func.count()).select_from(ErpItem)) == 8
     orders = await _all(erp, select(ErpOrder))
     assert len(orders) == 12 and all(o.data["lines"] for o in orders)
+    # Workstations and submitted BOMs, with their items and operations (F3.2); the draft
+    # BOM is not read.
+    boms = {b.code: b for b in await _all(erp, select(ErpBom))}
+    assert sorted(boms) == ["BOM-GBX-110-001", "BOM-SFT-40-001"]
+    shaft = boms["BOM-SFT-40-001"]
+    assert shaft.item_code == "SFT-40" and shaft.quantity == 10 and shaft.is_default
+    assert shaft.data["items"] == [{"item_code": "RM-EN8-BAR-45", "qty": "32.0", "uom": "Kg",
+                                    "rate": "78.0"}]
+    assert [(o["operation"], o["workstation"], o["minutes"]) for o in shaft.data["operations"]
+            ] == [("Turning", "CNC Lathe", "180.0"), ("Keyway milling", "VMC", "60.0")]
+    lathe = await _scalar(erp, select(ErpWorkstation).where(ErpWorkstation.code == "CNC Lathe"))
+    assert lathe.hour_rate == 650
 
     # The unreadable order is a dead letter and a task card naming it.
     dead = await _all(erp, select(SyncDeadLetter))
@@ -321,7 +335,7 @@ async def test_a_revoked_key_raises_an_alert_naming_the_cause_and_clears_when_fi
     t0 = datetime.now(UTC)
     q = Enqueued(erp.tid)
     counts = await tick(now=t0, enqueue=q)
-    assert counts["checked"] >= 1 and {w for w, *_ in q} == {"sync"} and len(q) == 7
+    assert counts["checked"] >= 1 and {w for w, *_ in q} == {"sync"} and len(q) == 9
     assert await _alert(erp) is None
 
     erp.fake.revoke()
@@ -393,7 +407,7 @@ async def test_sync_due_on_schedule_and_on_request(erp):
     assert [(w, t) for w, fid, t in q if fid == flows["order"].id] == [("sync", "manual")]
     q = Enqueued(erp.tid)
     await tick(now=datetime.now(UTC) + timedelta(minutes=6), enqueue=q)
-    assert len([x for x in q if x[0] == "sync"]) == 7
+    assert len([x for x in q if x[0] == "sync"]) == 9
 
 
 # --- linking customers to accounts (safeguards 2 and 3) -------------------------------------

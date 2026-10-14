@@ -35,6 +35,7 @@ from app.models import (
     MatchCandidate,
     MergeEvent,
     Message,
+    Quote,
     SandboxAction,
 )
 from app.steward.candidates import decide, ordered
@@ -64,6 +65,8 @@ REFERENCES: dict[str, list[tuple[type, str]]] = {
         (LegalHold, "account_id"), (Message, "account_id"),
         # Enquiries follow the surviving account and contact (M1).
         (Enquiry, "account_id"),
+        # Quotes follow the surviving account too (M3).
+        (Quote, "account_id"),
     ],
     # Consent follows the surviving contact, so a request to stop made on either
     # record still holds after the merge (F12.5, L9).

@@ -1,5 +1,6 @@
 """Seed data for the fake ERPNext: a small Indian manufacturer's customers, items,
-prices, orders, invoices, payments and stock, shaped like ERPNext v16 rows.
+prices, orders, invoices, payments, stock, workstations and BOMs, shaped like ERPNext
+v16 rows.
 
 `burst` adds that many customers sharing one modified time (a bulk import), which is
 where naive paging skips or repeats records. `broken` adds one sales order whose
@@ -139,6 +140,34 @@ def seed_demo(fake: FakeERPNext, *, seed: int = 7, burst: int = 0, broken: bool 
         "party": "Steel Supplier", "posting_date": "2026-07-01", "paid_amount": 1000.0,
         "paid_from_account_currency": "INR", "docstatus": 1,
     })
+
+    # Workstations and BOMs (F3.2): how a shaft and a gearbox are made, and from what.
+    for code, rate in (("CNC Lathe", 650.0), ("VMC", 900.0), ("Assembly Bench", 300.0)):
+        fake.add("Workstation", {"name": code, "workstation_name": code, "hour_rate": rate,
+                                 "hour_rate_labour": round(rate * 0.4, 2)})
+    bom = {"uom": "Nos", "is_active": 1, "docstatus": 1, "with_operations": 1}
+    fake.add("BOM", {**bom, "name": "BOM-SFT-40-001", "item": "SFT-40", "quantity": 10.0,
+                     "is_default": 1},
+             items=[{"item_code": "RM-EN8-BAR-45", "qty": 32.0, "stock_qty": 32.0,
+                     "stock_uom": "Kg", "rate": 78.0}],
+             operations=[{"operation": "Turning", "workstation": "CNC Lathe",
+                          "time_in_mins": 180.0, "hour_rate": 650.0},
+                         {"operation": "Keyway milling", "workstation": "VMC",
+                          "time_in_mins": 60.0, "hour_rate": 900.0}])
+    fake.add("BOM", {**bom, "name": "BOM-GBX-110-001", "item": "GBX-110", "quantity": 1.0,
+                     "is_default": 1},
+             items=[{"item_code": "RM-CI-HOUSING-110", "qty": 1.0, "stock_qty": 1.0,
+                     "stock_uom": "Nos", "rate": 4200.0},
+                    {"item_code": "SFT-40", "qty": 2.0, "stock_qty": 2.0, "stock_uom": "Nos"},
+                    {"item_code": "BRG-6205", "qty": 4.0, "stock_qty": 4.0, "stock_uom": "Nos",
+                     "rate": 180.0}],
+             operations=[{"operation": "Assembly", "workstation": "Assembly Bench",
+                          "time_in_mins": 90.0, "hour_rate": 300.0}])
+    # A draft BOM is still being worked on: never read.
+    fake.add("BOM", {**bom, "name": "BOM-GBX-110-002", "item": "GBX-110", "quantity": 1.0,
+                     "is_default": 0, "docstatus": 0},
+             items=[{"item_code": "RM-CI-HOUSING-110", "qty": 1.0, "stock_qty": 1.0}])
+
     if broken:
         fake.add("Sales Order", {
             "name": "SAL-ORD-2026-BROKEN", "customer": customers[0]["name"],

@@ -213,7 +213,8 @@ export interface EnquiryDetail extends Omit<EnquiryRow, "lines"> {
   score_parts: ScoreParts | null
   scored_at: string | null
   review: Review | null
-  may: { work: boolean; assign: boolean; send: boolean }
+  quote: { id: string; number: string; status: string } | null
+  may: { work: boolean; assign: boolean; send: boolean; quote: boolean; see_quotes: boolean }
 }
 
 /** The engineering review (P2 A): the lines, files and reasons for the engineering role. */

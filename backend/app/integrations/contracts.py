@@ -29,6 +29,8 @@ class Entity(StrEnum):
     invoice = "invoice"
     receipt = "receipt"
     stock = "stock"
+    workstation = "workstation"
+    bom = "bom"
 
 
 ENTITY_LABELS: dict[Entity, str] = {
@@ -39,6 +41,8 @@ ENTITY_LABELS: dict[Entity, str] = {
     Entity.invoice: "Invoices",
     Entity.receipt: "Payments received",
     Entity.stock: "Stock",
+    Entity.workstation: "Workstations",
+    Entity.bom: "Bills of materials",
 }
 
 
@@ -195,6 +199,42 @@ class Stock(Record):
     uom: str | None = None
 
 
+class Workstation(Record):
+    """A machine or work centre and its hour rate (labour, power, consumables, rent),
+    for costing operations (F3.2)."""
+
+    code: str
+    name: str
+    hour_rate: Decimal
+
+
+class BomItem(_Shape):
+    item_code: str
+    qty: Decimal  # for the BOM's quantity, not for one piece
+    uom: str | None = None
+    rate: Decimal | None = None  # the ERP's own rate on the BOM, for reference
+
+
+class BomOperation(_Shape):
+    operation: str
+    workstation: str | None = None
+    minutes: Decimal  # for the BOM's quantity
+    hour_rate: Decimal | None = None  # as the ERP has it on the BOM
+
+
+class Bom(Record):
+    """A submitted bill of materials: what goes into `quantity` of an item and the
+    operations that make it (F3.2, decision C3 A)."""
+
+    code: str
+    item_code: str
+    quantity: Decimal
+    uom: str | None = None
+    is_default: bool = False
+    items: tuple[BomItem, ...] = ()
+    operations: tuple[BomOperation, ...] = ()
+
+
 class NewCustomer(_Shape):
     """What Forge sends to create a customer in an ERP (decision E3: the one write in
     Phase 1). `ref` is Forge's idempotency key; the adapter stores it on the record so
@@ -216,5 +256,7 @@ CONTRACTS: dict[Entity, type[Record]] = {
     Entity.invoice: Invoice,
     Entity.receipt: Receipt,
     Entity.stock: Stock,
+    Entity.workstation: Workstation,
+    Entity.bom: Bom,
 }
 

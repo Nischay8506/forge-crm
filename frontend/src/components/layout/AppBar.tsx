@@ -11,6 +11,7 @@ import { useEnquiryCounts } from "@/features/enquiries/hooks"
 const NAV: { name: string; path: string; permission: string | null }[] = [
   { name: "Home", path: "/", permission: null },
   { name: "Enquiries", path: "/enquiries", permission: "enquiries.read" },
+  { name: "Quotes", path: "/quotes", permission: "quotes.read" },
   { name: "Accounts", path: "/accounts", permission: "accounts.read" },
   { name: "Contacts", path: "/contacts", permission: "accounts.read" },
   { name: "Data Steward", path: "/steward", permission: "steward.read" },

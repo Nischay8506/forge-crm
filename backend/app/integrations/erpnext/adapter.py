@@ -35,6 +35,9 @@ from app.integrations.adapter import (
 from app.integrations.contracts import (
     Address,
     Allocation,
+    Bom,
+    BomItem,
+    BomOperation,
     Customer,
     Entity,
     Invoice,
@@ -47,6 +50,7 @@ from app.integrations.contracts import (
     Receipt,
     Record,
     Stock,
+    Workstation,
 )
 from app.integrations.erpnext.client import FrappeClient
 
@@ -336,6 +340,42 @@ class ERPNextAdapter:
             uom=r.get("stock_uom"),
         )
 
+    def _workstation(self, r: dict[str, Any]) -> Workstation:
+        return Workstation(
+            external_id=r["name"],
+            modified_at=self.to_utc(r.get("modified")),
+            disabled=bool(r.get("disabled")),
+            code=r["name"],
+            name=(r.get("workstation_name") or r["name"]).strip(),
+            hour_rate=_num(r, "hour_rate"),
+        )
+
+    def _bom(self, r: dict[str, Any]) -> Bom:
+        return Bom(
+            external_id=r["name"],
+            modified_at=self.to_utc(r.get("modified")),
+            disabled=not r.get("is_active", 1) or r.get("docstatus") != 1,
+            code=r["name"],
+            item_code=r["item"],
+            quantity=_num(r, "quantity") or Decimal(1),
+            uom=r.get("uom"),
+            is_default=bool(r.get("is_default")),
+            items=tuple(
+                BomItem(item_code=x["item_code"], qty=_num(x, "stock_qty") or _num(x, "qty"),
+                        uom=x.get("stock_uom") or x.get("uom"),
+                        rate=_num(x, "rate") if x.get("rate") not in (None, "") else None)
+                for x in sorted(r.get("items") or [], key=lambda x: x.get("idx") or 0)
+            ),
+            operations=tuple(
+                BomOperation(operation=x.get("operation") or "Operation",
+                             workstation=x.get("workstation") or None,
+                             minutes=_num(x, "time_in_mins"),
+                             hour_rate=_num(x, "hour_rate")
+                             if x.get("hour_rate") not in (None, "") else None)
+                for x in sorted(r.get("operations") or [], key=lambda x: x.get("idx") or 0)
+            ) if r.get("with_operations", 1) else (),
+        )
+
     # --- reading ---------------------------------------------------------------------
 
     async def _children(self, source: _Source, rows: list[dict[str, Any]]) -> None:
@@ -567,5 +607,11 @@ ERPNextAdapter.SOURCES = {
         children=(_Child("references", "Payment Entry Reference"),),
     ),
     Entity.stock: _Source("Bin", ERPNextAdapter._stock, id_fields=("item_code", "warehouse")),
+    Entity.workstation: _Source("Workstation", ERPNextAdapter._workstation),
+    # Only submitted BOMs: a draft one is still being worked on.
+    Entity.bom: _Source(
+        "BOM", ERPNextAdapter._bom, filters=(("docstatus", "=", 1),),
+        children=(_Child("items", "BOM Item"), _Child("operations", "BOM Operation")),
+    ),
 }
 ERPNextAdapter.reads = frozenset(ERPNextAdapter.SOURCES)
