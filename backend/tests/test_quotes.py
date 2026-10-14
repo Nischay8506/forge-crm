@@ -106,7 +106,7 @@ async def test_rates_are_dated_and_never_edited(client, ctx):  # noqa: F811
     assert next(m for m in past if m["code"] == "F316")["current"]["rate"] == "410"
 
     bad = await client.post(f"{C}/materials", headers=h, json={
-        "code": "", "name": "", "rate": "-1", "unit": "tonne", "effective_from": "soon"})
+        "code": "", "name": "", "rate": "-1", "unit": "box", "effective_from": "soon"})
     assert bad.status_code == 422
     assert len(bad.json()["error"]["problems"]) == 5
 

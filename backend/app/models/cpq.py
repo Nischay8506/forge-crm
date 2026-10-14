@@ -74,8 +74,16 @@ class MaterialRate(IdMixin, TenantMixin, Base):
 
     code: Mapped[str] = mapped_column(String(40), nullable=False)  # F316, IS2062-E250
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    # The canonical unit (kg, m, m2, m3, nos) and the rate per it (K12 A); the unit and
+    # rate as typed (₹62,000 per tonne) are kept in source_unit and source_rate.
     unit: Mapped[str] = mapped_column(String(10), nullable=False, default="kg")
     rate: Mapped[Decimal] = mapped_column(RATE, nullable=False)  # rupees per unit
+    source_unit: Mapped[str | None] = mapped_column(String(20))
+    source_rate: Mapped[Decimal | None] = mapped_column(RATE)
+    # K4 A: the share of the bought material that ends up in the part (92 = 92%), and
+    # what the rest sells for as scrap, per canonical unit. None = 100% / no credit.
+    yield_pct: Mapped[Decimal | None] = mapped_column(Numeric(7, 3))
+    scrap_rate: Mapped[Decimal | None] = mapped_column(RATE)
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     note: Mapped[str | None] = mapped_column(String(300))
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)

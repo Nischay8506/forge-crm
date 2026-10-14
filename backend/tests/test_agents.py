@@ -95,7 +95,7 @@ async def _account(client, h, name, tier=None):
 async def test_agent_screen_answers_what_it_can_do(client, ctx):
     agents = (await client.get(f"{API}/agents", headers=ctx["h"])).json()
     keys = [a["key"] for a in agents]
-    assert keys[0] == "data_steward" and "sandbox" in keys  # test-only agents last
+    assert keys[0] == "cost" and keys[-1] == "sandbox"  # by name, test-only agents last
     await _rule(client, ctx["h"], conditions=[{"fact": "amount", "op": "gt", "value": 100000}],
                 outcome="ask_person")
     d = (await client.get(f"{API}/agents/sandbox", headers=ctx["h"])).json()

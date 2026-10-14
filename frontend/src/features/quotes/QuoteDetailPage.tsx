@@ -9,8 +9,9 @@ import { Nameplate } from "@/components/ui/Nameplate"
 import { Empty, ErrorText, Loading } from "@/components/ui/States"
 import { Tag } from "@/components/ui/Tag"
 import { formatDate, formatDateTime } from "@/lib/utils"
+import { CostView } from "./CostView"
 import { useQuote } from "./hooks"
-import { SOURCE_LABELS, STATUS_TONE, placeText, revisionText, rupees } from "./labels"
+import { COST_STATUS, SOURCE_LABELS, STATUS_TONE, placeText, reviewText, revisionText, rupees } from "./labels"
 import type { QuoteDetail, QuoteLineView } from "./types"
 
 /** One quote (Design frame 04, the Quote Builder): its active revision's lines with
@@ -24,13 +25,13 @@ export function QuoteDetailPage() {
   return <Detail q={data} />
 }
 
-type Draft = { description: string; qty: string; unit: string }
+type Draft = { description: string; qty: string; unit: string; item_code: string }
 
 function Detail({ q }: { q: QuoteDetail }) {
   const qc = useQueryClient()
   const rev = q.active
   const [editing, setEditing] = useState<string | "new" | null>(null)
-  const [draft, setDraft] = useState<Draft>({ description: "", qty: "", unit: "" })
+  const [draft, setDraft] = useState<Draft>({ description: "", qty: "", unit: "", item_code: "" })
   const [open, setOpen] = useState<string | null>(null)
   const [terms, setTerms] = useState(false)
   const call = useMutation({
@@ -46,21 +47,29 @@ function Detail({ q }: { q: QuoteDetail }) {
   const start = (l: QuoteLineView | null) => {
     call.reset()
     setEditing(l ? l.id : "new")
-    setDraft(l ? { description: l.description, qty: l.qty ?? "", unit: l.unit ?? "" } : { description: "", qty: "", unit: "" })
+    setDraft(l ? { description: l.description, qty: l.qty ?? "", unit: l.unit ?? "", item_code: l.item_code ?? "" }
+      : { description: "", qty: "", unit: "", item_code: "" })
   }
   const save = () => {
     const body: Record<string, unknown> = { qty: draft.qty.trim() === "" ? null : draft.qty.trim(), unit: draft.unit }
     const line = rev.lines.find((l) => l.id === editing)
-    if (!line?.configuration_id) body.description = draft.description
+    if (!line?.configuration_id) {
+      body.description = draft.description
+      body.item_code = draft.item_code
+    }
     call.mutate(editing === "new" ? { method: "post", path: "/lines", body } : { method: "patch", path: `/lines/${editing}`, body })
   }
   const costs = q.may.see_costs
   const form = (
     <div className="space-y-2 rounded-md border border-teal-500 bg-surface-0 p-3">
-      <div className="grid gap-2 grid-cols-2 sm:grid-cols-[1fr_110px_90px]">
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-[1fr_150px_110px_90px]">
         <Input className="col-span-2 sm:col-span-1" value={draft.description} aria-label="Item" placeholder="Item"
           disabled={!!rev.lines.find((l) => l.id === editing)?.configuration_id}
           onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+        <Input className="col-span-2 sm:col-span-1 font-mono" value={draft.item_code} aria-label="ERPNext item code" placeholder="ERPNext item code"
+          title="Its default BOM in ERPNext costs the line when the family has no full cost model"
+          disabled={!!rev.lines.find((l) => l.id === editing)?.configuration_id}
+          onChange={(e) => setDraft({ ...draft, item_code: e.target.value })} />
         <Input value={draft.qty} inputMode="decimal" aria-label="Quantity" placeholder="Qty" onChange={(e) => setDraft({ ...draft, qty: e.target.value })} />
         <Input value={draft.unit} aria-label="Unit" placeholder="Unit" onChange={(e) => setDraft({ ...draft, unit: e.target.value })} />
       </div>
@@ -88,11 +97,23 @@ function Detail({ q }: { q: QuoteDetail }) {
         </p>
       </div>
       {call.error && <p role="alert" className="text-red-500 text-[13px]">{errorMessage(call.error, "That did not work")}</p>}
+      {rev.reprice_reason && (
+        <div role="status" className="rounded-md border border-amber-500 bg-[#fdf1de] px-3 py-2 text-[13px] text-[#8a5300]">
+          <p className="font-semibold">Cost changed since this revision was sent: reprice recommended</p>
+          <ul className="list-disc pl-5">{rev.reprice_reason.split("; ").map((r) => <li key={r}>{r}</li>)}</ul>
+          {rev.reprice_at && <p className="text-[12px]">Noticed {formatDateTime(rev.reprice_at)}. A new revision is made in F3.7; until then, look at the costs below.</p>}
+        </div>
+      )}
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle>Lines</CardTitle>
-          {q.may.work && editing === null && <Button size="sm" variant="ghost" onClick={() => start(null)}>+ Add a line</Button>}
+          <span className="flex gap-1">
+            {q.may.work && costs && editing === null && (
+              <Button size="sm" variant="ghost" disabled={call.isPending} onClick={() => call.mutate({ method: "post", path: "/cost" })}>Work out costs</Button>
+            )}
+            {q.may.work && editing === null && <Button size="sm" variant="ghost" onClick={() => start(null)}>+ Add a line</Button>}
+          </span>
         </CardHeader>
         <div className="px-4 pb-4 space-y-2">
           {rev.lines.length === 0 && editing !== "new" && <Empty>No lines. Add what is being quoted.</Empty>}
@@ -103,7 +124,16 @@ function Detail({ q }: { q: QuoteDetail }) {
                 <div className="flex-1 min-w-[200px]">
                   <p className="text-ink-900">{l.description}</p>
                   {l.variant_code && <p className="font-mono text-[12px] font-semibold text-ink-700">{l.variant_code}</p>}
+                  {!l.variant_code && l.item_code && <p className="font-mono text-[12px] text-ink-500">{l.item_code}</p>}
                   {l.cost_flag && <p className="text-[12px] text-amber-600">{l.cost_flag}</p>}
+                  {costs && l.cost_status && l.cost_status !== "complete" && (
+                    <p className="text-[12px] mt-0.5">
+                      <Tag variant={COST_STATUS[l.cost_status].tone}>{COST_STATUS[l.cost_status].label}</Tag>
+                      {l.cost_review && (
+                        <> <Link to={`/decisions?card=${l.cost_review.id}`} className="text-teal-600 hover:underline">{reviewText(l.cost_review.status)}</Link></>
+                      )}
+                    </p>
+                  )}
                 </div>
                 <span className="w-24 text-right font-mono whitespace-nowrap">{l.qty === null ? <span className="text-amber-500">no qty</span> : `${Number(l.qty)} ${l.unit ?? ""}`}</span>
                 {costs && (
@@ -124,7 +154,7 @@ function Detail({ q }: { q: QuoteDetail }) {
                   </span>
                 )}
               </div>
-              {open === l.id && l.cost && <CostView l={l} />}
+              {open === l.id && l.cost && <div className="mt-2 sm:ml-9"><CostView c={l.cost} unit={l.unit} /></div>}
             </div>
           ))}
           {editing === "new" && form}
@@ -176,32 +206,6 @@ function TermsForm({ q, busy, onSave, onCancel }: {
         <Button size="sm" disabled={busy} onClick={() => onSave({ valid_until: valid, destination: dest })}>Save</Button>
         <Button size="sm" variant="secondary" onClick={onCancel}>Cancel</Button>
       </div>
-    </div>
-  )
-}
-
-/** "Why this cost" (F3.2): every part with how it was worked out, and the rates used. */
-function CostView({ l }: { l: QuoteLineView }) {
-  const c = l.cost!
-  return (
-    <div className="mt-2 ml-9 rounded-md bg-surface-0 border border-line p-3 text-[12.5px] space-y-2">
-      {c.why && <p className="text-ink-700">{c.why}</p>}
-      {(c.parts ?? []).length > 0 && (
-        <table className="w-full">
-          <tbody>
-            {(c.parts ?? []).map((p, i) => (
-              <tr key={i} className="align-top">
-                <td className="pr-2 text-ink-500 whitespace-nowrap">{p.group}</td>
-                <td className="pr-2 text-ink-900">{p.label}<span className="block text-ink-500">{p.detail}</span></td>
-                <td className="text-right font-mono whitespace-nowrap">{rupees(p.amount)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {(c.rates ?? []).length > 0 && (
-        <p className="text-ink-500">Rates used: {(c.rates ?? []).map((r) => `${r.name} ${rupees(r.rate)}/${r.unit}${r.from ? ` from ${formatDate(r.from)}` : " (ERPNext)"}`).join("; ")}</p>
-      )}
     </div>
   )
 }

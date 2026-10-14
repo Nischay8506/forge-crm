@@ -44,6 +44,7 @@ from app.audit.replay import audit_rows, record_name, shown
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import AppError, Conflict, Forbidden, NotFound, ValidationFailed
 from app.core.permissions import has_permission
+from app.cpq.agent import REVIEW_TOOL as COST_REVIEW
 from app.db import get_db
 from app.integrations.alerts import CARD_TITLES, acknowledge_alert
 from app.models import Decision, Delegation, PushSubscription, Role, User, UserRole
@@ -78,6 +79,8 @@ async def _inbox(db: AsyncSession, current: CurrentUser) -> Inbox:
 def _sees(d: Decision, current: CurrentUser) -> bool:
     """Alerts and tasks: integration ones for the integrations permission (E7), the
     inbox's own bottleneck alerts for people who manage the inbox (H9)."""
+    if d.tool_key == COST_REVIEW:  # costs are for people who may see them (C17 B)
+        return has_permission(current.permissions, "costs.view")
     if d.kind not in ("alert", "task"):
         return True
     if d.tool_key == INBOX_ALERT:

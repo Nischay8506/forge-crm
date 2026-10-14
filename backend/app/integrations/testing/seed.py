@@ -62,12 +62,13 @@ def seed_demo(fake: FakeERPNext, *, seed: int = 7, burst: int = 0, broken: bool 
             })
 
     for code, name, group, hsn in ITEMS:
+        rate = rnd.randrange(2_000, 90_000, 500)
         fake.add("Item", {
             "name": code, "item_code": code, "item_name": name, "item_group": group,
             "description": f"<div><p>{name}</p></div>", "stock_uom": "Nos",
             "gst_hsn_code": hsn, "is_stock_item": 1, "is_sales_item": 1,
+            "valuation_rate": round(rate * 0.62, 2), "last_purchase_rate": round(rate * 0.66, 2),
         })
-        rate = rnd.randrange(2_000, 90_000, 500)
         fake.add("Item Price", {
             "name": f"IP-{code}-S", "item_code": code, "price_list": "Standard Selling",
             "currency": "INR", "price_list_rate": float(rate), "uom": "Nos", "selling": 1,

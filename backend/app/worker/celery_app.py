@@ -36,6 +36,11 @@ celery_app.conf.update(
         "mail-tick": {"task": "forge.mail_tick", "schedule": 15.0},
         "enquiry-followups": {"task": "forge.enquiry_followups",
                               "schedule": crontab(minute=7)},
+        # F3.2: open quotes against today's rates and BOMs every hour (K9, K11 A); each
+        # owner's "cost changed" email once a day at 09:00 IST.
+        "costs-refresh": {"task": "forge.costs_refresh", "schedule": crontab(minute=20)},
+        "cost-alert-emails": {"task": "forge.cost_alert_emails",
+                              "schedule": crontab(hour=3, minute=30)},
     },
 )
 celery_app.autodiscover_tasks(["app.worker"], related_name="tasks")

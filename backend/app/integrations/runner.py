@@ -158,6 +158,15 @@ async def _finish(tenant_id: uuid.UUID, flow_id: uuid.UUID, run_id: uuid.UUID,
             if marked:
                 details["reprice_flagged"] = marked
                 run.details = dict(details)
+        if entity == Entity.bom and changed[Entity.bom]:
+            # K11 A: keep each new BOM version; drafts using the item are worked out
+            # again, sent quotes are marked "reprice recommended".
+            from app.cpq import costing
+
+            boms = await costing.boms_changed(s, conn.tenant_id, changed[Entity.bom])
+            if boms.get("bom_versions"):
+                details["bom_versions"] = boms
+                run.details = dict(details)
         if any(changed.values()):
             await mapping.discover(s, conn, entity)
         await sync_dead_letter_task(s, flow, conn)

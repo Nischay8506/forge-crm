@@ -154,7 +154,7 @@ async def change_line(session: AsyncSession, q: Quote, rev: QuoteRevision, ln: Q
         setattr(ln, k, data[k])
     if changed:
         # Anything the cost depends on changed: the cost must be worked out again.
-        ln.unit_cost = ln.cost = ln.cost_source = None
+        ln.unit_cost = ln.cost_source = ln.cost_status = None
         ln.cost_flag = None
         ln.updated_at = datetime.now(UTC)
         rev.costed_at = None
@@ -186,6 +186,7 @@ def line_out(ln: QuoteLine, costs: bool) -> dict[str, Any]:
         "enquiry_line_id": str(ln.enquiry_line_id) if ln.enquiry_line_id else None,
         "qty": None if ln.qty is None else format(ln.qty.normalize(), "f"), "unit": ln.unit,
         "cost_source": ln.cost_source, "cost_flag": ln.cost_flag,
+        "cost_status": ln.cost_status,
     }
     if costs:  # C17 B: everyone in sales sees costs, as a permission that can change
         out["unit_cost"] = money(ln.unit_cost)

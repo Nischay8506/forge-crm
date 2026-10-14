@@ -185,3 +185,33 @@ async def _mail_tick() -> dict:
 def mail_tick() -> dict:
     """M1: check the connected sales mailboxes (every minute, sooner after a push)."""
     return asyncio.run(_mail_tick())
+
+
+async def _costs_refresh() -> dict:
+    from app.cpq.costing import daily_refresh_all
+
+    try:
+        return await daily_refresh_all()
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.costs_refresh")
+def costs_refresh() -> dict:
+    """F3.2: work drafts out again and flag sent quotes when costs moved (K9, K11 A)."""
+    return asyncio.run(_costs_refresh())
+
+
+async def _cost_alert_emails() -> int:
+    from app.cpq.costing import email_alerts_all
+
+    try:
+        return await email_alerts_all()
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.cost_alert_emails")
+def cost_alert_emails() -> int:
+    """F3.2: one email a day to each owner whose sent quotes' costs changed (K9 A)."""
+    return asyncio.run(_cost_alert_emails())

@@ -61,6 +61,7 @@ from app.models.integrations import (
     CodeMap,
     CodeMapHistory,
     ErpBom,
+    ErpBomVersion,
     ErpConnection,
     ErpCustomer,
     ErpInvoice,
@@ -79,7 +80,7 @@ from app.models.integrations import (
 )
 from app.models.llm import LlmCall, TenantLlmBudget
 from app.models.outbox import OutboxEvent
-from app.models.quotes import Quote, QuoteLine, QuoteRevision
+from app.models.quotes import CostAlert, Quote, QuoteLine, QuoteRevision
 from app.models.tenancy import Role, Tenant, User, UserRole
 
 __all__ = [
@@ -134,6 +135,8 @@ __all__ = [
     "CodeMap",
     "CodeMapHistory",
     "ErpBom",
+    "ErpBomVersion",
+    "CostAlert",
     "ErpConnection",
     "ErpCustomer",
     "Configuration",

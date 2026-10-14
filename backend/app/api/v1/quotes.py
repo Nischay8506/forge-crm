@@ -1,6 +1,8 @@
 """Quotes (decisions C12 A, C14 A): started from an enquiry, numbered per financial year,
 with revisions R1, R2 ... A draft revision's lines can be changed; each line's cost and
-its breakdown (F3.2) are shown to people with the costs.view permission (C17 B)."""
+its breakdown (F3.2) are shown to people with the costs.view permission (C17 B). A
+draft's costs are worked out when it starts and after every change to its lines
+(app/cpq/costing.py); a sent one shows "cost changed: reprice recommended" (K9 A)."""
 
 import uuid
 from datetime import date, timedelta
@@ -15,9 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import AppError, Forbidden, NotFound
 from app.core.permissions import has_permission
-from app.cpq import quotes
+from app.cpq import costing, quotes
 from app.db import get_db
-from app.models import Account, Enquiry, Quote, QuoteLine, QuoteRevision, User
+from app.models import Account, Decision, Enquiry, Quote, QuoteLine, QuoteRevision, User
 from app.models.quotes import OPEN_QUOTE_STATUSES
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
@@ -91,6 +93,7 @@ async def _row(db: AsyncSession, q: Quote, names: dict[uuid.UUID, str] | None = 
     return {"id": str(q.id), "number": q.number, "status": q.status,
             "status_label": STATUS_LABELS.get(q.status, q.status), "revision": rev.number,
             "valid_until": rev.valid_until, "currency": q.currency,
+            "reprice_reason": rev.reprice_reason, "reprice_at": rev.reprice_at,
             "enquiry": {"id": str(enq.id), "ref": enq.ref, "summary": enq.summary} if enq else None,
             "customer": customer, "account_id": str(q.account_id) if q.account_id else None,
             "owner_id": str(q.owner_id) if q.owner_id else None, "owner_name": owner,
@@ -99,9 +102,14 @@ async def _row(db: AsyncSession, q: Quote, names: dict[uuid.UUID, str] | None = 
 
 @router.get("")
 async def list_quotes(status: str | None = Query(None, max_length=20),
-                      mine: bool = False, current: CurrentUser = Depends(READ),
+                      mine: bool = False, reprice: bool = False,
+                      current: CurrentUser = Depends(READ),
                       db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     stmt = select(Quote).order_by(Quote.created_at.desc()).limit(200)
+    if reprice:  # sent quotes whose costs changed since (K9 A)
+        stmt = stmt.where(Quote.id.in_(select(QuoteRevision.quote_id).where(
+            QuoteRevision.number == Quote.active_revision,
+            QuoteRevision.reprice_reason.is_not(None))))
     if status == "open":
         stmt = stmt.where(Quote.status.in_(OPEN_QUOTE_STATUSES))
     elif status:
@@ -121,6 +129,8 @@ async def start_quote(body: StartIn, current: CurrentUser = Depends(WORK),
     if enq.status == "closed":
         raise AppError("The enquiry is closed; reopen it to quote")
     q = await quotes.start(db, enq, _actor(current))
+    await costing.cost_revision(db, q, await quotes.revision(db, q), _actor(current),
+                                why="quote started")
     return await _detail(db, q, current)
 
 
@@ -129,13 +139,25 @@ async def _detail(db: AsyncSession, q: Quote, current: CurrentUser) -> dict[str,
     revs = list(await db.scalars(select(QuoteRevision).where(
         QuoteRevision.quote_id == q.id).order_by(QuoteRevision.number)))
     costs = _costs(current)
+    lines = await quotes.lines_of(db, rev)
+    reviews = {d.id: d for d in await db.scalars(select(Decision).where(Decision.id.in_(
+        [ln.cost_review_id for ln in lines if ln.cost_review_id])))} if costs else {}
+
+    def line(ln: QuoteLine) -> dict[str, Any]:
+        out = quotes.line_out(ln, costs)
+        d = reviews.get(ln.cost_review_id) if ln.cost_review_id else None
+        if costs:
+            out["cost_review"] = {"id": str(d.id), "status": d.status,
+                                  "decided_by": d.decided_by, "note": d.note} if d else None
+        return out
+
     return {**await _row(db, q),
             "active": {"number": rev.number, "status": rev.status, "reason": rev.reason,
                        "reason_note": rev.reason_note, "valid_until": rev.valid_until,
                        "delivery_terms": rev.delivery_terms, "destination": rev.destination,
                        "costed_at": rev.costed_at, "sent_at": rev.sent_at,
-                       "lines": [quotes.line_out(ln, costs)
-                                 for ln in await quotes.lines_of(db, rev)]},
+                       "reprice_reason": rev.reprice_reason, "reprice_at": rev.reprice_at,
+                       "lines": [line(ln) for ln in lines]},
             "revisions": [{"number": r.number, "status": r.status, "reason": r.reason,
                            "created_at": r.created_at, "sent_at": r.sent_at} for r in revs],
             "may": {"work": has_permission(current.permissions, "quotes.work")
@@ -187,6 +209,7 @@ async def add_line(quote_id: uuid.UUID, body: LineIn, current: CurrentUser = Dep
     q = await _quote(db, quote_id, lock=True)
     rev = await quotes.revision(db, q, lock=True)
     await quotes.add_line(db, q, rev, _clean(body.model_dump()))
+    await costing.cost_revision(db, q, rev, _actor(current), why="line added")
     return await _detail(db, q, current)
 
 
@@ -202,7 +225,8 @@ async def change_line(quote_id: uuid.UUID, line_id: uuid.UUID, body: LinePatch,
         data.pop("description", None)
     if ln.configuration_id and "description" in data:
         raise Forbidden("A configured line's description comes from its configuration")
-    await quotes.change_line(db, q, rev, ln, data)
+    if await quotes.change_line(db, q, rev, ln, data):
+        await costing.cost_revision(db, q, rev, _actor(current), why="line changed")
     return await _detail(db, q, current)
 
 
@@ -212,5 +236,21 @@ async def remove_line(quote_id: uuid.UUID, line_id: uuid.UUID,
                       db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     q = await _quote(db, quote_id, lock=True)
     rev = await quotes.revision(db, q, lock=True)
-    await quotes.remove_line(db, q, rev, await _line(db, rev, line_id))
+    ln = await _line(db, rev, line_id)
+    if ln.cost_review_id is not None:
+        from app.agents import runtime
+
+        await runtime.supersede(db, f"cost:{ln.id}", _actor(current), "The line was removed")
+    await quotes.remove_line(db, q, rev, ln)
+    await costing.cost_revision(db, q, rev, _actor(current), why="line removed")
+    return await _detail(db, q, current)
+
+
+@router.post("/{quote_id}/cost")
+async def work_out_costs(quote_id: uuid.UUID, current: CurrentUser = Depends(WORK),
+                         db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """Work out the draft's costs again with today's rates, models and BOMs (F3.2)."""
+    q = await _quote(db, quote_id, lock=True)
+    rev = await quotes.revision(db, q, lock=True)
+    await costing.cost_revision(db, q, rev, _actor(current), why="asked for")
     return await _detail(db, q, current)

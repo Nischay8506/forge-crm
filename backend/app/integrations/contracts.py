@@ -92,6 +92,9 @@ class Item(Record):
     hsn_code: str | None = None
     is_stock_item: bool = True
     is_sales_item: bool = True
+    # For reference next to Forge's material rates (F3.2, K5 A); never used on their own.
+    valuation_rate: Decimal | None = None
+    last_purchase_rate: Decimal | None = None
 
 
 class Price(Record):

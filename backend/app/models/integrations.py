@@ -196,6 +196,9 @@ class ErpItem(ErpRecordMixin, Base):
     item_group: Mapped[str | None] = mapped_column(String(200))
     uom: Mapped[str | None] = mapped_column(String(50))
     hsn_code: Mapped[str | None] = mapped_column(String(20))
+    # Shown next to Forge's material rates for reference only (K5 A).
+    valuation_rate: Mapped[Decimal | None] = mapped_column(QTY)
+    last_purchase_rate: Mapped[Decimal | None] = mapped_column(QTY)
 
 
 class ErpPrice(ErpRecordMixin, Base):
@@ -284,6 +287,22 @@ class ErpBom(ErpRecordMixin, Base):
     quantity: Mapped[Decimal] = mapped_column(QTY, nullable=False)
     uom: Mapped[str | None] = mapped_column(String(50))
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class ErpBomVersion(IdMixin, TenantMixin, Base):
+    """Every version of an ERPNext BOM Forge has read (K11 A), never changed: a quote's
+    cost names the version it used, and a new one flags the quotes that used the old."""
+
+    __tablename__ = "erp_bom_versions"
+
+    connection_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDCol, ForeignKey("erp_connections.id"), nullable=False)
+    bom_code: Mapped[str] = mapped_column(String(200), nullable=False)
+    item_code: Mapped[str] = mapped_column(String(200), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    modified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    seen_at: Mapped[datetime] = _now_col()
 
 
 class ErpWrite(IdMixin, TenantMixin, TimestampMixin, ConnectionMixin, Base):

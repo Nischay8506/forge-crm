@@ -61,6 +61,9 @@ class QuoteRevision(IdMixin, TenantMixin, Base):
     delivery_terms: Mapped[str | None] = mapped_column(String(20))
     destination: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     costed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A sent revision whose costs changed since (a rate, K9 A; a BOM, K11 A).
+    reprice_reason: Mapped[str | None] = mapped_column(String(500))
+    reprice_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = _now_col()
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -91,5 +94,24 @@ class QuoteLine(IdMixin, TenantMixin, Base):
     unit_cost: Mapped[Decimal | None] = mapped_column(QTY)
     cost: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     cost_flag: Mapped[str | None] = mapped_column(String(500))
+    # K10 A: complete, incomplete (a part is missing or invalid), unknown (no source)
+    # or reviewed (a person with costs.manage accepted or set it on a Decisions card).
+    cost_status: Mapped[str | None] = mapped_column(String(12))
+    cost_review_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDCol, ForeignKey("decisions.id"))
     created_at: Mapped[datetime] = _now_col()
     updated_at: Mapped[datetime] = _now_col()
+
+
+class CostAlert(IdMixin, TenantMixin, Base):
+    """A sent quote whose cost changed (K9 A): its owner hears about it in one email a
+    day, listing all of theirs."""
+
+    __tablename__ = "cost_alerts"
+
+    quote_id: Mapped[uuid.UUID] = mapped_column(UUIDCol, ForeignKey("quotes.id"), nullable=False)
+    revision: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(UUIDCol, ForeignKey("users.id"))
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = _now_col()
+    emailed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

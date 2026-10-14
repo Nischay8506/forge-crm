@@ -11,13 +11,14 @@ const VIEWS = [
   { key: "open", label: "Open" },
   { key: "mine", label: "Mine" },
   { key: "all", label: "All" },
+  { key: "reprice", label: "Reprice recommended" },
 ] as const
 
 /** Every quote: number, customer, enquiry, status, revision and how long it is valid. */
 export function QuotesPage() {
   const [search, setSearch] = useSearchParams()
-  const view = VIEWS.find((v) => v.key === search.get("view"))?.key ?? "open"
-  const { data, isLoading, error } = useQuotes(view === "all" ? "" : "open", view === "mine")
+  const view = search.get("reprice") ? "reprice" : VIEWS.find((v) => v.key === search.get("view"))?.key ?? "open"
+  const { data, isLoading, error } = useQuotes(view === "all" || view === "reprice" ? "" : "open", view === "mine", view === "reprice")
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
@@ -32,7 +33,7 @@ export function QuotesPage() {
       {isLoading && <Loading />}
       <ErrorText error={error} fallback="Could not load the quotes" />
       {data && data.quotes.length === 0 && (
-        <Empty>No quotes yet. Start one from an enquiry with "Start a quote".</Empty>
+        <Empty>{view === "reprice" ? "No sent quote has had its costs change." : 'No quotes yet. Start one from an enquiry with "Start a quote".'}</Empty>
       )}
       {data && data.quotes.length > 0 && (
         <Card className="overflow-x-auto">
@@ -58,7 +59,10 @@ export function QuotesPage() {
                   <td className="py-2 pr-2">
                     {q.enquiry && <Link to={`/enquiries/${q.enquiry.id}`} className="text-teal-600 hover:underline font-mono text-[12px]">{q.enquiry.ref}</Link>}
                   </td>
-                  <td className="py-2 pr-2"><Tag variant={STATUS_TONE[q.status]}>{q.status_label}</Tag></td>
+                  <td className="py-2 pr-2">
+                    <Tag variant={STATUS_TONE[q.status]}>{q.status_label}</Tag>
+                    {q.reprice_reason && <span className="block mt-0.5"><Tag variant="amber" title={q.reprice_reason}>Reprice recommended</Tag></span>}
+                  </td>
                   <td className="py-2 pr-2 whitespace-nowrap text-ink-700">{formatDate(q.valid_until)}</td>
                   <td className="py-2 pr-3 text-ink-700">{q.owner_name ?? "–"}</td>
                 </tr>

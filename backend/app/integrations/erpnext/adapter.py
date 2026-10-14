@@ -240,6 +240,9 @@ class ERPNextAdapter:
             hsn_code=r.get("gst_hsn_code") or None,
             is_stock_item=bool(r.get("is_stock_item")),
             is_sales_item=bool(r.get("is_sales_item", 1)),
+            valuation_rate=_num(r, "valuation_rate") if r.get("valuation_rate") else None,
+            last_purchase_rate=_num(r, "last_purchase_rate")
+            if r.get("last_purchase_rate") else None,
         )
 
     def _price(self, r: dict[str, Any]) -> Price:

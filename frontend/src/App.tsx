@@ -53,6 +53,7 @@ import { OtherMailPage } from '@/features/enquiries/OtherMailPage'
 import { QueuePage } from '@/features/enquiries/QueuePage'
 import { SetupPage } from '@/features/enquiries/SetupPage'
 import { TestMailboxPage } from '@/features/enquiries/TestMailboxPage'
+import { CostModelPage, CostModelsPage } from '@/features/quotes/CostModelsPage'
 import { QuoteDetailPage } from '@/features/quotes/QuoteDetailPage'
 import { QuotesLayout } from '@/features/quotes/QuotesLayout'
 import { QuotesPage } from '@/features/quotes/QuotesPage'
@@ -90,6 +91,8 @@ const router = createBrowserRouter([
           { index: true, element: <QuotesPage /> },
           { path: 'materials', element: <MaterialRatesPage /> },
           { path: 'machines', element: <MachineRatesPage /> },
+          { path: 'cost-models', element: <CostModelsPage /> },
+          { path: 'cost-models/:familyId', element: <CostModelPage /> },
         ],
       },
       { path: 'quotes/:id', element: <QuoteDetailPage /> },

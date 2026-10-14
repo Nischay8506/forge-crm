@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/config/api"
-import type { MachineItem, MaterialItem, QuoteDetail, QuoteRow } from "./types"
+import type { CostModelDetail, CostModelFamily, MachineItem, MaterialItem, QuoteDetail, QuoteRow } from "./types"
 
-export function useQuotes(status: string, mine: boolean) {
+export function useQuotes(status: string, mine: boolean, reprice = false) {
   return useQuery({
-    queryKey: ["quotes", status, mine],
-    queryFn: async () => (await api.get<{ quotes: QuoteRow[] }>("/quotes", { params: { status: status || undefined, mine } })).data,
+    queryKey: ["quotes", status, mine, reprice],
+    queryFn: async () => (await api.get<{ quotes: QuoteRow[] }>("/quotes", {
+      params: { status: status || undefined, mine, reprice: reprice || undefined } })).data,
   })
 }
 
@@ -28,5 +29,20 @@ export function useMachines() {
   return useQuery({
     queryKey: ["costs", "machines"],
     queryFn: async () => (await api.get<{ at: string; machines: MachineItem[] }>("/costs/machines")).data,
+  })
+}
+
+export function useCostModels() {
+  return useQuery({
+    queryKey: ["costs", "models"],
+    queryFn: async () => (await api.get<{ families: CostModelFamily[] }>("/costs/models")).data,
+  })
+}
+
+export function useCostModel(familyId: string | undefined) {
+  return useQuery({
+    queryKey: ["costs", "model", familyId],
+    queryFn: async () => (await api.get<CostModelDetail>(`/costs/models/${familyId}`)).data,
+    enabled: !!familyId,
   })
 }

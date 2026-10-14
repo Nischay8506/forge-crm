@@ -57,6 +57,10 @@ async def record_name(session: AsyncSession, record_type: str | None,
         row = (await session.execute(select(Enquiry.ref, Enquiry.summary)
                                      .where(Enquiry.id == record_id))).first()
         return f"{row.ref}: {row.summary}" if row and row.summary else (row.ref if row else None)
+    if record_type == "quote":
+        from app.models import Quote
+
+        return await session.scalar(select(Quote.number).where(Quote.id == record_id))
     return None
 
 
