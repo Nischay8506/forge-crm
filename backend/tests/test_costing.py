@@ -145,7 +145,12 @@ def test_boms_explode_convert_units_and_stop_at_loops():
     assert parts == {"EN8 (SHAFT)": "390.00", "Turning (SHAFT)": "240.00", "BRG": "360.00"}
     assert out["conversions"][0]["from"] == "g" and out["conversions"][0]["result"] == "5"
     assert out["status"] == "incomplete" and out["per_unit"] == "990.00"
-    assert out["problems"] == ["BOM BOM-PUMP, Assembly: it has no workstation, so no hour rate"]
+    # The missing hour rate, and the overhead and packing a family's cost model would have
+    # added to a BOM cost (J3 C).
+    assert out["problems"] == [
+        "BOM BOM-PUMP, Assembly: it has no workstation, so no hour rate",
+        "BOM BOM-PUMP: the line has no product family, so its factory overhead and packing "
+        "are missing"]
 
     book.boms["SHAFT"] = _bom("BOM-SHAFT", "SHAFT", 1, [("PUMP", 1, "Nos")])
     loop = costing.work_out(book, family_id=None, configuration_id=None, item_code="PUMP",
@@ -434,7 +439,16 @@ async def test_an_item_is_costed_from_its_erpnext_bom_and_bom_changes_flag_quote
                                json={"item_code": "GBX-110"})
         line = r.json()["active"]["lines"][0]
         cost = line["cost"]
-        assert line["cost_source"] == "bom" and line["cost_status"] == "complete", cost
+        # The BOM covers the materials and the operations, but the line belongs to no
+        # family, so the factory overhead and packing are missing: the cost is incomplete
+        # and a person reviews it on a card (J3 C).
+        assert line["cost_source"] == "bom" and line["cost_status"] == "incomplete", cost
+        assert cost["problems"] == ["BOM BOM-GBX-110-001: the line has no product family, so "
+                                    "its factory overhead and packing are missing"]
+        card = (await client.get(f"{API}/decisions/{line['cost_review']['id']}",
+                                 headers=h)).json()
+        assert card["status"] == "pending" and card["title"].startswith(
+            f"Review the incomplete cost of {q['number']} R1, line 1")
         # Housing 4,200; two shafts from their own BOM: 6.4 kg of bar at ₹78/kg, 36 min
         # turning at ₹650/h and 12 min milling at ₹900/h (ERPNext's workstations); four
         # bearings at ₹180; 90 min assembly at ₹300/h.

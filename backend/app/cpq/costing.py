@@ -18,7 +18,9 @@ Per unit (K4, K6 A):
 
 Quantities are converted to their rate's unit with app/cpq/units.py, and every
 conversion is kept (K12 A). Anything that can't be worked out (no rate, a formula that
-fails, a unit that doesn't convert, BOMs that loop) leaves the cost incomplete (K10 A):
+fails, a unit that doesn't convert, BOMs that loop) leaves the cost incomplete (K10 A),
+and so does a BOM cost with no family cost model behind it, because its factory overhead
+and packing are then missing (J3 C):
 the rest is still worked out, and a person with costs.manage reviews the line on a
 Decisions card (app/cpq/agent.py). The line keeps the whole breakdown (inputs, rates
 with their dates, BOM versions, conversions and problems), so it always shows why it
@@ -449,6 +451,14 @@ def work_out(book: Book, *, family_id: uuid.UUID | None, configuration_id: uuid.
             q = costmodel.evaluate(p.model, attrs, qty, with_rate_card=False)
             _keep(w, q)
             _extras(w, p.model, q, qty)
+        elif p.problem is None:
+            # J3 C: overhead and packing come from the family's cost model (K6 A), so with
+            # no model they are missing parts: the cost is incomplete and a person reviews
+            # it on a card (K10), rather than a BOM-only cost passing as the whole cost.
+            w.problem(f"BOM {p.bom.code}: "  # type: ignore[union-attr]
+                      + ("the line has no product family" if family_id is None
+                         else f"{fam} has no cost model yet")
+                      + ", so its factory overhead and packing are missing")
     elif p.source == "rate_card":
         _from_rate_card(w, p.row, p.model, attrs, qty, fam)  # type: ignore[arg-type]
     else:
