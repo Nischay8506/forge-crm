@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app import dev_login
 from app.agents.registry import load_definitions
 from app.api.v1 import router as v1_router
 from app.config import get_settings
@@ -16,6 +17,7 @@ from app.integrations.mcp_server import build_server
 async def lifespan(app: FastAPI):
     # No background loops in the web process: pollers and timers run in the Celery worker.
     # The MCP server's session manager lives as long as the app.
+    await dev_login.ensure_on_startup()
     async with app.state.mcp.session_manager.run():
         yield
     await dispose_engine()

@@ -22,6 +22,24 @@ async def test_login_me_and_refresh(client, make_tenant):
     assert r2.status_code == 200
 
 
+async def test_development_login_is_added_only_in_development(client, monkeypatch):
+    from app import dev_login
+    from app.config import get_settings
+
+    creds = {"company": dev_login.COMPANY, "email": dev_login.EMAIL,
+             "password": dev_login.PASSWORD}
+    monkeypatch.setattr(get_settings(), "environment", "production")
+    await dev_login.ensure_on_startup()
+    assert (await client.post("/api/v1/auth/login", json=creds)).status_code == 401
+
+    monkeypatch.setattr(get_settings(), "environment", "development")
+    await dev_login.ensure_on_startup()
+    headers = await login(client, *creds.values())
+    me = (await client.get("/api/v1/auth/me", headers=headers)).json()
+    assert me["email"] == dev_login.EMAIL and me["permissions"] == ["*"]
+    assert await dev_login.ensure() is False  # left as it is on the next start
+
+
 async def test_bad_credentials_rejected(client, make_tenant):
     slug, email, _ = await make_tenant()
     r = await client.post(
