@@ -265,6 +265,44 @@ async def test_a_configured_line_is_costed_from_its_model(client, ctx):  # noqa:
     assert kinds.count("cost.model.saved") == 1 and kinds.count("quote.costed") >= 4
 
 
+async def test_configuring_a_line_after_the_quote_started_updates_the_draft(client, ctx):  # noqa: F811
+    # Found on Nischay's PC (15 Oct): the quote was started, then the line configured.
+    h, tid = ctx["h"], ctx["tid"]
+    fam, q = await _flanges_quote(client, h, [("pipe", 40, None), ("Gasket", 40, None)])
+    one = q["active"]["lines"][0]
+    assert one["cost_status"] == "unknown" and one["family_id"] is None
+    card_id = one["cost_review"]["id"]
+
+    flange = {"size": "150", "class": "300", "material": "F316", "facing": "RF"}
+    r = await client.post(f"{API}/products/configurations", headers=h, json={
+        "family_id": fam["id"], "enquiry_line_id": one["enquiry_line_id"], "values": flange})
+    assert r.status_code == 201, r.text
+    got = (await client.get(f"{Q}/{q['id']}", headers=h)).json()["active"]["lines"][0]
+    assert got["family_id"] == fam["id"] and got["variant_code"] == "FL-150-300-F316-RF"
+    assert got["description"].startswith("pipe (") and got["cost_status"] == "complete"
+    assert got["unit_cost"] == str(_flange_cost("19.1", 12, "1.5")[1])
+    # The card for the unknown cost closes by itself; the gasket's stays.
+    assert (await client.get(f"{API}/decisions/{card_id}", headers=h)).json()["status"] \
+        == "superseded"
+    async with tenant_session(tid) as s:
+        kinds = list(await s.scalars(select(AuditRecord.kind).where(
+            AuditRecord.record_id == uuid.UUID(q["id"]))))
+        assert "quote.line.configured" in kinds
+
+    # A sent revision never changes, whatever happens to the enquiry.
+    async with tenant_session(tid) as s:
+        quote = await s.get(Quote, uuid.UUID(q["id"]))
+        rev = await s.scalar(select(QuoteRevision).where(QuoteRevision.quote_id == quote.id))
+        rev.status, quote.status = "sent", "sent"
+    r = await client.post(f"{API}/products/configurations", headers=h, json={
+        "family_id": fam["id"], "enquiry_line_id": one["enquiry_line_id"],
+        "values": {**flange, "material": "A105"}})
+    assert r.status_code == 201, r.text
+    after = (await client.get(f"{Q}/{q['id']}", headers=h)).json()["active"]["lines"][0]
+    assert after["variant_code"] == "FL-150-300-F316-RF"
+    assert after["unit_cost"] == got["unit_cost"]
+
+
 async def test_missing_rates_make_costs_incomplete_until_they_are_added(client, ctx):  # noqa: F811
     h = ctx["h"]
     fam, q = await _flanges_quote(client, h, [

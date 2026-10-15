@@ -162,6 +162,39 @@ async def change_line(session: AsyncSession, q: Quote, rev: QuoteRevision, ln: Q
     return changed
 
 
+async def follow_configuration(session: AsyncSession, line: EnquiryLine, cfg: Configuration,
+                               actor: str) -> tuple[Quote, QuoteRevision] | None:
+    """An enquiry line configured after its quote started: the draft quote line copied
+    from it takes the new configuration, so its cost must be worked out again. A sent
+    revision never changes. Returns the quote and draft that changed, if any."""
+    q = await session.scalar(select(Quote).where(Quote.enquiry_id == line.enquiry_id)
+                             .with_for_update())
+    if q is None:
+        return None
+    rev = await revision(session, q, lock=True)
+    if rev.status != "draft":
+        return None
+    ln = await session.scalar(select(QuoteLine).where(
+        QuoteLine.revision_id == rev.id, QuoteLine.enquiry_line_id == line.id)
+        .with_for_update())
+    if ln is None or ln.configuration_id == cfg.id:
+        return None
+    before = ln.variant_code
+    ln.family_id, ln.configuration_id = cfg.family_id, cfg.id
+    ln.variant_code, ln.description = cfg.variant_code, _describe(line, cfg)
+    ln.unit_cost = ln.cost_source = ln.cost_status = None
+    ln.cost_flag = None
+    ln.updated_at = datetime.now(UTC)
+    rev.costed_at = None
+    await session.flush()
+    await chain.append(session, q.tenant_id, "quote.line.configured", actor=actor,
+                       record_type="quote", record_id=q.id, account_id=q.account_id,
+                       evidence_class="customer_money",
+                       data={"number": q.number, "revision": rev.number,
+                             "line": ln.position, "from": before, "to": cfg.variant_code})
+    return q, rev
+
+
 async def remove_line(session: AsyncSession, q: Quote, rev: QuoteRevision,
                       ln: QuoteLine) -> None:
     must_be_draft(q, rev)

@@ -334,7 +334,9 @@ async def test_send_anyway_is_recorded_and_never_passes_a_block(client, ctx):
                           json={"reason": "Customer asked for it tonight"})
     assert r.status_code == 200 and r.json()["status"] == "queued", r.text
     assert r.json()["override_by"].startswith("user:")
-    assert await send.deliver_due(tid, ist(2026, 10, 14, 23, 5).astimezone(UTC)) == {"sent": 1}
+    # "Send anyway" queues it for now (the real clock), quiet hours or not.
+    soon = datetime.now(UTC) + timedelta(minutes=5)
+    assert await send.deliver_due(tid, soon) == {"sent": 1}
     log = (await client.get(f"{API}/audit?kind=message.sent_anyway", headers=h)).json()
     assert len(log) == 1 and log[0]["actor"].startswith("user:")
     blocked = await _compose(client, h, cid, subject="", body="x")

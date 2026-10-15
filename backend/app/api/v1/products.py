@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import AppError, Forbidden, NotFound, ValidationFailed
 from app.core.permissions import has_permission
-from app.cpq import products
+from app.cpq import costing, products, quotes
 from app.cpq.configurator import ModelProblems, TooComplex
 from app.cpq.samples import SAMPLES
 from app.db import get_db
@@ -164,6 +164,10 @@ async def save_configuration(body: ConfigIn, current: CurrentUser = Depends(USE)
         await products.link(db, line, cfg)
         await records.event(db, enq, "line_configured", _actor(current), line=line.position,
                             family=f.name, variant_code=cfg.variant_code)
+        # Its draft quote, if one was started already, follows the new configuration.
+        changed = await quotes.follow_configuration(db, line, cfg, _actor(current))
+        if changed is not None:
+            await costing.cost_revision(db, *changed, _actor(current), why="line configured")
     return products.config_out(cfg) or {}
 
 
