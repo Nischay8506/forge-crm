@@ -331,6 +331,8 @@ function SettingsPanel({ data, canManage }: { data: ConnectionDetail; canManage:
   const [form, setForm] = useState({
     name: data.name, base_url: data.base_url,
     time_zone: data.settings.time_zone ?? "", company: data.settings.company ?? "",
+    bom_includes_overhead: data.settings.bom_includes_overhead === "yes",
+    bom_includes_packing: data.settings.bom_includes_packing === "yes",
   })
   const [creds, setCreds] = useState({ api_key: "", api_secret: "" })
   const [hook, setHook] = useState<{ token: string; url: string; header: string } | null>(null)
@@ -338,7 +340,11 @@ function SettingsPanel({ data, canManage }: { data: ConnectionDetail; canManage:
   const save = useMutation({
     mutationFn: async () => api.patch(`/integrations/connections/${data.id}`, {
       name: form.name, base_url: form.base_url,
-      settings: { ...data.settings, time_zone: form.time_zone || null, company: form.company || null },
+      settings: {
+        ...data.settings, time_zone: form.time_zone || null, company: form.company || null,
+        bom_includes_overhead: form.bom_includes_overhead ? "yes" : null,
+        bom_includes_packing: form.bom_includes_packing ? "yes" : null,
+      },
     }),
     onSuccess: done,
   })
@@ -365,6 +371,22 @@ function SettingsPanel({ data, canManage }: { data: ConnectionDetail; canManage:
           <Field label={SETTING_LABELS.company} hint="Only needed when ERPNext has several companies">
             <Input disabled={!canManage} value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
           </Field>
+          <div className="space-y-1.5 pt-1">
+            <p className="text-[12.5px] text-ink-500">
+              When a quote line is costed from a BOM here, Forge adds the family's factory overhead and packing
+              on top. Tick a box if this ERP's BOM costs already carry that, so it is not counted twice.
+            </p>
+            <label className="flex items-center gap-1.5 text-[12.5px]">
+              <input type="checkbox" disabled={!canManage} checked={form.bom_includes_overhead}
+                onChange={(e) => setForm({ ...form, bom_includes_overhead: e.target.checked })} />
+              {SETTING_LABELS.bom_includes_overhead}
+            </label>
+            <label className="flex items-center gap-1.5 text-[12.5px]">
+              <input type="checkbox" disabled={!canManage} checked={form.bom_includes_packing}
+                onChange={(e) => setForm({ ...form, bom_includes_packing: e.target.checked })} />
+              {SETTING_LABELS.bom_includes_packing}
+            </label>
+          </div>
           {save.error && (
             <div className="text-red-500 text-[12.5px]">
               {saveProblems.length ? saveProblems.map((p) => <p key={p}>{p}</p>) : errorMessage(save.error, "Could not save")}

@@ -45,6 +45,7 @@ export interface CostBreakdown {
   boms: { code: string; item_code: string; level: number; fingerprint: string; modified_at: string; quantity: string; uom: string | null }[]
   conversions: { what: string; from: string; to: string; factor: string; qty: string; result: string }[]
   problems: string[]
+  notes: string[]
   values: Record<string, string>
   model: { id: string; version: number } | null
   packed_kg: string | null

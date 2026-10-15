@@ -32,7 +32,11 @@ KINDS: dict[str, type[ERPNextAdapter]] = {"erpnext": ERPNextAdapter}
 # Customers first, so orders and invoices find their account on the first sync.
 ENTITY_ORDER = (Entity.customer, Entity.item, Entity.price, Entity.order, Entity.invoice,
                 Entity.receipt, Entity.stock, Entity.workstation, Entity.bom)
-SETTING_KEYS = ("time_zone", "company", "host_header")
+SETTING_KEYS = ("time_zone", "company", "host_header", "bom_includes_overhead",
+                "bom_includes_packing")
+# "yes" on either means this ERP's BOM costs already carry that part, so Forge adds none
+# on top of a cost it took from a BOM (J3 C's double-counting check).
+YES_NO_KEYS = ("bom_includes_overhead", "bom_includes_packing")
 
 # Plain words for alert titles, and what a person can do about each cause.
 CAUSE_TITLES = {
@@ -111,6 +115,9 @@ def _clean_url(url: str) -> str:
 def _clean_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     out = {k: (v.strip() if isinstance(v, str) else v) for k, v in (settings or {}).items()
            if k in SETTING_KEYS and v not in (None, "")}
+    for k in YES_NO_KEYS:
+        if k in out and str(out[k]).lower() not in ("yes", "no"):
+            raise ValidationFailed([f"{k} must be yes or no"])
     if "time_zone" in out:
         from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 

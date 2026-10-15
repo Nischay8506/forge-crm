@@ -126,6 +126,38 @@ def _bom(code, item, qty, items, ops=(), uom="Nos"):
                   is_default=True, data=data, modified_at=datetime.now(UTC))
 
 
+def test_an_erp_that_already_includes_overhead_is_not_charged_for_it_twice():
+    """A company whose ERP already burdens its BOM costs ticks the box on the connection,
+    and Forge then adds neither overhead nor packing on top, and calls nothing missing."""
+    book = costing.Book(date(2026, 10, 14), RateBook(date(2026, 10, 14), {
+        "BRG": _rate("material", "BRG", 180, unit="nos")}, {}))
+    bom = _bom("BOM-PUMP", "PUMP", 1, [("BRG", 2, "Nos")])
+    book.boms = {"PUMP": bom}
+    plain = costing.work_out(book, family_id=None, configuration_id=None, item_code="PUMP",
+                             unit="nos", qty=Decimal(1))
+    assert plain["status"] == "incomplete" and plain["notes"] == []
+    assert plain["problems"] == ["BOM BOM-PUMP: the line has no product family, so its "
+                                 "factory overhead and packing are missing"]
+
+    book.erps = {bom.connection_id: {"name": "ERPNext Pune", "overhead": True,
+                                     "packing": True}}
+    both = costing.work_out(book, family_id=None, configuration_id=None, item_code="PUMP",
+                            unit="nos", qty=Decimal(1))
+    assert both["status"] == "complete" and both["problems"] == []
+    assert both["notes"] == [
+        "The BOM cost from ERPNext Pune already includes the factory overhead.",
+        "The BOM cost from ERPNext Pune already includes the packing."]
+
+    # Only the overhead: the packing is still missing, so the cost still goes to review.
+    book.erps[bom.connection_id]["packing"] = False
+    half = costing.work_out(book, family_id=None, configuration_id=None, item_code="PUMP",
+                            unit="nos", qty=Decimal(1))
+    assert half["status"] == "incomplete"
+    assert half["problems"] == ["BOM BOM-PUMP: the line has no product family, so its "
+                                "packing is missing"]
+    assert half["per_unit"] == both["per_unit"] == "360.00"
+
+
 def test_boms_explode_convert_units_and_stop_at_loops():
     book = costing.Book(date(2026, 10, 14), RateBook(date(2026, 10, 14), {
         "EN8": _rate("material", "EN8", 78, y=50, scrap=20),

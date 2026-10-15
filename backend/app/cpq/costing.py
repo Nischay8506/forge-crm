@@ -55,6 +55,7 @@ from app.models import (
     CostModel,
     ErpBom,
     ErpBomVersion,
+    ErpConnection,
     ProductFamily,
     Quote,
     QuoteLine,
@@ -151,6 +152,9 @@ class Book:
     configs: dict[uuid.UUID, Configuration] = field(default_factory=dict)
     families: dict[uuid.UUID, str] = field(default_factory=dict)
     boms: dict[str, ErpBom] = field(default_factory=dict)  # item code (upper) -> default
+    # Connections whose BOM costs already carry the overhead or the packing: Forge adds
+    # none on top of a cost it took from their BOMs, so neither is counted twice.
+    erps: dict[uuid.UUID, dict[str, Any]] = field(default_factory=dict)  # id -> name, included
     _looked: set[str] = field(default_factory=set)
 
     @staticmethod
@@ -189,6 +193,23 @@ class Book:
                      for c in want if c in self.boms
                      for x in (self.boms[c].data or {}).get("items") or []}
             want = inner - self._looked - {""}
+        await self.load_erps(session)
+
+    async def load_erps(self, session: AsyncSession) -> None:
+        """What each ERP connection behind a BOM says its costs already include."""
+        ids = {b.connection_id for b in self.boms.values()} - set(self.erps)
+        if not ids:
+            return
+        for c in await session.scalars(select(ErpConnection).where(ErpConnection.id.in_(ids))):
+            s = c.settings or {}
+            self.erps[c.id] = {
+                "name": c.name,
+                "overhead": str(s.get("bom_includes_overhead", "")).lower() == "yes",
+                "packing": str(s.get("bom_includes_packing", "")).lower() == "yes"}
+
+    def included_by(self, bom: ErpBom) -> dict[str, Any]:
+        return self.erps.get(bom.connection_id, {"name": "the ERP", "overhead": False,
+                                                 "packing": False})
 
     def family(self, family_id: uuid.UUID | None) -> str:
         return self.families.get(family_id, "the family") if family_id else "the family"
@@ -212,6 +233,7 @@ class Work:
     boms: list[dict[str, Any]] = field(default_factory=list)
     conversions: list[dict[str, Any]] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
     values: dict[str, str] = field(default_factory=dict)
     packed_kg: Decimal | None = None
     packed_m3: Decimal | None = None
@@ -228,6 +250,11 @@ class Work:
     def problem(self, text: str) -> None:
         if text not in self.problems:
             self.problems.append(text)
+
+    def note(self, text: str) -> None:
+        """Something worth saying about the cost that is not a problem."""
+        if text not in self.notes:
+            self.notes.append(text)
 
     def convert(self, where: str, qty: Decimal, frm: str | None, to: str | None) -> Decimal:
         f = units.factor(frm or to, to or frm)
@@ -283,14 +310,23 @@ def _operation(w: Work, book: Book, label: str, machine: str, minutes: Decimal, 
 
 
 def _extras(w: Work, m: costmodel.CostModel, q: costmodel.Quantities,
-            qty: Decimal | None) -> None:
-    """Overhead, packing and tooling from the family's model, on what is costed so far."""
+            qty: Decimal | None, already: dict[str, Any] | None = None) -> None:
+    """Overhead, packing and tooling from the family's model, on what is costed so far.
+    `already` is what the ERP behind a BOM cost says it carries itself: that part is left
+    out here rather than counted twice, and the line says so."""
+    already = already or {}
     base = w.total("material", "conversion")
-    if q.overhead_pct:
+    if already.get("overhead"):
+        w.note(f"The BOM cost from {already['name']} already includes the factory overhead, "
+               "so Forge adds none.")
+    elif q.overhead_pct:
         w.part("overhead", "Factory overhead",
                f"{n(q.overhead_pct)}% of material and conversion ({rs(base)})",
                base * q.overhead_pct / 100)
-    if q.packing is not None and q.packing[1] > 0:
+    if already.get("packing"):
+        w.note(f"The BOM cost from {already['name']} already includes the packing, so Forge "
+               "adds none.")
+    elif q.packing is not None and q.packing[1] > 0:
         basis, v = q.packing
         if basis == "pct":
             b2 = w.total("material", "conversion", "overhead")
@@ -447,18 +483,28 @@ def work_out(book: Book, *, family_id: uuid.UUID | None, configuration_id: uuid.
         _from_model(w, book, p.row, p.model, attrs, qty, fam)  # type: ignore[arg-type]
     elif p.source == "bom":
         _from_bom(w, book, p.bom, unit)  # type: ignore[arg-type]
+        already = book.included_by(p.bom)  # type: ignore[arg-type]
         if p.model is not None:  # the family's overhead, packing and tooling still apply
             q = costmodel.evaluate(p.model, attrs, qty, with_rate_card=False)
             _keep(w, q)
-            _extras(w, p.model, q, qty)
+            _extras(w, p.model, q, qty, already)
         elif p.problem is None:
             # J3 C: overhead and packing come from the family's cost model (K6 A), so with
             # no model they are missing parts: the cost is incomplete and a person reviews
             # it on a card (K10), rather than a BOM-only cost passing as the whole cost.
-            w.problem(f"BOM {p.bom.code}: "  # type: ignore[union-attr]
-                      + ("the line has no product family" if family_id is None
-                         else f"{fam} has no cost model yet")
-                      + ", so its factory overhead and packing are missing")
+            # What this ERP says its own BOM costs already carry is not missing.
+            missing = []
+            for word, key in (("factory overhead", "overhead"), ("packing", "packing")):
+                if already.get(key):
+                    w.note(f"The BOM cost from {already['name']} already includes the {word}.")
+                else:
+                    missing.append(word)
+            if missing:
+                w.problem(f"BOM {p.bom.code}: "  # type: ignore[union-attr]
+                          + ("the line has no product family" if family_id is None
+                             else f"{fam} has no cost model yet")
+                          + f", so its {' and '.join(missing)} "
+                          + ("are" if len(missing) > 1 else "is") + " missing")
     elif p.source == "rate_card":
         _from_rate_card(w, p.row, p.model, attrs, qty, fam)  # type: ignore[arg-type]
     else:
@@ -483,6 +529,7 @@ def work_out(book: Book, *, family_id: uuid.UUID | None, configuration_id: uuid.
         "rates": sorted(w.rates.values(), key=lambda r: (r["kind"], r["code"])),
         "missing": [{"kind": k, "code": c} for k, c in sorted(w.missing)],
         "boms": w.boms, "conversions": w.conversions, "problems": w.problems,
+        "notes": w.notes,
         "values": w.values, "model": w.model,
         "packed_kg": n(w.packed_kg, 4) if w.packed_kg is not None else None,
         "packed_m3": n(w.packed_m3, 6) if w.packed_m3 is not None else None,

@@ -18,6 +18,9 @@ export function CostView({ c, unit }: { c: CostBreakdown; unit?: string | null }
           <ul className="list-disc pl-4 space-y-0.5">{c.problems.map((p) => <li key={p}>{p}</li>)}</ul>
         </div>
       )}
+      {(c.notes ?? []).length > 0 && (
+        <ul className="list-disc pl-4 space-y-0.5 text-ink-500">{c.notes.map((t) => <li key={t}>{t}</li>)}</ul>
+      )}
       {c.parts.length > 0 && (
         <table className="w-full">
           <tbody>

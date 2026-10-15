@@ -62,6 +62,8 @@ export const SETTING_LABELS: Record<string, string> = {
   time_zone: "Time zone",
   company: "Company (for credit limits)",
   host_header: "Host header",
+  bom_includes_overhead: "BOM costs already include the factory overhead",
+  bom_includes_packing: "BOM costs already include the packing",
 }
 
 export function words(s: string | null | undefined): string {
