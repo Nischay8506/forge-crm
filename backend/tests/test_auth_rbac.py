@@ -37,7 +37,14 @@ async def test_development_login_is_added_only_in_development(client, monkeypatc
     headers = await login(client, *creds.values())
     me = (await client.get("/api/v1/auth/me", headers=headers)).json()
     assert me["email"] == dev_login.EMAIL and me["permissions"] == ["*"]
-    assert await dev_login.ensure() is False  # left as it is on the next start
+    assert await dev_login.ensure() == []  # left as it is on the next start
+
+    # One login per role, so the inbox and its approvals can be tried without seeding.
+    for key, (_, role) in dev_login.PEOPLE.items():
+        them = await login(client, dev_login.COMPANY, f"{key}@{dev_login.COMPANY}.example.com",
+                           dev_login.PASSWORD)
+        mine = (await client.get("/api/v1/auth/me", headers=them)).json()
+        assert set(mine["permissions"]) == set(dev_login.ROLES[role][1])
 
 
 async def test_bad_credentials_rejected(client, make_tenant):
