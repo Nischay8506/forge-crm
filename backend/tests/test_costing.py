@@ -9,6 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.exc import ProgrammingError
 
 from app.cpq import costing, costmodel, units
 from app.cpq.configurator import Model as ProductModel
@@ -431,6 +432,59 @@ async def test_sent_quotes_are_flagged_when_costs_move(client, ctx):  # noqa: F8
             Message.created_at.desc()))
         assert msg.subject.startswith("Costs changed on 1 of your sent quote")
         assert f"{q['number']} R1: Line 1: Material F316" in msg.body
+
+
+# The sealed cost snapshot (J3, point 5) ---------------------------------------------------
+
+async def test_a_cost_changed_outside_forge_no_longer_matches_its_seal(client, ctx):  # noqa: F811
+    h, tid = ctx["h"], ctx["tid"]
+    _, q = await _flanges_quote(client, h, [
+        ("Weld neck flange", 40, {"size": "150", "class": "300", "material": "F316",
+                                  "facing": "RF"}),
+        ("Weld neck flange", 10, {"size": "100", "class": "150", "material": "LF2",
+                                  "facing": "RF"})])
+    got = (await client.get(f"{Q}/{q['id']}/seal", headers=h)).json()
+    assert got["ok"] is True and got["revision"] == 1
+    assert got["lines"] == [{"line": 1, "state": "sealed"}, {"line": 2, "state": "sealed"}]
+    assert got["checked"]["seq"] > 0
+
+    # Reviewing a line adds to its kept cost, and the seal still holds: the fingerprint
+    # covers what Forge worked out, not what a person decided afterwards.
+    async with tenant_session(tid) as s:
+        line = await s.scalar(select(QuoteLine).where(QuoteLine.position == 1))
+        line.cost = {**line.cost, "review": {"key": "x", "by": "someone", "unit_cost": "1"}}
+    got = (await client.get(f"{Q}/{q['id']}/seal", headers=h)).json()
+    assert got["ok"] is True and got["lines"][0]["state"] == "sealed"
+
+    # Someone with database access lowers line 1's cost and leaves its own seal in place.
+    # The breakdown is worked out again from itself, so it no longer matches the chain.
+    async with tenant_session(tid) as s:
+        line = await s.scalar(select(QuoteLine).where(QuoteLine.position == 1))
+        line.cost = {**line.cost, "per_unit": "1.00"}
+    got = (await client.get(f"{Q}/{q['id']}/seal", headers=h)).json()
+    assert got["ok"] is False
+    assert got["lines"] == [{"line": 1, "state": "changed"}, {"line": 2, "state": "sealed"}]
+
+    # Working the costs out again seals the new breakdown.
+    assert (await client.post(f"{Q}/{q['id']}/cost", headers=h)).status_code == 200
+    got = (await client.get(f"{Q}/{q['id']}/seal", headers=h)).json()
+    assert got["ok"] is True and [x["state"] for x in got["lines"]] == ["sealed", "sealed"]
+
+    # The seals live in the audit chain, which no application role may rewrite: an
+    # attempt to change the record they are in fails before it reaches the check.
+    async with tenant_session(tid) as s:
+        rec = await s.scalar(select(AuditRecord).where(
+            AuditRecord.kind == "quote.costed").order_by(AuditRecord.seq.desc()).limit(1))
+        assert rec.data["cost_seals"]["revision"] == 1
+        rec.data = {}
+        with pytest.raises(ProgrammingError, match="permission denied"):
+            await s.flush()
+        await s.rollback()
+
+    # Reading a quote is not reading its costs (C17 B).
+    _, seller = await _user_with_role(client, ctx, "Seal Seller", ["quotes.read"])
+    r = await client.get(f"{Q}/{q['id']}/seal", headers=seller)
+    assert r.status_code == 403 and "costs.view" in r.text
 
 
 # ERPNext BOMs (K7, K11 A) -----------------------------------------------------------------

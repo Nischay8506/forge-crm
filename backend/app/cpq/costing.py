@@ -20,11 +20,16 @@ Quantities are converted to their rate's unit with app/cpq/units.py, and every
 conversion is kept (K12 A). Anything that can't be worked out (no rate, a formula that
 fails, a unit that doesn't convert, BOMs that loop) leaves the cost incomplete (K10 A),
 and so does a BOM cost with no family cost model behind it, because its factory overhead
-and packing are then missing (J3 C):
-the rest is still worked out, and a person with costs.manage reviews the line on a
-Decisions card (app/cpq/agent.py). The line keeps the whole breakdown (inputs, rates
-with their dates, BOM versions, conversions and problems), so it always shows why it
-cost what it did.
+and packing are then missing (J3 C). The rest is still worked out, and a person with
+costs.manage reviews the line on a Decisions card (app/cpq/agent.py). The line keeps the
+whole breakdown (inputs, rates with their dates, BOM versions, conversions and problems),
+so it always shows why it cost what it did.
+
+Each breakdown is sealed: seal_of() fingerprints it and cost_revision() writes every
+line's seal into the audit chain, whose hashes and hourly signatures protect it (R3).
+seals() works the fingerprints out again from the kept breakdowns and says, line by line,
+whether each is still the cost Forge worked out, so a cost changed in the database
+without Forge cannot pass as one Forge produced.
 
 refresh() finds open quotes whose costs are out of date: a rate changed or took effect
 (K9 A), an ERPNext BOM changed (K11 A), the cost model changed, or something that was
@@ -50,6 +55,7 @@ from app.cpq import costmodel, quotes, units
 from app.cpq.formula import num
 from app.cpq.rates import Rate, RateBook
 from app.models import (
+    AuditRecord,
     Configuration,
     CostAlert,
     CostModel,
@@ -540,7 +546,18 @@ def work_out(book: Book, *, family_id: uuid.UUID | None, configuration_id: uuid.
         "at": book.at.isoformat(), "costed_at": datetime.now(UTC).isoformat(),
     }
     out["review_key"] = review_key(out)
+    out["seal"] = seal_of(out)
     return out
+
+
+def seal_of(out: dict[str, Any]) -> str:
+    """The fingerprint of a worked-out cost: every part, rate, BOM version, conversion
+    and input that made it. cost_revision() writes it into the audit chain, so a stored
+    breakdown that no longer matches its seal was changed outside Forge (seals()).
+    The seal itself and the review a person later added are left out."""
+    body = {k: v for k, v in out.items() if k not in ("seal", "review")}
+    return hashlib.sha256(chain.canonical(json.loads(json.dumps(body, default=str)))
+                          .encode()).hexdigest()
 
 
 def review_key(out: dict[str, Any]) -> str:
@@ -583,7 +600,8 @@ async def cost_revision(session: AsyncSession, q: Quote, rev: QuoteRevision, act
     lines = await quotes.lines_of(session, rev)
     book = await Book.load(session, await quotes.today(session, q.tenant_id), lines)
     review: list[QuoteLine] = []
-    summary = []
+    summary: list[dict[str, Any]] = []
+    line_seals: dict[str, str] = {}
     for ln in lines:
         out = work_out(book, family_id=ln.family_id, configuration_id=ln.configuration_id,
                        item_code=ln.item_code, unit=ln.unit, qty=ln.qty)
@@ -605,6 +623,7 @@ async def cost_revision(session: AsyncSession, q: Quote, rev: QuoteRevision, act
             ln.cost_review_id = None
         summary.append({"line": ln.position, "source": out["source"], "status": status,
                         "unit_cost": money(unit_cost), "problems": out["problems"][:5]})
+        line_seals[str(ln.position)] = out["seal"]
     await record_boms(session, [book.boms[b["item_code"].upper()] for ln in lines
                                 for b in ln.cost["boms"]
                                 if b["item_code"].upper() in book.boms])
@@ -615,10 +634,53 @@ async def cost_revision(session: AsyncSession, q: Quote, rev: QuoteRevision, act
                        record_id=q.id, account_id=q.account_id,
                        evidence_class="customer_money",
                        data={"number": q.number, "revision": rev.number, "why": why,
-                             "at": book.at, "lines": summary})
+                             "at": book.at, "lines": summary,
+                             # Self-contained, and in the chain's plain skeleton: the
+                             # seals are still readable once the rest is trimmed (R5).
+                             "cost_seals": {"revision": rev.number,
+                                            "lines": line_seals}})
     if review:
         await cost_agent.ask_review(session, q, rev, review)
     return {"lines": summary}
+
+
+async def seals(session: AsyncSession, q: Quote, rev: QuoteRevision) -> dict[str, Any]:
+    """Check each costed line against the fingerprint the audit chain holds for it.
+
+    A cost is worked out by Forge and then kept on the line. This says whether what is
+    kept is still the cost Forge worked out: the audit record of the costing holds each
+    line's seal, the chain's own hashes and hourly signatures protect that record (R3),
+    so a breakdown edited straight in the database no longer matches. "checked" is the
+    audit record it was checked against; a quote costed before seals existed, or never
+    costed, says so instead."""
+    rec = await session.scalar(
+        select(AuditRecord).where(AuditRecord.tenant_id == q.tenant_id,
+                                  AuditRecord.kind == "quote.costed",
+                                  AuditRecord.record_type == "quote",
+                                  AuditRecord.record_id == q.id)
+        .order_by(AuditRecord.seq.desc()).limit(1))
+    sealed = ((rec.data or {}).get("cost_seals") or {}) if rec is not None else {}
+    held = sealed.get("lines") or {}
+    same_rev = sealed.get("revision") == rev.number
+    lines = []
+    for ln in await quotes.lines_of(session, rev):
+        cost = ln.cost or {}
+        if not cost:
+            lines.append({"line": ln.position, "state": "not_costed"})
+            continue
+        want = held.get(str(ln.position)) if same_rev else None
+        if want is None:
+            lines.append({"line": ln.position, "state": "not_sealed"})
+            continue
+        # Worked out again from the kept breakdown, never read from its own "seal"
+        # key: the point is to catch a breakdown changed outside Forge, and an
+        # editor who leaves that key alone would otherwise pass.
+        now = seal_of(cost)
+        lines.append({"line": ln.position, "state": "sealed" if now == want else "changed"})
+    return {"revision": rev.number,
+            "checked": {"seq": rec.seq, "at": rec.created_at.isoformat()}
+            if rec is not None and same_rev else None,
+            "ok": all(x["state"] != "changed" for x in lines), "lines": lines}
 
 
 # Out of date ----------------------------------------------------------------------------

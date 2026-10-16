@@ -254,3 +254,15 @@ async def work_out_costs(quote_id: uuid.UUID, current: CurrentUser = Depends(WOR
     rev = await quotes.revision(db, q, lock=True)
     await costing.cost_revision(db, q, rev, _actor(current), why="asked for")
     return await _detail(db, q, current)
+
+
+@router.get("/{quote_id}/seal")
+async def check_seal(quote_id: uuid.UUID, revision: int | None = None,
+                     current: CurrentUser = Depends(READ),
+                     db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """Is each line's kept cost still the one Forge worked out? Checked against the
+    fingerprints in the audit chain, which its hashes and hourly signatures protect."""
+    if not _costs(current):
+        raise Forbidden("You need the costs.view permission to check a quote's costs")
+    q = await _quote(db, quote_id)
+    return await costing.seals(db, q, await quotes.revision(db, q, revision))
