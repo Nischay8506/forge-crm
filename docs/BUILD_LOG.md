@@ -5,14 +5,19 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
-## 2026-10-16 (Day 9): the cost snapshot sealed; errors that say what is wrong; one-command setup
+## 2026-10-16 (Day 9): the cost snapshot sealed; errors that say what is wrong; one-command setup;
+the work split three ways
 
 **Decisions (Nischay):** "go" at 05:38Z resumed the build paused the evening before. At 06:18Z, after a
 friend's laptop refused to save an enquiry, he asked what had gone wrong and what other keys a teammate
 must generate. At 07:05Z: "prepare a project copy which I can share with teammates and they can run in
 their system, and a startup guide so that they can run the website by reading it", with "it should not
 have issues which we currently facing". At 09:32Z he asked for this documentation update, ahead of the
-usual 17:30 IST slot.
+usual 17:30 IST slot. In the afternoon he turned to working with two teammates: at 10:43Z how the three
+streams integrate at the end, worried about moving a teammate's database onto his; at 12:36Z what to
+tell each teammate and where they start; at 12:48Z that both teammates had run `scripts\setup.cmd` on
+their own laptops, **inside OneDrive**, and Forge runs with no errors; and at 12:51Z he chose **A** on
+the platform owner, which is **himself**.
 
 **Done**
 - **5d8450f, each line's worked-out cost is sealed in the audit chain** (the fifth of his extra J3
@@ -42,6 +47,29 @@ usual 17:30 IST slot.
 - A shareable copy for teammates at `forge-crm-share/` in the Claude project files: `forge-crm.zip`
   (the git history, no `.env` and no keys) and `START_HERE.md` beside it.
 
+**Done, afternoon**
+- Answered the integration question: there is no database to migrate. The schema is the files in
+  `backend/alembic/versions/`, every machine's data is sample data, and at merge each person drops their
+  database and runs `alembic upgrade head` on the merged code. A shared development database across
+  machines was argued against: it would take away the thing that makes the end integration cheap.
+  Reproduced a forked migration chain in a throwaway copy to show him what it looks like
+  (`alembic heads` printing two lines, `Multiple head revisions are present`) and that re-pointing
+  `down_revision` and renumbering puts it back to one head.
+- Wrote a brief for each teammate, posted in the thread for him to send: the day-one steps, the first
+  feature, the folders they own, what not to touch, and the two rules that bite. **Stream B starts on
+  F2.1** (evidence-backed deal stages: the opportunity object every other M2 feature hangs off, needing
+  nothing from the other streams) and **Stream C on F5.1** (Account 360, on top of the accounts,
+  contacts, site tree and ERP links that already exist). Both lead with proving the whole loop (clone,
+  setup, branch, the five checks, a pull request, a merge) on one trivial change before any module work.
+- **5415e96, the platform owner is named.** The work-split doc's rule about the ten Module 12 folders
+  says "without Nischay" rather than "without the platform owner", the handover records the three-stream
+  split and the ownership as decisions, and `START_HERE.md` gained what a second and third developer
+  need: setting their own git name before their first commit (a shared zip carries the name it was built
+  with), `npm run build` as the fifth check, one migration per pull request with `alembic heads` printing
+  a single head before merging and what to do when it prints two, and a section on the three streams,
+  their folders, and the habit at the four places two streams meet, where the owner writes the small
+  function and the other side calls it.
+
 **Problems found and fixed**
 - **"Could not save this enquiry" on a friend's laptop.** Reproduced from nothing: the laptop had no
   `backend\.env` at all, so `EVIDENCE_KEYS` was empty, so every write that records customer details in
@@ -56,12 +84,25 @@ usual 17:30 IST slot.
   now counts as unset. Checked on a fresh copy: setup from nothing, then the API, the fixed admin login,
   and a manual enquiry saved.
 
+- **The copy to Nischay's PC broke its own git history**, briefly. The `.sync` bundle named its file of
+  new objects `tmp.pack`, the same as the morning's bundle, and extracting with `tar --overwrite`
+  replaced it, so the objects of that morning's commit were destroyed: his repository answered
+  "Could not read 3a01a57 / Failed to traverse parents of commit 5415e96". Repaired by packing the range
+  from the newest commit his machine could still read up to HEAD under a fresh name and indexing it;
+  `git log` then showed all three commits with a clean tree. Every bundle from now on names its pack
+  uniquely, since duplicate objects across packs are harmless and an overwritten pack is not.
+- A teammate's clone showed that the shared zip carries Claude's git identity, so their commits would
+  have been authored "Claude" until they set their own. Named in START_HERE section 2 now.
+
 **Not done / next**
 - **Freight** (K1 D) still waits on **G1-G7**. Then F3.3 pricing and the floor.
 - Open with Nischay: whether the seal check gets a "Check costs" button on the quote cost view, or stays
   an API and audit check.
 - Three of his five extra J3 points are on the later list in HANDOVER section 7, each with the condition
   that would make it worth building.
+- Three process questions are open with him, all in HANDOVER section 7: the merge cadence that keeps a
+  forked migration chain cheap, whether a GitHub Action runs the five checks on every push, and the
+  folder name for M6, since `app/channels` is already the messaging platform.
 
 ## 2026-10-15 (Day 8): J1-J4 answered; a fix from his own test; fixed development logins
 

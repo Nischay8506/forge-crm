@@ -376,12 +376,17 @@ tenant named `eval…` (`gate…` for the policy gate) in the dev database each 
 Claude builds and runs the tests in its own cloud workspace, then copies the source (with the
 `.git` history, without `node_modules`/`.venv`) into this folder. Each copy is one git commit, so
 `git log` in this folder shows every step. Your machine needs `npm install` / `uv sync` after a copy.
-The bundle used for the copy is left at `.sync/forge-crm-sync.tgz` (git-ignored, overwritten each time).
+Each copy's bundle is left in `.sync/` under its own name (git-ignored). The file of new git objects
+inside a bundle must be named uniquely too, never `tmp.pack`: on 2026-10-16 two bundles used that name,
+the second overwrote the first, and the objects of the earlier commit were lost, so `git log` on the
+device failed with "Could not read <sha>". The repair is to pack the range from the newest commit the
+device can still read up to HEAD under a fresh name and run `git index-pack` on it.
 If you edit files here yourself, tell Claude before the next session so it starts from your version.
 Since 2026-10-12 the same history also goes to the GitHub repo (section 1): Claude hands the new
 commits over as a git bundle and they are pushed as they are, never with a `.env` file or a key. A
 teammate works from a clone of that repo with their own `backend/.env` and `frontend/.env` and their own
-keys; since 2026-10-16 `scripts\setup.cmd` writes both from the `.env.example` files and generates the
+keys, and reads [START_HERE.md](../START_HERE.md) first, whose section 9 has the three streams, the
+folders each owns and the shared-platform rule; since 2026-10-16 `scripts\setup.cmd` writes both from the `.env.example` files and generates the
 keys, so a new machine needs `git pull` and that one command. A shareable zip of the repository
 (history included, no `.env`, no keys) is kept at `forge-crm-share/forge-crm.zip` in the Claude project
 files, with `START_HERE.md` beside it.
