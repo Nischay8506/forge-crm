@@ -33,6 +33,10 @@ cd forge-crm
 If Nischay sent you a zip instead, unzip it and `cd` into the folder. It is a full git
 repository, so `git pull` works from it as well.
 
+Put it somewhere **outside OneDrive, Dropbox or Google Drive**, for example `C:\dev`. A
+synced folder tries to upload the thousands of files that the Python and Node packages
+add, which is slow and sometimes locks a file while you are building.
+
 ## 3. Run setup once
 
 Docker Desktop has to be running first. Then, in the `forge-crm` folder:
@@ -137,6 +141,12 @@ screen instead of a bare 500, so if the message names a setting, that is the one
 printed. If port 5173 was busy, Vite moves to 5174 and the API then refuses the browser,
 because `CORS_ORIGINS` in `backend\.env` lists the address it trusts. Either free 5173 or
 add the new address to that list and restart the API.
+
+**`uv sync` stops with "failed to hardlink" or "os error 396".** The project is in
+OneDrive, which cannot do hardlinks. Setup now tells uv to copy instead, so run
+`scripts\setup.cmd` again and it will get past it. If you want it off your cloud drive,
+move the whole folder to `C:\dev\forge-crm`, delete `backend\.venv`, and run setup once
+more.
 
 **The API will not start, or says it cannot connect.** Docker Desktop is not running, or
 the containers are not up: `docker compose -f infra/docker-compose.yml ps` should show

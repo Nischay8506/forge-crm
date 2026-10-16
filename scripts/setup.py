@@ -149,6 +149,18 @@ def main() -> None:
                          "backend/.env before running setup again)")
     args = ap.parse_args()
 
+    # OneDrive (and any other cloud-synced folder) cannot hardlink, which is how uv
+    # fills a virtual environment from its cache: it fails with "The cloud operation
+    # cannot be performed on a file with incompatible hardlinks" (os error 396).
+    # Copying is a little slower and always works.
+    os.environ.setdefault("UV_LINK_MODE", "copy")
+    if "onedrive" in str(ROOT).lower():
+        print(f"\nNOTE: this project is inside OneDrive ({ROOT}).\n"
+              "      Setup will work, but OneDrive keeps trying to upload the thousands\n"
+              "      of files in .venv and node_modules, which is slow and can lock a\n"
+              "      file while you build. A folder outside OneDrive, such as\n"
+              "      C:\\dev\\forge-crm, is the easier place to work.")
+
     say("Checking the tools")
     need("uv", "uv (it installs Python itself)", "https://docs.astral.sh/uv/")
     need("npm", "Node.js 22", "https://nodejs.org/")
