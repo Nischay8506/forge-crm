@@ -182,6 +182,9 @@ recommendation, and record the answer here.
 | Development logins | A server started with `ENVIRONMENT=development` always has company **forge** with one login per role, so testing never needs a company created by hand (section 4). Any other `ENVIRONMENT`, such as production, never gets them | 2026-10-15 |
 | One-command setup | A teammate must be able to clone the repository, run one command and have it work, with a page that says how: "it should not have issues which we currently facing". Built as `scripts\setup.cmd` and `START_HERE.md` (section 4) | 2026-10-16 |
 
+| Three streams | From 2026-10-16 the work is split three ways by stretch of the sales flow, not by layer, so each person owns whole features end to end. **A Quote to cash** (M3, M4, M6: `app/cpq`, `app/orders`, `features/quotes`, `features/orders`) is Nischay's. **B Demand and insight** (M1 leftovers, M2, M10, M11: `app/enquiries`, `app/pipeline`, `app/analytics`, `features/enquiries`, `features/pipeline`) is teammate 1's, starting at F2.1. **C Customer and after-sales** (M5, M7, M8, M9: `app/accounts`, `app/field`, `app/service`, `features/accounts`, `features/service`) is teammate 2's, starting at F5.1. Full reasoning and the hand-off points: the Claude Doc "Forge CRM work split for three" | 2026-10-16 |
+| Platform owner: Nischay | Nothing in `app/core`, `app/db.py`, `app/rls.py`, `app/models`, `app/agents`, `app/audit`, `app/approvals`, `app/channels`, `app/integrations` or `app/llm` changes without Nischay. Those are Module 12 and all three streams run on them; he is the only person who knows all of it, and platform changes are small and frequent (he chose A on the card) | 2026-10-16 |
+
 Still open (section 7): the freight details G1-G7, D3 new LLM keys, D4 daily update time, and whether
 the cost seal check gets a button on the quote cost view.
 
@@ -1347,6 +1350,17 @@ built or when Nischay drops it.
 
 Open questions for Nischay:
 - **G1-G7** freight details (above).
+- **The migration rule for three people.** The work-split doc already says one migration per pull
+  request and `alembic heads` printing a single head before merging. What is not settled is the cadence
+  that keeps it cheap: **A** each stream merges into `main` at least weekly, so a fork is one file to
+  re-point (recommended) / **B** reserved revision-number ranges per stream and `alembic merge` when two
+  heads appear / **C** one person writes every migration.
+- **A build check on GitHub.** A GitHub Action running the five checks on every push would tell a
+  teammate within minutes that they broke something, instead of Nischay finding it at merge: **A** add
+  it now (recommended) / **B** at the first merge / **C** leave it to the five checks run by hand.
+- **M6's folder name.** The work-split doc gives stream A `app/channel`, but `app/channels` already
+  exists and is the Step 6 messaging platform, which the platform rule puts off limits. M6 dealers needs
+  its own name: `app/partners` (recommended) or `app/dealers`.
 - **The cost seal check**: does it get a "Check costs" button on the quote's cost view (A, the
   recommendation: anyone with `costs.view` can see at a glance that each line's cost is still the one
   Forge worked out), or stay an API and audit check for when something looks wrong (B)?

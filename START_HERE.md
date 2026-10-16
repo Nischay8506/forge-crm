@@ -31,7 +31,13 @@ cd forge-crm
 ```
 
 If Nischay sent you a zip instead, unzip it and `cd` into the folder. It is a full git
-repository, so `git pull` works from it as well.
+repository, so `git pull` works from it as well. **Set your own name on it before your
+first commit**, or your commits will be signed with the name the zip was built with:
+
+```
+git config user.name "Your Name"
+git config user.email "you@example.com"
+```
 
 Put it somewhere **outside OneDrive, Dropbox or Google Drive**, for example `C:\dev`. A
 synced folder tries to upload the thousands of files that the Python and Node packages
@@ -113,11 +119,19 @@ cd backend    uv run pytest          (about five minutes, needs Docker running)
 cd backend    uv run ruff check app tests evals
 cd frontend   npx tsc --noEmit -p .
 cd frontend   npx vitest run
+cd frontend   npm run build
 ```
 
-All four have to pass. Branch off `main`, keep each commit one change, and say in the
+All five have to pass. Branch off `main`, keep each commit one change, and say in the
 message what a reader would see differently. `docs/HANDOVER.md` section 5 is the code map
 and the rules the code follows: read the part you are touching before you add to it.
+
+**If your change adds a database migration**, add one per pull request, and run
+`uv run alembic heads` before you merge. It must print exactly **one** line. Two lines
+mean someone else added a migration from the same starting point, and the chain has
+forked: change your file's `down_revision` to their number, renumber and rename your own
+file, and check again. Never merge a second head, because then nobody's
+`alembic upgrade head` works, and `uv run pytest` fails before a single test runs.
 
 ## 8. Getting new code later
 
@@ -155,6 +169,30 @@ the containers are not up: `docker compose -f infra/docker-compose.yml ps` shoul
 Also worth knowing: `backend\.env` is only read when the API starts from inside the
 `backend` folder, and `uv run pytest` needs Docker running because it uses a real
 PostgreSQL.
+
+## 9. Working alongside the other two streams
+
+The work is split three ways, by stretch of the sales flow rather than by layer, so each
+person owns whole features end to end:
+
+| Stream | Modules | Owns these folders |
+|---|---|---|
+| A. Quote to cash | M3 CPQ, M4 order and ERP handoff, M6 dealers | `app/cpq`, `app/orders`, `features/quotes`, `features/orders` |
+| B. Demand and insight | M1 leftovers, M2 pipeline, M10 forecasting, M11 voice of customer | `app/enquiries`, `app/pipeline`, `app/analytics`, `features/enquiries`, `features/pipeline` |
+| C. Customer and after-sales | M5 accounts, M7 field, M8 service and warranty, M9 installed base | `app/accounts`, `app/field`, `app/service`, `features/accounts`, `features/service` |
+
+Stay inside your own folders, and **ask Nischay before changing anything in the shared
+platform**: `app/core`, `app/db.py`, `app/rls.py`, `app/models`, `app/agents`,
+`app/audit`, `app/approvals`, `app/channels`, `app/integrations`, `app/llm`. Those are
+Module 12, every stream runs on them, and Nischay owns them. A new permission code, a new
+audit skeleton key or a new router line is a small change there, so just say what you
+need.
+
+Where two streams meet (an enquiry becoming an opportunity, a quote becoming an order, an
+order becoming an installed asset), the stream that **owns** the record writes the small
+function and the other stream calls it, rather than reading the other's tables directly.
+`app/cpq/quotes.follow_configuration` is the pattern: twenty-odd lines in the owner's
+folder, called from the other side.
 
 ## Where to read next
 
