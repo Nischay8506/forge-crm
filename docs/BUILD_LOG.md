@@ -5,6 +5,114 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-16 (Day 9): the cost snapshot sealed; errors that say what is wrong; one-command setup
+
+**Decisions (Nischay):** "go" at 05:38Z resumed the build paused the evening before. At 06:18Z, after a
+friend's laptop refused to save an enquiry, he asked what had gone wrong and what other keys a teammate
+must generate. At 07:05Z: "prepare a project copy which I can share with teammates and they can run in
+their system, and a startup guide so that they can run the website by reading it", with "it should not
+have issues which we currently facing". At 09:32Z he asked for this documentation update, ahead of the
+usual 17:30 IST slot.
+
+**Done**
+- **5d8450f, each line's worked-out cost is sealed in the audit chain** (the fifth of his extra J3
+  points). Every cost breakdown now carries a fingerprint of everything that made it, and the audit
+  record of the costing holds each line's fingerprint in its plain skeleton, where the chain's hashes
+  and hourly signatures protect it. `GET /api/v1/quotes/{id}/seal` works the fingerprints out again from
+  the kept breakdowns and answers, line by line, **sealed**, **changed**, **not sealed** or **not
+  costed**; it needs `costs.view`. A review added to a cost afterwards leaves the seal standing, and the
+  check never trusts the seal stored beside the cost: it recomputes it.
+- **e22eb9c, errors that say what went wrong.** Every API answer now keeps the one `{"error": {...}}`
+  shape the screens read, whoever raised it. A missing or malformed key setting is a 503 naming the
+  setting and the command that makes a key; FastAPI's own 422 names the field ("customer phone: String
+  should have at most 30 characters"); anything unexpected is a 500 with a reference that is also in the
+  server's log next to the traceback. The server lists its unusable key settings as it starts, and a
+  request that never reached the API says so with the API's address instead of blaming the form.
+- **47e8eb3, one command to make a clone runnable, and a page that says how.** `scripts\setup.cmd`
+  starts the PostgreSQL and Redis containers, writes `backend\.env` with values that match them and a
+  freshly generated key for each setting that needs one, installs both sides and creates the tables. It
+  can be run again any time: it fills in what is missing and never changes a setting somebody already
+  filled in, so it also repairs a half-set-up machine. **START_HERE.md** in the repository root is the
+  page a new teammate reads: the four tools to install, the one command, the three terminals, the four
+  development logins, what works without an AI key, what to run before pushing, and the three things
+  that actually go wrong.
+- **3622cc8, setup works in a OneDrive folder**, where hardlinks do not. Setup tells uv to copy instead
+  (`UV_LINK_MODE=copy`), and says, when the project sits inside OneDrive, that a folder such as
+  `C:\dev\forge-crm` is an easier place to work.
+- A shareable copy for teammates at `forge-crm-share/` in the Claude project files: `forge-crm.zip`
+  (the git history, no `.env` and no keys) and `START_HERE.md` beside it.
+
+**Problems found and fixed**
+- **"Could not save this enquiry" on a friend's laptop.** Reproduced from nothing: the laptop had no
+  `backend\.env` at all, so `EVIDENCE_KEYS` was empty, so every write that records customer details in
+  the audit trail failed, while every read worked because the configuration's defaults happen to match
+  the Docker database. Two fixes: the error shape above, so the next such machine says so; and the
+  setup script, so a new machine has the file.
+- **A teammate's `uv sync` stopped on the first wheel** with "The cloud operation cannot be performed on
+  a file with incompatible hardlinks (os error 396)". uv fills a virtual environment by hardlinking from
+  its cache, which OneDrive does not allow. Fixed in setup and named in the guide with both cures.
+- The setup script first left the database password as `CHANGE_ME`, because `.env.example` writes
+  `CHANGE_ME` inside the database URLs rather than as the whole value. A value *containing* `CHANGE_ME`
+  now counts as unset. Checked on a fresh copy: setup from nothing, then the API, the fixed admin login,
+  and a manual enquiry saved.
+
+**Not done / next**
+- **Freight** (K1 D) still waits on **G1-G7**. Then F3.3 pricing and the floor.
+- Open with Nischay: whether the seal check gets a "Check costs" button on the quote cost view, or stays
+  an API and audit check.
+- Three of his five extra J3 points are on the later list in HANDOVER section 7, each with the condition
+  that would make it worth building.
+
+## 2026-10-15 (Day 8): J1-J4 answered; a fix from his own test; fixed development logins
+
+**Decisions (Nischay):** the **"Update the draft"** card: an enquiry line configured after its
+quote has started updates the draft quote line. **J1-J4** at 13:07Z: J1 A (BOM quantities are taken as
+used, no yield on top), J2 A (sub-assemblies with their own default BOM opened up, 5 levels), **J3 C**
+(a line costed from an ERPNext BOM with no family cost model behind it has no factory overhead or
+packing, so the cost is incomplete and goes to a review card) and J4 A (the daily reprice email at
+09:00 IST). At 13:17Z he picked two of his five extra J3 points as "worth now" (the per-connection
+"BOM costs already include..." checkboxes, and sealing the quotation cost snapshot) and left three for
+later. He paused the build at 13:21Z.
+
+Earlier in the day: no code change for the no-Docker options (10:39Z, "docker issue is solved"), and
+`uv` stays the documented way to run the commands (10:28Z), since `pip install -e .` fails on this
+repository's flat layout.
+
+**Done**
+- **c636e55, configuring an enquiry line after its quote started updates the draft quote.** Found on
+  Nischay's own PC: he started a quote before configuring its line, so the quote kept the unconfigured
+  line and its cost read "not known". The draft quote line copied from the enquiry line now takes the
+  new configuration and its cost is worked out again; a sent revision never changes. Audited as
+  `quote.line.configured`.
+- **e7dc078 and 8703ced, fixed logins on development servers.** A server started with
+  `ENVIRONMENT=development` (the default) always has company **forge** with
+  `admin@forge.example.com`, and one login per role beside it (`tester@`, `finance@`, `rep@`), all on
+  the password `Forge@2026`. Anything that needs two people, such as an approval chain, can be tried
+  without seeding a throwaway company. Any other `ENVIRONMENT`, such as production, never gets them, and
+  an existing login is left as it is, so a changed password stays changed.
+- **a6c785c, J3 C**: a BOM cost with no cost model behind it is incomplete. The cost keeps every part the
+  BOM does cover, says which parts are missing, and goes to a review card in Decisions, so nobody prices
+  from a cost that quietly left out the overhead. A family whose model sets overhead to zero on purpose
+  is unaffected.
+- **876ad9f, an ERP whose BOM costs already include the overhead is not charged twice** (his extra J3
+  point 2). Each ERP connection says, as two checkboxes on its page, whether its BOM costs already carry
+  the factory overhead and the packing. What it carries is left out of Forge's own figure, "why this
+  cost" says so, and it is no longer called missing, so such a line needs no review. Nothing changes for
+  a company that leaves the boxes unticked.
+
+**Problems found and fixed**
+- `test_send_anyway_is_recorded_and_never_passes_a_block` delivered at a fixed 14 Oct 23:05 IST, but
+  "send anyway" queues for the real now, so it failed once that time passed; it now delivers five
+  minutes from now.
+- The first version of the seal check trusted the `seal` key stored beside the cost, which an editor who
+  left that key alone would have passed; it now always recomputes.
+- A seal test tried to fake an older audit record and hit "permission denied for table audit_records":
+  `audit_records` is append-only for `forge_app` (migration 0004). The test now asserts that guarantee
+  instead of faking the data.
+
+**Not done / next**
+- Freight (K1 D) waits on G1-G7; the two "worth now" extras were built the next morning.
+
 ## 2026-10-14 (Day 7): M3 answers in; F3.1 configurator built; F3.2 cost engine built (freight to come)
 
 **Decisions (Nischay):** C1-C18 at 07:10Z: C1 B (build in the guide's order, one feature at a time:
