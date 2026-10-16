@@ -31,10 +31,16 @@ api.interceptors.response.use(
   }
 )
 
-/** Backend errors look like {"error": {"code", "message"}}. */
+/** Backend errors look like {"error": {"code", "message"}}. A request that never
+ *  reached the API says so instead of the screen's fallback, because "could not save"
+ *  sends people looking at their form when the server is simply not running. */
 export function errorMessage(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) return err.response?.data?.error?.message ?? fallback
-  return fallback
+  if (!axios.isAxiosError(err)) return fallback
+  const said = err.response?.data?.error?.message
+  if (said) return said
+  if (!err.response) return `Could not reach the Forge API at ${API_URL}. Is the backend running?`
+  return `${fallback} (the server answered ${err.response.status}${
+    err.response.status >= 500 ? "; its log has the details" : ""})`
 }
 
 /** Validation errors (422) also carry the list of problems, one per field. */

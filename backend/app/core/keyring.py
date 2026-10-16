@@ -57,3 +57,33 @@ def new_key_spec(prefix: str, kid: str | None = None) -> str:
     if not KID_RE.match(kid):
         raise KeyRingError("key id must be lowercase letters and digits, at most 16")
     return f"{kid}:{base64.urlsafe_b64encode(os.urandom(32)).decode()}"
+
+
+# What each key setting is for, and the command that makes one, so a server can say at
+# startup what it cannot do yet (the fresh-install trap: backend/.env copied from
+# .env.example has all three empty, so the app reads everything and saves nothing).
+NEEDED = {
+    "EVIDENCE_KEYS": ("the audit trail's details, so saving anything with customer "
+                      "details in it fails", "new-evidence-key"),
+    "AUDIT_SEAL_KEYS": ("the hourly signatures over the audit trail", "new-seal-key"),
+    "CREDENTIAL_KEYS": ("stored ERPNext and mailbox sign-ins", "new-credential-key"),
+}
+
+
+def unusable() -> list[str]:
+    """The key settings that are empty or malformed, with what each one costs."""
+    from app.config import get_settings
+
+    s = get_settings()
+    out = []
+    for setting, (what, command) in NEEDED.items():
+        spec = getattr(s, setting.lower(), None)
+        try:
+            if parse(setting, spec) is not None:
+                continue
+            why = "is not set"
+        except KeyRingError as e:
+            why = str(e)
+        out.append(f"{setting} {why}, so {what}. Make one with "
+                   f"`uv run python -m app.cli {command}` and put it in backend/.env")
+    return out

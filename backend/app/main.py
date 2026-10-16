@@ -1,6 +1,8 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -8,9 +10,19 @@ from app import dev_login
 from app.agents.registry import load_definitions
 from app.api.v1 import router as v1_router
 from app.config import get_settings
-from app.core.errors import AppError, app_error_handler
+from app.core import keyring
+from app.core.errors import (
+    AppError,
+    app_error_handler,
+    not_configured_handler,
+    unhandled_handler,
+    validation_handler,
+)
+from app.core.keyring import KeyRingError
 from app.db import dispose_engine, get_sessionmaker
 from app.integrations.mcp_server import build_server
+
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -18,6 +30,8 @@ async def lifespan(app: FastAPI):
     # No background loops in the web process: pollers and timers run in the Celery worker.
     # The MCP server's session manager lives as long as the app.
     await dev_login.ensure_on_startup()
+    for problem in keyring.unusable():
+        log.warning("Not ready: %s", problem)
     async with app.state.mcp.session_manager.run():
         yield
     await dispose_engine()
@@ -34,7 +48,11 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Every answer keeps the {"error": {...}} shape the screens read, whoever raised it.
     app.add_exception_handler(AppError, app_error_handler)
+    app.add_exception_handler(RequestValidationError, validation_handler)
+    app.add_exception_handler(KeyRingError, not_configured_handler)
+    app.add_exception_handler(Exception, unhandled_handler)
     app.include_router(v1_router)
 
     # Outside AI tools (decision E9): MCP over streamable HTTP at /mcp/, bearer tokens
