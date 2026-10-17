@@ -5,6 +5,21 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-17 (Day 10): nothing built, waiting on answers
+
+Nothing was built and nothing was decided today: no message from Nischay, and no push from either
+teammate (GitHub `main` is still at cae6ff9, yesterday evening's documentation commit). Waiting on
+**Nischay**: the **G1-G7** freight answers, which are the last piece of F3.2 and the gate to F3.3
+pricing; his own run of F3.1 and the cost engine on his PC, with the step-by-step guide linked in
+[HANDOVER](HANDOVER.md) section 7; and the five choices at the end of that section (the "Check costs"
+button, the merge cadence for three people, a build check on GitHub, M6's folder name, the D3 keys).
+Waiting on **the two teammates**: the trivial pull request that proves the loop, then F2.1 for stream B
+and F5.1 for stream C, both briefed on 2026-10-16. His PC is still at 5415e96, because the laptop has
+been off the bridge since yesterday afternoon, so `git pull` in that folder is what brings it up to
+date.
+
+---
+
 ## 2026-10-16 (Day 9): the cost snapshot sealed; errors that say what is wrong; one-command setup;
 the work split three ways
 

@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-16
+Last updated: 2026-10-17
 
 ---
 
@@ -380,7 +380,10 @@ Each copy's bundle is left in `.sync/` under its own name (git-ignored). The fil
 inside a bundle must be named uniquely too, never `tmp.pack`: on 2026-10-16 two bundles used that name,
 the second overwrote the first, and the objects of the earlier commit were lost, so `git log` on the
 device failed with "Could not read <sha>". The repair is to pack the range from the newest commit the
-device can still read up to HEAD under a fresh name and run `git index-pack` on it.
+device can still read up to HEAD under a fresh name and run `git index-pack` on it. When the laptop is
+not connected, as it has been since the afternoon of 2026-10-16, no copy can be made at all: this folder
+is at commit 5415e96 and everything after it (the documentation commits of 2026-10-16 evening and
+2026-10-17) is on GitHub, so `git pull` here is what catches it up.
 If you edit files here yourself, tell Claude before the next session so it starts from your version.
 Since 2026-10-12 the same history also goes to the GitHub repo (section 1): Claude hands the new
 commits over as a git bundle and they are pushed as they are, never with a `.env` file or a key. A
@@ -742,7 +745,7 @@ docs/                  this file, BUILD_LOG.md
     `AppError` subclass rather than returning its own error body, and `keyring.unusable()` is what tells
     a person a key setting is missing, at startup and in the answer.
 
-## 6. Current state (end of 2026-10-16)
+## 6. Current state (end of 2026-10-16; nothing was built on 2026-10-17)
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
 first module, **M1 Enquiry, is built for email (2026-10-12)**. **M3 CPQ** is being built one feature at a
