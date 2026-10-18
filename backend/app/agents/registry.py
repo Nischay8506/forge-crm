@@ -154,7 +154,7 @@ def register_agent(agent: AgentDef) -> AgentDef:
 # Modules that register agents and tools when imported. Add new agents here.
 DEFINITION_MODULES = ("app.steward.agent", "app.agents.sandbox", "app.integrations.agent",
                       "app.integrations.mcp_tools", "app.privacy.agent", "app.language.agent",
-                      "app.enquiries.agent", "app.cpq.agent")
+                      "app.enquiries.agent", "app.cpq.agent", "app.cpq.price_agent")
 
 
 def load_definitions() -> None:

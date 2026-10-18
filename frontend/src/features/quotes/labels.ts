@@ -1,4 +1,4 @@
-import type { CostSource, CostStatus, QuoteStatus } from "./types"
+import type { CostSource, CostStatus, PriceSource, PriceStatus, QuoteStatus } from "./types"
 
 export const STATUS_TONE: Record<QuoteStatus, "teal" | "gold" | "green" | "red" | "amber" | "neutral"> = {
   draft: "neutral", pending_approval: "amber", sent: "teal", accepted: "green", lost: "red", expired: "neutral",
@@ -50,4 +50,46 @@ export function reviewText(status: string): string {
     countered: "a unit cost was set in Decisions", superseded: "replaced by a newer card",
     failed: "the review could not be applied",
   } as Record<string, string>)[status] ?? status
+}
+
+// Prices (F3.3, decision C2 A) ------------------------------------------------------------
+
+/** Where a line's list price came from. */
+export const PRICE_SOURCE_LABELS: Record<PriceSource, string> = {
+  contract: "The customer's own price", price_list: "ERP price list",
+  cost_plus: "Cost at the target margin", none: "Not priced",
+}
+
+/** A line's price against its floor, in words and colour. */
+export const PRICE_STATUS: Record<PriceStatus, { label: string; tone: "teal" | "amber" | "red" | "neutral" }> = {
+  ok: { label: "Clears the floor", tone: "neutral" },
+  below_floor: { label: "Below the floor", tone: "red" },
+  no_cost: { label: "Cost not known, so no margin", tone: "amber" },
+  no_floor: { label: "No floor set", tone: "amber" },
+  no_price: { label: "Not priced", tone: "red" },
+}
+
+/** "25%", "12.5%"; "–" when there is no percentage. */
+export function percent(v: string | number | null | undefined): string {
+  if (v === null || v === undefined || v === "") return "–"
+  const n = Number(v)
+  return Number.isFinite(n) ? `${Number(n.toFixed(3))}%` : String(v)
+}
+
+/** The price approval card's state, for the line (C2 A). */
+export function approvalText(status: string): string {
+  return ({
+    pending: "waiting for a price approval in Decisions", approved: "price approved in Decisions",
+    rejected: "sent back: change the price, the cost or the policy",
+    countered: "a price was set in Decisions", superseded: "replaced by a newer card",
+    failed: "the approval could not be applied",
+  } as Record<string, string>)[status] ?? status
+}
+
+/** What the rep asked for on a line, in words. */
+export function askText(ask: { discount_pct?: string; unit_price?: string } | null): string {
+  if (!ask) return ""
+  if (ask.unit_price !== undefined) return `asked ${rupees(ask.unit_price)}`
+  if (ask.discount_pct !== undefined) return `asked ${percent(ask.discount_pct)} off`
+  return ""
 }

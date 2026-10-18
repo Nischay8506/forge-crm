@@ -33,7 +33,7 @@ KINDS: dict[str, type[ERPNextAdapter]] = {"erpnext": ERPNextAdapter}
 ENTITY_ORDER = (Entity.customer, Entity.item, Entity.price, Entity.order, Entity.invoice,
                 Entity.receipt, Entity.stock, Entity.workstation, Entity.bom)
 SETTING_KEYS = ("time_zone", "company", "host_header", "bom_includes_overhead",
-                "bom_includes_packing")
+                "bom_includes_packing", "selling_price_list")
 # "yes" on either means this ERP's BOM costs already carry that part, so Forge adds none
 # on top of a cost it took from a BOM (J3 C's double-counting check).
 YES_NO_KEYS = ("bom_includes_overhead", "bom_includes_packing")

@@ -32,7 +32,14 @@ from app.models.channels import (
     MessageEvent,
     ToneGuide,
 )
-from app.models.cpq import Configuration, CostModel, MachineRate, MaterialRate, ProductModel
+from app.models.cpq import (
+    Configuration,
+    CostModel,
+    MachineRate,
+    MaterialRate,
+    PricePolicy,
+    ProductModel,
+)
 from app.models.enquiries import (
     CapabilityProfile,
     Enquiry,
@@ -158,6 +165,7 @@ __all__ = [
     "OutboxEvent",
     "MachineRate",
     "MaterialRate",
+    "PricePolicy",
     "ProductModel",
     "Quote",
     "QuoteLine",

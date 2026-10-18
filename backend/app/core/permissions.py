@@ -61,6 +61,9 @@ PERMISSIONS: dict[str, str] = {
     # Decision C17 B: everyone in sales sees costs, as a permission that can change.
     "costs.view": "See what each quote line costs and why (the cost breakdown)",
     "costs.manage": "Set material and machine-hour rates and each family's cost model",
+    "prices.manage": "Set each family's target margin, floor, tier discounts and quantity "
+                     "breaks",
+    "prices.approve": "Approve a quote line priced below its floor",
 }
 
 ALL = "*"

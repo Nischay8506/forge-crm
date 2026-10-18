@@ -57,6 +57,8 @@ SKELETON_KEYS = frozenset({
     # F3.2: the fingerprint of each costed quote line, so a cost can be shown years
     # later to be the one Forge worked out, even once the details have been trimmed.
     "cost_seals",
+    # F3.3: the same for each line's price, the number the customer is given.
+    "price_seals",
     # Step 5 (F12.3): a decision's place in its chain, timing and card fingerprint.
     "approval_steps", "sla_hours", "recommended", "counter_of", "step", "steps",
     "on_behalf_of", "card_hash", "decision_ms", "fields", "option",

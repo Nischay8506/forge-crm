@@ -61,6 +61,9 @@ class QuoteRevision(IdMixin, TenantMixin, Base):
     delivery_terms: Mapped[str | None] = mapped_column(String(20))
     destination: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     costed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    priced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # F3.3: ok, or below_floor when any line or the quote as a whole is under its floor.
+    price_status: Mapped[str | None] = mapped_column(String(12))
     # A sent revision whose costs changed since (a rate, K9 A; a BOM, K11 A).
     reprice_reason: Mapped[str | None] = mapped_column(String(500))
     reprice_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -70,9 +73,11 @@ class QuoteRevision(IdMixin, TenantMixin, Base):
 
 
 class QuoteLine(IdMixin, TenantMixin, Base):
-    """One line of a revision: what, how many, and its cost. `cost` is the full
-    breakdown it was worked out with (inputs, rates and their dates, formulas, results);
-    `cost_flag` says why it should be worked out again (a rate or item changed)."""
+    """One line of a revision: what, how many, its cost and its price. `cost` is the
+    full breakdown it was worked out with (inputs, rates and their dates, formulas,
+    results); `cost_flag` says why it should be worked out again (a rate or item
+    changed). `price` is the waterfall that made the price (F3.3): where the list price
+    came from, each discount, the margin and the floor it was checked against."""
 
     __tablename__ = "quote_lines"
 
@@ -98,6 +103,22 @@ class QuoteLine(IdMixin, TenantMixin, Base):
     # or reviewed (a person with costs.manage accepted or set it on a Decisions card).
     cost_status: Mapped[str | None] = mapped_column(String(12))
     cost_review_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDCol, ForeignKey("decisions.id"))
+    # F3.3 (C2 A). Where the list price came from: contract (a customer price in the
+    # ERP), price_list (the ERP's selling list), cost_plus (the family's target margin)
+    # or none, when nothing could price it.
+    price_source: Mapped[str | None] = mapped_column(String(12))
+    list_price: Mapped[Decimal | None] = mapped_column(QTY)
+    unit_price: Mapped[Decimal | None] = mapped_column(QTY)
+    margin_pct: Mapped[Decimal | None] = mapped_column(Numeric(7, 3))
+    # ok, below_floor, no_cost (a line with no cost can't pass the floor on its own),
+    # no_price (nothing could price it) or no_floor (no policy says what the floor is).
+    # Anything but ok goes for approval.
+    price_status: Mapped[str | None] = mapped_column(String(12))
+    price: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # What the rep asked for (C2 A): {"discount_pct": 7} or {"unit_price": "1200.00"}.
+    ask: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    price_review_id: Mapped[uuid.UUID | None] = mapped_column(
         UUIDCol, ForeignKey("decisions.id"))
     created_at: Mapped[datetime] = _now_col()
     updated_at: Mapped[datetime] = _now_col()

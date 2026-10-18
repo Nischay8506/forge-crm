@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/config/api"
-import type { CostModelDetail, CostModelFamily, MachineItem, MaterialItem, QuoteDetail, QuoteRow } from "./types"
+import type { CostModelDetail, CostModelFamily, MachineItem, MaterialItem, PricePolicyDetail, PricePolicyList, QuoteDetail, QuoteRow } from "./types"
 
 export function useQuotes(status: string, mine: boolean, reprice = false) {
   return useQuery({
@@ -44,5 +44,20 @@ export function useCostModel(familyId: string | undefined) {
     queryKey: ["costs", "model", familyId],
     queryFn: async () => (await api.get<CostModelDetail>(`/costs/models/${familyId}`)).data,
     enabled: !!familyId,
+  })
+}
+
+export function usePricePolicies() {
+  return useQuery({
+    queryKey: ["costs", "price-policies"],
+    queryFn: async () => (await api.get<PricePolicyList>("/costs/price-policies")).data,
+  })
+}
+
+export function usePricePolicy(target: string | undefined) {
+  return useQuery({
+    queryKey: ["costs", "price-policy", target],
+    queryFn: async () => (await api.get<PricePolicyDetail>(`/costs/price-policies/${target}`)).data,
+    enabled: !!target,
   })
 }

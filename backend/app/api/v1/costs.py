@@ -1,5 +1,6 @@
 """Costs (F3.2, decisions C3 A, K8 to K13 A): material and machine-hour rates with the
-date they apply from, and each product family's cost model.
+date they apply from, each product family's cost model, and the pricing policy it is
+priced by (F3.3, C2 A: the target margin, the floor, tier discounts, quantity breaks).
 
 A new rate never changes an old one. When it applies from today or earlier, open draft
 quotes that used (or missed) it are worked out again at once and sent ones are marked
@@ -19,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import NotFound, ValidationFailed
-from app.cpq import costing, costmodel, products, quotes, rates, units
+from app.cpq import costing, costmodel, pricing, products, quotes, rates, units
 from app.cpq.rates import RateBook
 from app.cpq.samples import COST_SAMPLES
 from app.db import get_db
@@ -235,3 +236,92 @@ async def use_sample(family_id: uuid.UUID, current: CurrentUser = Depends(MANAGE
     except costmodel.CostModelProblems as exc:
         raise ValidationFailed(exc.problems) from exc
     return {**_version_out(done["model"], with_model=True), "sample_rates": done["sample_rates"]}
+
+
+# Pricing policies (F3.3, decision C2 A) ----------------------------------------------------
+
+PRICES = require_permission("prices.manage")
+
+
+class PolicyIn(BaseModel):
+    target_margin_pct: str = Field(max_length=12)
+    floor_margin_pct: str = Field(max_length=12)
+    tier_discounts: dict[str, str] = Field(default_factory=dict)
+    qty_breaks: list[dict[str, str]] = Field(default_factory=list, max_length=20)
+    rounding: str = Field(default="none", max_length=10)
+    effective_from: str = Field(max_length=10)
+    note: str | None = Field(default=None, max_length=300)
+
+
+def _target(target: str) -> uuid.UUID | None:
+    """"company" is the policy every family falls back to; anything else is a family."""
+    if target == "company":
+        return None
+    try:
+        return uuid.UUID(target)
+    except ValueError:
+        raise NotFound("Product family not found") from None
+
+
+def _policy_out(r: Any) -> dict[str, Any]:
+    return {"id": str(r.id), "effective_from": r.effective_from, "policy": r.policy,
+            "note": r.note, "created_by": r.created_by, "created_at": r.created_at}
+
+
+@router.get("/price-policies")
+async def price_policies(at: date | None = Query(None), current: CurrentUser = Depends(VIEW),
+                         db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """What each family is priced by on a day, and the company-wide policy behind them."""
+    day = at or await quotes.today(db, current.tenant_id)
+    fams = list(await db.scalars(select(ProductFamily).where(ProductFamily.active.is_(True))
+                                 .order_by(ProductFamily.name)))
+    live = await pricing.policies(db, current.tenant_id, day, {f.id for f in fams})
+    company = live.get(None)
+    return {
+        "at": day,
+        "company": company.out() if company else None,
+        "sample": pricing.SAMPLE_POLICY,
+        "families": [{"id": str(f.id), "name": f.name,
+                      "own": f.id in live,
+                      "policy": (live[f.id] if f.id in live else company).out()
+                      if (f.id in live or company) else None} for f in fams],
+    }
+
+
+@router.get("/price-policies/{target}")
+async def price_policy(target: str, current: CurrentUser = Depends(VIEW),
+                       db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    family_id = _target(target)
+    f = await _family(db, family_id) if family_id else None
+    day = await quotes.today(db, current.tenant_id)
+    live = await pricing.policies(db, current.tenant_id, day, {family_id} if family_id else set())
+    rows = await pricing.versions(db, current.tenant_id, family_id)
+    chosen = live.get(family_id) or (live.get(None) if family_id else None)
+    return {"family": {"id": str(f.id), "name": f.name} if f else None,
+            "scope": "family" if family_id else "company",
+            "in_force": chosen.out() if chosen else None,
+            "from_company": bool(family_id and family_id not in live and live.get(None)),
+            "sample": pricing.SAMPLE_POLICY,
+            "versions": [_policy_out(r) for r in rows]}
+
+
+@router.put("/price-policies/{target}")
+async def save_price_policy(target: str, body: PolicyIn, current: CurrentUser = Depends(PRICES),
+                            db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """A new dated version. Nothing is edited: the old numbers stay, so a quote made
+    under them can still be explained."""
+    family_id = _target(target)
+    if family_id:
+        await _family(db, family_id)
+    try:
+        day = date.fromisoformat(body.effective_from)
+    except ValueError:
+        raise ValidationFailed(["effective from: a date like 2026-10-18 is needed"]) from None
+    data = body.model_dump(exclude={"effective_from", "note"})
+    row = await pricing.save(db, current.tenant_id, family_id, data, _actor(current),
+                             effective_from=day, note=body.note)
+    repriced: list[str] = []
+    if day <= await quotes.today(db, current.tenant_id):
+        repriced = await pricing.reprice_open_drafts(
+            db, current.tenant_id, _actor(current), why="the pricing policy changed")
+    return {**_policy_out(row), "repriced": repriced}

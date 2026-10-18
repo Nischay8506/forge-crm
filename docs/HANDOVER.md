@@ -46,7 +46,7 @@ Phase 2 (the money path), in order:
 | Module | What | Status |
 |---|---|---|
 | M1 | Enquiry & Lead Management (F1.1-F1.10, Design File frame 02) | **Built for email 2026-10-12** to N1-N15 and P1-P3 (section 3): F1.1, F1.4-F1.10. F1.2 (WhatsApp) and F1.3 (web form, marketplaces) are on the later list (N2 A, N14); F1.1's 95% check and scan reading wait for D3 and real samples (section 6) |
-| M3 | CPQ: configure, price, quote (F3.1-F3.9, frame 04) | Answered 2026-10-14 (C1-C18, K1-K9) and 2026-10-15 (J1-J4). Built one feature at a time in the guide's order (C1 B). **F3.1 configurator built 2026-10-14**, waiting for Nischay's try on his PC. **F3.2 cost engine built 2026-10-14** to K2-K13 A (cost models, units, the source order, review cards, rate and BOM changes), finished to J1-J4 on 2026-10-15 and 16 (J3 C, the per-connection overhead checkboxes, the sealed cost snapshot); **freight** (K1 D) waits on G1-G7 |
+| M3 | CPQ: configure, price, quote (F3.1-F3.9, frame 04) | Answered 2026-10-14 (C1-C18, K1-K9) and 2026-10-15 (J1-J4). Built one feature at a time in the guide's order (C1 B). **F3.1 configurator built 2026-10-14**, waiting for Nischay's try on his PC. **F3.2 cost engine built 2026-10-14** to K2-K13 A (cost models, units, the source order, review cards, rate and BOM changes), finished to J1-J4 on 2026-10-15 and 16 (J3 C, the per-connection overhead checkboxes, the sealed cost snapshot); **freight** (K1 D) waits on G1-G7. **F3.3 price and floor built 2026-10-18** to C2 A (the source order, tier and quantity discounts, the rep's ask, the floor on every line and on the quote, approval cards, pricing policies, sealed prices); its eight open details (Y1-Y8) wait on Nischay |
 | M4 | Order, contract & ERP handoff (F4.1-F4.5) | Not started |
 
 Phase 1 is done when: all six F12 "Done When" checks pass, ERPNext syncs customers, items, orders
@@ -99,6 +99,7 @@ recommendation, and record the answer here.
 | V1 A | Support ERPNext v15 and v16; contract tests run against both | 2026-10-09 |
 | V2 A | A company can have more than one ERP connection; the setup screen adds one at a time | 2026-10-09 |
 | V3 A | The mapping studio maps customers → accounts plus the code lists Phase 2 needs (units, customer groups, territories, payment terms, warehouses, tax templates); rule-based suggestions until the D3 keys are set, then AI-assisted | 2026-10-09 |
+| C2 A, built 2026-10-18 | F3.3 prices a line from the first source that covers it (the customer's own ERP price, then the ERP selling price list, then the cost at the family's target margin), then the tier discount, the quantity break and the rep's ask; the floor is checked on every line and on the whole quote, and anything that cannot stand on its own goes to a person. The eight details it leaves open (Y1-Y8 in `plans/Phase2_M3_F3.3_Price_Questions.md`) were asked on 2026-10-18 and are **not answered**: what is built follows the recommendations, and each is a setting, not a rewrite | 2026-10-18 |
 | W1 A | Forge's own code lists for ERP mapping: units use the GST unit codes (UQC) and tax uses the GST rate slabs; customer groups, territories, payment terms and warehouses start as a copy of the first ERP's lists, and later ERPs map onto them | 2026-10-09 |
 | X1 A | Integration defaults kept as built: ERP Connector agent at L2, Outside AI tools agent at L0; alerts after 3 minutes unreachable, 3 failed reads in a row, 15 minutes without a read, or a run stuck 30 minutes (a rejected key alerts at once); nightly comparison after 02:00 IST; ERP customers disabled in the ERP are not made into accounts; "create in ERPNext" sends name, type and GSTIN only | 2026-10-09 |
 | Order | Step 4 starts before Nischay's own Step 3 check; he runs that check whenever he can and anything it finds is fixed alongside | 2026-10-09 |
@@ -533,6 +534,12 @@ backend/
                          BOM → rate card → not known, K7 A), the breakdown kept on each line,
                          staleness and refresh after rate, model and BOM changes, the daily email
       agent.py           the Cost Engine agent and its review card for incomplete costs (K10 A)
+      pricing.py         the price (F3.3): the source order (the customer's ERP price → the ERP
+                         selling price list → the cost at the target margin), the tier discount,
+                         the quantity break and the rep's ask, rounding up, the floor on every line
+                         and on the whole quote, the waterfall kept on each line and its seal
+      price_agent.py     the Quote agent and its approval card for a price that cannot stand on
+                         its own (below the floor, no cost, no floor, not priced)
     files/store.py     stored files (raw emails, attachments): encrypted, local folder now,
                        S3-compatible later (N9 A); rows never deleted, removal blanks the bytes
     sla/engine.py      the timer engine (F1.10): targets on an "always" or "working" clock,
@@ -744,16 +751,27 @@ docs/                  this file, BUILD_LOG.md
     key) and anything unexpected (500 with a reference that is also in the log). New code raises an
     `AppError` subclass rather than returning its own error body, and `keyring.unusable()` is what tells
     a person a key setting is missing, at startup and in the answer.
+44. **A price is worked out the same way every time, and never without its floor** (C2 A).
+    `pricing.price_line()` tries the sources in one order (the customer's own ERP price, the ERP
+    selling price list, the cost at the family's target margin) and nothing else prices a line: with
+    no policy and no ERP price, the line is left unpriced with the screen to go to, rather than
+    guessed. Every discount is a step in the kept waterfall with its own amount, rounding only ever
+    goes up, and the margin is checked against the family's floor whichever way the price was found.
+    Anything but "ok" goes to a person on a Quote agent card before the quote can go out.
+45. **Pricing policies are never edited**, like rates and cost models (rule 37): a change is a new
+    `price_policies` row from a date, the app role has only SELECT and INSERT on the table, and the
+    waterfall names the policy version it used.
 
-## 6. Current state (end of 2026-10-16; nothing was built on 2026-10-17 or 2026-10-18)
+## 6. Current state (end of 2026-10-18)
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
 first module, **M1 Enquiry, is built for email (2026-10-12)**. **M3 CPQ** is being built one feature at a
-time (C1 B): **F3.1 is built** and waits for Nischay's try, and **F3.2's cost engine is built** and
-finished to J1-J4, with freight still to come (G1-G7). Tests: 308 backend (plus 3 that run only against
-a live ERPNext) and 42 frontend, all passing; every new screen was checked in a browser, on a desktop and at phone width
-(390 px). Nischay's PC needs `uv run alembic upgrade head` (migrations 0013 to 0015) after the copy,
-or enquiry and quote pages fail.
+time (C1 B): **F3.1 is built** and waits for Nischay's try, **F3.2's cost engine is built** and
+finished to J1-J4, with freight still to come (G1-G7), and **F3.3, the price and the floor, is built**
+(2026-10-18) with its eight open details waiting on him (Y1-Y8). Tests: 318 backend (plus 3 that run
+only against a live ERPNext) and 43 frontend, all passing; every new screen was checked in a browser, on a
+desktop and at phone width (390 px). Nischay's PC needs `uv run alembic upgrade head` (migrations 0013 to
+0016) after the copy, or enquiry and quote pages fail.
 
 Two things changed on 2026-10-16 that are not features: a clone is set up by one command and described
 by `START_HERE.md` (section 4), and the API now answers every error in one shape, so a missing key
@@ -1279,13 +1297,23 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 
 ## 7. Next step and open questions
 
-**Now: Nischay tries F3.1 and the cost engine on his PC** ("Sample data"). After the copy,
-`uv run alembic upgrade head` (0013 to 0015), then restart the API, worker and beat.
+**Now: Nischay answers Y1-Y8** (`plans/Phase2_M3_F3.3_Price_Questions.md` in the Claude project
+files): where the target margin and floor live, what a below-floor line does, tier discounts,
+quantity breaks, rounding, which ERPNext price wins, GST now or with the PDF, and whether a rep can
+type their own ask. F3.3 is built on the recommendations; each answer is a setting, not a rewrite.
+
+**And he tries F3.1, the cost engine and the new prices on his PC** ("Sample data"). After the copy,
+`uv run alembic upgrade head` (0013 to 0016), then restart the API, worker and beat.
 - F3.1: Enquiries → Setup → Product families → "+ Flanges" → "Options and rules", and "Configure" on
   an enquiry line.
 - Cost engine: Quotes → Cost models → Flanges → "Start from the flanges sample"; then "Start a quote"
   on an enquiry with a configured flange line, and look at "why this cost". A line no cost model, BOM or
   rate card covers (a gasket, say) gets a review card in Decisions.
+- Prices (F3.3): Quotes → Pricing policy → the company's policy → "Start from the sample" → save, which
+  prices every open draft again. On the quote, each line then shows its price and margin, "why this
+  price" opens the waterfall, and **Ask** puts the rep's discount or price on a line. Ask for enough
+  off and the line goes under the floor: it turns red and a Quote agent card appears in Decisions,
+  where it can be approved or countered with a price.
 Fixes from his tries come before more F3.2 work ("Start F3.2 now"). A step-by-step guide for these two
 tries, with the figures to expect and a table for his results, is the Claude Doc written on 2026-10-15:
 https://claude.ai/code/artifact/91919188-ba5c-4b66-8a5a-124d16f8679a

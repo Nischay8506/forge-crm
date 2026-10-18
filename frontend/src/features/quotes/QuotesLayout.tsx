@@ -8,6 +8,7 @@ const TABS = [
   { to: "/quotes/materials", label: "Material rates", permission: "costs.view" },
   { to: "/quotes/machines", label: "Machine-hour rates", permission: "costs.view" },
   { to: "/quotes/cost-models", label: "Cost models", permission: "costs.view" },
+  { to: "/quotes/price-policies", label: "Pricing policy", permission: "costs.view" },
 ]
 
 export function QuotesLayout() {

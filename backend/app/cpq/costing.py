@@ -592,9 +592,11 @@ async def cost_revision(session: AsyncSession, q: Quote, rev: QuoteRevision, act
                         why: str = "worked out") -> dict[str, Any]:
     """Work out every line of a draft revision and keep each breakdown on its line.
     Incomplete or unknown lines go to a person with costs.manage (K10 A), unless the
-    same thing was already reviewed."""
+    same thing was already reviewed. The revision is priced again straight after
+    (app/cpq/pricing.py), because a cost that changed changes the price it carries."""
     from app.agents import runtime
     from app.cpq import agent as cost_agent
+    from app.cpq import pricing
 
     quotes.must_be_draft(q, rev)
     lines = await quotes.lines_of(session, rev)
@@ -641,7 +643,8 @@ async def cost_revision(session: AsyncSession, q: Quote, rev: QuoteRevision, act
                                             "lines": line_seals}})
     if review:
         await cost_agent.ask_review(session, q, rev, review)
-    return {"lines": summary}
+    priced = await pricing.price_revision(session, q, rev, actor, why=why)
+    return {"lines": summary, "prices": priced}
 
 
 async def seals(session: AsyncSession, q: Quote, rev: QuoteRevision) -> dict[str, Any]:

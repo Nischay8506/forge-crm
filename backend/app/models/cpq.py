@@ -2,7 +2,8 @@
 options and rules; every save is a new version, never changed after) and the
 configurations made with it (decision C4 A). F3.2: material and machine-hour rates with
 the date they apply from, and each family's cost model (decision C3 A), versioned like
-the options model."""
+the options model. F3.3: the pricing policy a family is priced by (decision C2 A), dated
+like the rates so an old quote can still be explained with the numbers of its day."""
 
 import uuid
 from datetime import date, datetime
@@ -116,6 +117,30 @@ class CostModel(IdMixin, TenantMixin, Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     model: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    note: Mapped[str | None] = mapped_column(String(300))
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = _now_col()
+
+
+class PricePolicy(IdMixin, TenantMixin, Base):
+    """What a family is priced by from a date (F3.3, decision C2 A): its target margin
+    and its floor, the tier discounts and the quantity breaks, and how prices round.
+    A policy is never edited: a change is a new row from a date, so a quote made in
+    March can still be explained with the numbers that applied in March. A row with no
+    family is the company-wide one, used by families that have none of their own.
+
+    policy: {"target_margin_pct", "floor_margin_pct",
+             "tier_discounts": {"standard": 0, "key": 2, "strategic": 5},
+             "qty_breaks": [{"from_qty": 50, "discount_pct": 2}, ...],
+             "rounding": "none" | "0.01" | "1" | "5" | "10"}
+    """
+
+    __tablename__ = "price_policies"
+
+    family_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDCol, ForeignKey("product_families.id"))
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    policy: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     note: Mapped[str | None] = mapped_column(String(300))
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = _now_col()

@@ -109,6 +109,13 @@ async def _run(session: AsyncSession, ctx: AgentContext, a: ReviewArgs) -> dict[
         ln.unit_cost = Decimal(a.unit_cost)
     ln.updated_at = datetime.now(UTC)
     await session.flush()
+    # The cost a person settled is the cost the price is worked out from (F3.3).
+    from app.cpq import pricing
+
+    q = await session.get(Quote, a.quote_id)
+    if q is not None:
+        await pricing.price_revision(session, q, rev, ctx.approved_by or ctx.actor,
+                                     why="cost reviewed")
     return {"quote_id": str(a.quote_id), "line_id": str(a.line_id),
             "unit_cost": a.unit_cost or a.worked_out}
 

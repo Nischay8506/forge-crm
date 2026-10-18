@@ -146,6 +146,17 @@ async def add_line(session: AsyncSession, q: Quote, rev: QuoteRevision,
     return ln
 
 
+async def set_ask(session: AsyncSession, q: Quote, rev: QuoteRevision, ln: QuoteLine,
+                  ask: dict[str, Any] | None) -> None:
+    """What the rep asks for on a line (C2 A): a discount off the price Forge worked
+    out, or a price of their own. The floor check and the approval card follow from
+    pricing the revision again."""
+    must_be_draft(q, rev)
+    ln.ask = ask or None
+    ln.updated_at = datetime.now(UTC)
+    await session.flush()
+
+
 async def change_line(session: AsyncSession, q: Quote, rev: QuoteRevision, ln: QuoteLine,
                       data: dict[str, Any]) -> list[str]:
     must_be_draft(q, rev)
@@ -220,8 +231,17 @@ def line_out(ln: QuoteLine, costs: bool) -> dict[str, Any]:
         "qty": None if ln.qty is None else format(ln.qty.normalize(), "f"), "unit": ln.unit,
         "cost_source": ln.cost_source, "cost_flag": ln.cost_flag,
         "cost_status": ln.cost_status,
+        # F3.3: the price everyone in sales sees, with the margin against the floor.
+        "price_source": ln.price_source, "price_status": ln.price_status,
+        "list_price": money(ln.list_price), "unit_price": money(ln.unit_price),
+        "amount": money(ln.unit_price * ln.qty) if (
+            ln.unit_price is not None and ln.qty is not None) else None,
+        "margin_pct": None if ln.margin_pct is None else format(
+            ln.margin_pct.normalize(), "f"),
+        "ask": ln.ask,
     }
     if costs:  # C17 B: everyone in sales sees costs, as a permission that can change
         out["unit_cost"] = money(ln.unit_cost)
         out["cost"] = ln.cost
+        out["price"] = ln.price  # the whole waterfall, with the cost it was checked on
     return out

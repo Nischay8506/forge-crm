@@ -5,14 +5,61 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
-## 2026-10-18 (Day 11): nothing built
+## 2026-10-18 (Day 11): the price and the floor (F3.3)
 
-A second quiet day: no message from Nischay, no push from either teammate (GitHub `main` is still at
-c74880d, yesterday's documentation commit), and his laptop is still off the bridge, so his folder stays
-at 5415e96 until he runs `git pull`. The same answers are waiting on him as yesterday: **G1-G7** on
-freight, his own run of F3.1 and the cost engine, and the five choices at the end of
-[HANDOVER](HANDOVER.md) section 7. The two teammates still owe the trivial pull request that proves the
-loop, before F2.1 (stream B) and F5.1 (stream C).
+**Decisions (Nischay):** after two quiet days he wrote one word at 16:40Z, "go", taken as: carry on
+with the build. The next feature in M3's order is F3.3, and how it works was already settled on
+2026-10-14 (C2 A). The eight details that decision leaves open were written up as **Y1-Y8**
+(`plans/Phase2_M3_F3.3_Price_Questions.md` in the Claude project files) and asked in the thread;
+they are **still open**, so what is built follows the recommendations and each one is a setting, not
+a rewrite, if he chooses differently.
+
+**Done**
+- **F3.3, the price and the floor** (`app/cpq/pricing.py`, migration 0016). A line's list price comes
+  from the first source that covers it: a selling price in the ERP **for this very customer**, valid
+  today; else the item's rate on the connection's **default selling price list** (a new setting on
+  the ERP connection; with none set, Forge says so rather than guessing which list to use); else the
+  **cost at the family's target margin**. Then the **tier discount** (strategic, key, standard), the
+  **quantity break** the line reaches, and the **rep's own ask** (a discount or a price of their
+  own), each off the running price. The price is rounded **up** as the policy says, so rounding can
+  never push a line under its floor.
+- **The floor is checked on every line and on the whole quote.** A line below it, a line whose cost
+  is not known, a line with no policy to give it a floor, and a line nothing could price all go to a
+  person on a Decisions card (the new **Quote agent**, `app/cpq/price_agent.py`), who approves the
+  price, counters with one, or sends it back. The card carries the price's fingerprint, so an
+  approval only ever covers the price it was shown. The whole quote is weighed against the floor its
+  own lines come to.
+- **Pricing policies** (`price_policies`): target margin, floor, tier discounts, quantity breaks and
+  rounding, per family with one company-wide policy behind them. Never edited: a change is a new row
+  from a date, like a material rate, so a quote made in March can still be explained with March's
+  numbers. Saving one prices every open draft again, and says which quotes changed.
+- **Each price is sealed in the audit chain**, as costs are since 5d8450f: `quote.priced` holds every
+  line's fingerprint in the chain's plain skeleton, and `GET /quotes/{id}/price-seal` works them out
+  again from the kept waterfalls, so a price edited in the database cannot pass as one Forge made.
+- **On screen:** each quote line now shows its price, the margin it leaves, and "why this price" (the
+  list price with its source, every discount with its amount, the margin against the floor, and the
+  sync time of an ERP price); an **Ask** button for the rep's discount or price; the quote's total
+  with its margin against the weighted floor, naming any lines left out of it. A new **Quotes →
+  Pricing policy** screen sets the numbers, with its versions and a sample to start from.
+- Prices follow costs automatically: every path that works out costs (a quote starting, a line added,
+  changed or removed, a configuration arriving, a rate or BOM change, a cost approved on a card)
+  prices the draft again straight after.
+
+**Problems**
+- The first version stored the price twice, at four decimals inside the waterfall and two on the
+  line, so a quote's total disagreed with its lines by paise. Every price is now one number, to the
+  paisa, rounded up; "no rounding" was dropped as a choice, because it only ever meant "to the paisa"
+  anyway.
+- Price seals came back as "not sealed" at first: a key is only kept in an audit record's plain data
+  if it is in `chain.SKELETON_KEYS`, so `price_seals` had to be added there, as `cost_seals` was.
+
+**Not done / next**
+- **Y1-Y8 wait on Nischay**, and so do **G1-G7** (freight, the last piece of F3.2). F3.4, the
+  discount approval matrix (C5 A), is the next feature in order after them.
+- GST is deliberately not in F3.3: margins and the floor are worked out before tax (C8 A), and the
+  tax lines come with the quote document, F3.5.
+- The two quiet days before this: no message, no build and no teammate pushes on 17 and 18 October
+  until the evening.
 
 ---
 

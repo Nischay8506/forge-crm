@@ -2,7 +2,9 @@
 with revisions R1, R2 ... A draft revision's lines can be changed; each line's cost and
 its breakdown (F3.2) are shown to people with the costs.view permission (C17 B). A
 draft's costs are worked out when it starts and after every change to its lines
-(app/cpq/costing.py); a sent one shows "cost changed: reprice recommended" (K9 A)."""
+(app/cpq/costing.py), and its prices follow at once (F3.3, app/cpq/pricing.py): where
+each line's price came from, the discounts on it, and the margin against the family's
+floor. A sent one shows "cost changed: reprice recommended" (K9 A)."""
 
 import uuid
 from datetime import date, timedelta
@@ -17,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import CurrentUser, require_permission
 from app.core.errors import AppError, Forbidden, NotFound
 from app.core.permissions import has_permission
-from app.cpq import costing, quotes
+from app.cpq import costing, pricing, quotes
 from app.db import get_db
 from app.models import Account, Decision, Enquiry, Quote, QuoteLine, QuoteRevision, User
 from app.models.quotes import OPEN_QUOTE_STATUSES
@@ -68,6 +70,13 @@ class LinePatch(BaseModel):
     qty: Decimal | None = Field(default=None, ge=0, le=Decimal("1e12"))
     unit: str | None = Field(default=None, max_length=20)
     item_code: str | None = Field(default=None, max_length=140)
+
+
+class AskIn(BaseModel):
+    """What the rep asks for on a line (C2 A): one of the two, or neither to clear it."""
+
+    discount_pct: Decimal | None = Field(default=None, ge=0, lt=100)
+    unit_price: Decimal | None = Field(default=None, ge=0, le=Decimal("1e12"))
 
 
 def _clean(data: dict[str, Any]) -> dict[str, Any]:
@@ -140,15 +149,20 @@ async def _detail(db: AsyncSession, q: Quote, current: CurrentUser) -> dict[str,
         QuoteRevision.quote_id == q.id).order_by(QuoteRevision.number)))
     costs = _costs(current)
     lines = await quotes.lines_of(db, rev)
-    reviews = {d.id: d for d in await db.scalars(select(Decision).where(Decision.id.in_(
-        [ln.cost_review_id for ln in lines if ln.cost_review_id])))} if costs else {}
+    card_ids = [x for ln in lines for x in (ln.cost_review_id, ln.price_review_id) if x]
+    cards = {d.id: d for d in await db.scalars(select(Decision).where(
+        Decision.id.in_(card_ids)))} if card_ids else {}
+
+    def _card(decision_id: uuid.UUID | None) -> dict[str, Any] | None:
+        d = cards.get(decision_id) if decision_id else None
+        return {"id": str(d.id), "status": d.status, "decided_by": d.decided_by,
+                "note": d.note} if d else None
 
     def line(ln: QuoteLine) -> dict[str, Any]:
         out = quotes.line_out(ln, costs)
-        d = reviews.get(ln.cost_review_id) if ln.cost_review_id else None
         if costs:
-            out["cost_review"] = {"id": str(d.id), "status": d.status,
-                                  "decided_by": d.decided_by, "note": d.note} if d else None
+            out["cost_review"] = _card(ln.cost_review_id)
+        out["price_review"] = _card(ln.price_review_id)
         return out
 
     return {**await _row(db, q),
@@ -156,6 +170,8 @@ async def _detail(db: AsyncSession, q: Quote, current: CurrentUser) -> dict[str,
                        "reason_note": rev.reason_note, "valid_until": rev.valid_until,
                        "delivery_terms": rev.delivery_terms, "destination": rev.destination,
                        "costed_at": rev.costed_at, "sent_at": rev.sent_at,
+                       "priced_at": rev.priced_at, "price_status": rev.price_status,
+                       "totals": pricing.totals(lines),
                        "reprice_reason": rev.reprice_reason, "reprice_at": rev.reprice_at,
                        "lines": [line(ln) for ln in lines]},
             "revisions": [{"number": r.number, "status": r.status, "reason": r.reason,
@@ -237,10 +253,12 @@ async def remove_line(quote_id: uuid.UUID, line_id: uuid.UUID,
     q = await _quote(db, quote_id, lock=True)
     rev = await quotes.revision(db, q, lock=True)
     ln = await _line(db, rev, line_id)
-    if ln.cost_review_id is not None:
+    if ln.cost_review_id is not None or ln.price_review_id is not None:
         from app.agents import runtime
 
-        await runtime.supersede(db, f"cost:{ln.id}", _actor(current), "The line was removed")
+        for key in ("cost", "price"):
+            await runtime.supersede(db, f"{key}:{ln.id}", _actor(current),
+                                    "The line was removed")
     await quotes.remove_line(db, q, rev, ln)
     await costing.cost_revision(db, q, rev, _actor(current), why="line removed")
     return await _detail(db, q, current)
@@ -254,6 +272,46 @@ async def work_out_costs(quote_id: uuid.UUID, current: CurrentUser = Depends(WOR
     rev = await quotes.revision(db, q, lock=True)
     await costing.cost_revision(db, q, rev, _actor(current), why="asked for")
     return await _detail(db, q, current)
+
+
+@router.put("/{quote_id}/lines/{line_id}/ask")
+async def set_ask(quote_id: uuid.UUID, line_id: uuid.UUID, body: AskIn,
+                  current: CurrentUser = Depends(WORK),
+                  db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """The rep's own ask on a line: a discount off Forge's price, or a price of their
+    own. It is priced again at once, so a line under the floor goes for approval (C2 A)."""
+    q = await _quote(db, quote_id, lock=True)
+    rev = await quotes.revision(db, q, lock=True)
+    ln = await _line(db, rev, line_id)
+    data = body.model_dump(exclude_unset=True)
+    if data.get("discount_pct") is not None and data.get("unit_price") is not None:
+        raise AppError("Ask for a discount or a price, not both")
+    ask = {k: format(v, "f") for k, v in data.items() if v is not None}
+    await quotes.set_ask(db, q, rev, ln, ask)
+    await pricing.price_revision(db, q, rev, _actor(current), why="the rep's ask")
+    return await _detail(db, q, current)
+
+
+@router.post("/{quote_id}/price")
+async def work_out_prices(quote_id: uuid.UUID, current: CurrentUser = Depends(WORK),
+                          db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """Price the draft again with today's policy, ERP prices and costs (F3.3)."""
+    q = await _quote(db, quote_id, lock=True)
+    rev = await quotes.revision(db, q, lock=True)
+    await pricing.price_revision(db, q, rev, _actor(current), why="asked for")
+    return await _detail(db, q, current)
+
+
+@router.get("/{quote_id}/price-seal")
+async def check_price_seal(quote_id: uuid.UUID, revision: int | None = None,
+                           current: CurrentUser = Depends(READ),
+                           db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """Is each line's kept price still the one Forge worked out? Checked against the
+    fingerprints in the audit chain, as the cost seals are."""
+    if not _costs(current):
+        raise Forbidden("You need the costs.view permission to check a quote's prices")
+    q = await _quote(db, quote_id)
+    return await pricing.seals(db, q, await quotes.revision(db, q, revision))
 
 
 @router.get("/{quote_id}/seal")

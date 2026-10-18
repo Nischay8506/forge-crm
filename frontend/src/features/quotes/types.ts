@@ -57,6 +57,32 @@ export interface CostBreakdown {
   review?: { key: string; by: string; at: string; unit_cost: string | null; worked_out: string | null }
 }
 
+export type PriceSource = "contract" | "price_list" | "cost_plus" | "none"
+export type PriceStatus = "ok" | "below_floor" | "no_cost" | "no_price" | "no_floor"
+
+/** A line's price waterfall, as Forge worked it out (F3.3; backend app/cpq/pricing.py). */
+export interface PriceWaterfall {
+  status: PriceStatus
+  source: PriceSource
+  currency: string
+  list_price: string | null
+  unit_price: string | null
+  qty: string | null
+  unit: string | null
+  amount: string | null
+  unit_cost: string | null
+  margin_pct: string | null
+  floor_margin_pct: string | null
+  tier: string | null
+  policy: { id: string | null; scope: "family" | "company"; from: string; target_margin_pct: string; floor_margin_pct: string; rounding: string } | null
+  at: string
+  steps: { kind: "list" | "discount" | "ask" | "rounding"; label: string; pct?: string; amount?: string; price: string }[]
+  notes: string[]
+  problems: string[]
+  review_key: string
+  approval?: { key: string; by: string; at: string; unit_price: string | null; priced: string | null }
+}
+
 export interface QuoteLineView {
   id: string
   position: number
@@ -75,6 +101,17 @@ export interface QuoteLineView {
   cost?: CostBreakdown | null
   /** The Decisions card a person with costs.manage reviews (K10 A). */
   cost_review?: { id: string; status: string; decided_by: string | null; note: string | null } | null
+  /** F3.3: the price everyone in sales sees, and the waterfall behind it (C17 B). */
+  price_source: PriceSource | null
+  price_status: PriceStatus | null
+  list_price: string | null
+  unit_price: string | null
+  amount: string | null
+  margin_pct: string | null
+  ask: { discount_pct?: string; unit_price?: string } | null
+  price?: PriceWaterfall | null
+  /** The Decisions card a person with prices.approve decides (C2 A). */
+  price_review?: { id: string; status: string; decided_by: string | null; note: string | null } | null
 }
 
 export interface QuoteDetail extends QuoteRow {
@@ -88,12 +125,60 @@ export interface QuoteDetail extends QuoteRow {
     destination: { place?: string; city?: string; state?: string } | null
     costed_at: string | null
     sent_at: string | null
+    priced_at: string | null
+    price_status: "ok" | "below_floor" | null
+    totals: QuoteTotals
     reprice_reason: string | null
     reprice_at: string | null
     lines: QuoteLineView[]
   }
   revisions: { number: number; status: string; reason: string | null; created_at: string; sent_at: string | null }[]
   may: { work: boolean; see_costs: boolean }
+}
+
+/** The quote as a whole, against the floor its lines weigh out to (C2 A). */
+export interface QuoteTotals {
+  total: string
+  cost: string | null
+  margin_pct: string | null
+  floor_margin_pct: string | null
+  status: "ok" | "below_floor"
+  lines_left_out: number
+}
+
+/** What a family (or the company) is priced by from a date (F3.3). */
+export interface PricePolicyData {
+  target_margin_pct: string
+  floor_margin_pct: string
+  tier_discounts: Record<string, string>
+  qty_breaks: { from_qty: string; discount_pct: string }[]
+  rounding: string
+}
+
+export interface PricePolicyVersion {
+  id: string; effective_from: string; policy: PricePolicyData; note: string | null
+  created_by: string; created_at: string
+}
+
+export interface PricePolicyInForce {
+  id: string | null; scope: "family" | "company"; from: string
+  target_margin_pct: string; floor_margin_pct: string; rounding: string
+}
+
+export interface PricePolicyList {
+  at: string
+  company: PricePolicyInForce | null
+  sample: PricePolicyData
+  families: { id: string; name: string; own: boolean; policy: PricePolicyInForce | null }[]
+}
+
+export interface PricePolicyDetail {
+  family: { id: string; name: string } | null
+  scope: "family" | "company"
+  in_force: PricePolicyInForce | null
+  from_company: boolean
+  sample: PricePolicyData
+  versions: PricePolicyVersion[]
 }
 
 export interface RateRow {
