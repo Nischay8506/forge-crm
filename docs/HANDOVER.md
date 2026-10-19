@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-18
+Last updated: 2026-10-19
 
 ---
 
@@ -762,7 +762,7 @@ docs/                  this file, BUILD_LOG.md
     `price_policies` row from a date, the app role has only SELECT and INSERT on the table, and the
     waterfall names the policy version it used.
 
-## 6. Current state (end of 2026-10-18)
+## 6. Current state (end of 2026-10-19)
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
 first module, **M1 Enquiry, is built for email (2026-10-12)**. **M3 CPQ** is being built one feature at a
@@ -770,8 +770,9 @@ time (C1 B): **F3.1 is built** and waits for Nischay's try, **F3.2's cost engine
 finished to J1-J4, with freight still to come (G1-G7), and **F3.3, the price and the floor, is built**
 (2026-10-18) with its eight open details waiting on him (Y1-Y8). Tests: 318 backend (plus 3 that run
 only against a live ERPNext) and 43 frontend, all passing; every new screen was checked in a browser, on a
-desktop and at phone width (390 px). Nischay's PC needs `uv run alembic upgrade head` (migrations 0013 to
-0016) after the copy, or enquiry and quote pages fail.
+desktop and at phone width (390 px). Nischay's PC was brought to 0016 on the evening of
+2026-10-18 and is current with F3.3; a copy onto any other machine needs `uv run alembic upgrade head`
+(migrations 0013 to 0016), or enquiry and quote pages fail.
 
 Two things changed on 2026-10-16 that are not features: a clone is set up by one command and described
 by `START_HERE.md` (section 4), and the API now answers every error in one shape, so a missing key
@@ -823,8 +824,8 @@ Built to C1-C18, "Sample data", "Start F3.2 now", K2-K13 A and the K10 card (sec
     unit conversion (K12 A).
   - **Review cards** (K10 A, the "Cost Engine" agent at L2): an incomplete or unknown cost goes to a
     Decisions card for `costs.manage`. Approve uses the cost as worked out (an unknown cost is then
-    priced by hand and, once F3.3 is built, goes for approval); counter sets the unit cost; reject
-    leaves it waiting until someone adds what is missing, after which "Work out costs" closes the card.
+    priced by hand and goes for approval); counter sets the unit cost; reject leaves it waiting until
+    someone adds what is missing, after which "Work out costs" closes the card.
   - **When things change** (K9 A, K11 A): a new rate, a cost model save or an ERPNext BOM change works
     out draft quotes again at once and marks sent quotes "reprice recommended"; the hourly job does the
     same for rates dated ahead. Each owner gets one email a day (09:00 IST) listing their marked quotes.
@@ -1302,8 +1303,9 @@ files): where the target margin and floor live, what a below-floor line does, ti
 quantity breaks, rounding, which ERPNext price wins, GST now or with the PDF, and whether a rep can
 type their own ask. F3.3 is built on the recommendations; each answer is a setting, not a rewrite.
 
-**And he tries F3.1, the cost engine and the new prices on his PC** ("Sample data"). After the copy,
-`uv run alembic upgrade head` (0013 to 0016), then restart the API, worker and beat.
+**And he tries F3.1, the cost engine and the new prices on his PC** ("Sample data"). His PC is already
+on 0016 (he migrated it on the evening of 2026-10-18); he only needs the API, worker and beat running.
+On a machine that has not been migrated, `uv run alembic upgrade head` (0013 to 0016) comes first.
 - F3.1: Enquiries → Setup → Product families → "+ Flanges" → "Options and rules", and "Configure" on
   an enquiry line.
 - Cost engine: Quotes → Cost models → Flanges → "Start from the flanges sample"; then "Start a quote"
@@ -1321,8 +1323,8 @@ https://claude.ai/code/artifact/91919188-ba5c-4b66-8a5a-124d16f8679a
 **Then Claude builds freight** (K1 D) once Nischay answers **G1-G7** in
 `plans/Phase2_M3_F3.2_Freight_Questions.md` in the Claude project files (reference data loading, which
 mapping wins, origin plant, carriers, manual review, export terms, shipments). It is the last piece of
-F3.2; everything else in the cost engine is built, including J1-J4 as answered. Then F3.3 pricing and
-the floor (C2 A).
+F3.2; everything else in the cost engine is built, including J1-J4 as answered. **Then F3.4, discount
+approvals**, which is the next feature in M3's order (C1 B) now that F3.3 is built.
 
 **M1 on his PC:** after the copy, `uv sync` and `uv run alembic upgrade head` (0010-0012), restart the
 API, worker and beat, then Enquiries → Setup (templates, the sample button under What we make) and

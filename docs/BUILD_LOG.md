@@ -5,6 +5,24 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-19 (Day 12): nothing built
+
+Nothing was built today, and nothing is in progress.
+
+Yesterday evening Nischay ran `uv run alembic upgrade head` on his PC and it went from 0015 to 0016,
+so his copy is current with F3.3 at commit 4fc8f9e. His first attempt failed with a refused
+connection, because the PostgreSQL container was not running; starting Docker Desktop and the
+containers (or `scripts\setup.cmd`, which does both) was all it needed.
+
+**Waiting on Nischay**, in the order the build needs them: **Y1-Y8**, the eight details F3.3 leaves
+open; **G1-G7**, the freight answers and the last piece of F3.2; and his trial of F3.1, the cost
+engine and the new prices on his PC.
+
+**Next:** freight (K1 D) if G1-G7 comes first, otherwise **F3.4, discount approvals**, which is the
+next feature in M3's order (C1 B). Nothing in either depends on Y1-Y8, which are settings.
+
+---
+
 ## 2026-10-18 (Day 11): the price and the floor (F3.3)
 
 **Decisions (Nischay):** after two quiet days he wrote one word at 16:40Z, "go", taken as: carry on
