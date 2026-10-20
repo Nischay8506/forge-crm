@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-19
+Last updated: 2026-10-20
 
 ---
 
@@ -762,7 +762,7 @@ docs/                  this file, BUILD_LOG.md
     `price_policies` row from a date, the app role has only SELECT and INSERT on the table, and the
     waterfall names the policy version it used.
 
-## 6. Current state (end of 2026-10-19)
+## 6. Current state (end of 2026-10-20)
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
 first module, **M1 Enquiry, is built for email (2026-10-12)**. **M3 CPQ** is being built one feature at a
@@ -1287,7 +1287,8 @@ Known gaps from Steps 1 and 2 (none block Step 4):
   buttons in WhatsApp come with WhatsApp (later list); push on a
   phone needs Forge at an `https://` address; the inbox list does not refresh by itself (the menu
   count does, every 30 s), so a card changed by someone else is caught by the fingerprint check
-  when deciding, not shown live; the calendar has one time zone per company.
+  when deciding, not shown live; the calendar has one time zone per company. The list could poll on
+  the same 30 s as the count: Nischay was asked on 2026-10-19 and has not answered (section 7).
 - Meaning match is built and tested with a stand-in model, but is **off until a Gemini key is set (D3)**.
   The vector column has no fixed size, so there is no ANN index yet; fine for thousands of accounts.
   The duplicate check on the create form uses the rules only, not meaning match.
@@ -1319,6 +1320,12 @@ On a machine that has not been migrated, `uv run alembic upgrade head` (0013 to 
 Fixes from his tries come before more F3.2 work ("Start F3.2 now"). A step-by-step guide for these two
 tries, with the figures to expect and a table for his results, is the Claude Doc written on 2026-10-15:
 https://claude.ai/code/artifact/91919188-ba5c-4b66-8a5a-124d16f8679a
+A second page, written for his project check on 2026-10-19, shows the build to other people: what to
+start beforehand, a twenty-minute click path in seven parts, the Module 12 architecture, a card for
+each of F12.1 to F12.6 with the state of every Done-When check, and a built-against-open table:
+https://claude.ai/artifact/SSNKA5JFu1B1FABR3GcULV — two things it points out, both as designed, are
+that no policy rule exists until someone adds one (so an L2 agent just acts and no card appears) and
+that the person who asked for a card can never decide it or hand it on.
 
 **Then Claude builds freight** (K1 D) once Nischay answers **G1-G7** in
 `plans/Phase2_M3_F3.2_Freight_Questions.md` in the Claude project files (reference data loading, which
@@ -1399,6 +1406,10 @@ Open questions for Nischay:
 - **M6's folder name.** The work-split doc gives stream A `app/channel`, but `app/channels` already
   exists and is the Step 6 messaging platform, which the platform rule puts off limits. M6 dealers needs
   its own name: `app/partners` (recommended) or `app/dealers`.
+- **The Decisions list refreshing itself.** The menu count polls every 30 seconds; the list does not,
+  so a card changed in another window shows only after F5. Making the list poll the same way is a small
+  change: **A** do it now (recommended) / **B** leave it, since the fingerprint check already stops a
+  stale decision. Asked on 2026-10-19, during his project check, and not yet answered.
 - **The cost seal check**: does it get a "Check costs" button on the quote's cost view (A, the
   recommendation: anyone with `costs.view` can see at a glance that each line's cost is still the one
   Forge worked out), or stay an API and audit check for when something looks wrong (B)?

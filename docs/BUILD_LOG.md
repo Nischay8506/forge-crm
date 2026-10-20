@@ -5,21 +5,47 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
-## 2026-10-19 (Day 12): nothing built
+## 2026-10-20 (Day 13): nothing built
 
-Nothing was built today, and nothing is in progress.
+Nothing was built, nothing is in progress, and Nischay has not written since the project check on
+2026-10-19.
 
-Yesterday evening Nischay ran `uv run alembic upgrade head` on his PC and it went from 0015 to 0016,
-so his copy is current with F3.3 at commit 4fc8f9e. His first attempt failed with a refused
-connection, because the PostgreSQL container was not running; starting Docker Desktop and the
-containers (or `scripts\setup.cmd`, which does both) was all it needed.
+**Waiting on him**, in the order the build needs them: **Y1-Y8**, the eight details F3.3 leaves open;
+**G1-G7**, the freight answers and the last piece of F3.2; his trial of F3.1, the cost engine and the
+new prices on his PC; and the smaller open questions in section 7 of the handover, which now include
+the self-refreshing Decisions list.
 
-**Waiting on Nischay**, in the order the build needs them: **Y1-Y8**, the eight details F3.3 leaves
-open; **G1-G7**, the freight answers and the last piece of F3.2; and his trial of F3.1, the cost
-engine and the new prices on his PC.
+**Next:** freight (K1 D) if G1-G7 comes first, otherwise **F3.4, discount approvals**, the next
+feature in M3's order (C1 B). Neither depends on Y1-Y8, which are settings.
 
-**Next:** freight (K1 D) if G1-G7 comes first, otherwise **F3.4, discount approvals**, which is the
-next feature in M3's order (C1 B). Nothing in either depends on Y1-Y8, which are settings.
+---
+
+## 2026-10-19 (Day 12): the project check, nothing built
+
+No code was written. (This entry was finished on 2026-10-20: the morning's work happened in another
+thread, and the first version of it said only that nothing was built.)
+
+**Nischay had a project check** and asked at 06:49Z for a guide: where to start the demo, and every
+feature of Module 12 with its architecture and how it works. It was written as a page,
+https://claude.ai/artifact/SSNKA5JFu1B1FABR3GcULV — what to start before the meeting, a seven-part
+click path of about twenty minutes, the Module 12 architecture, a card for each of F12.1 to F12.6 with
+the honest state of every Done-When check, and a built-against-open table for the closing slide. No
+file in the repository was touched.
+
+**Two things came out of his run-through, both as designed rather than faults.** Forge ships with no
+policy rules, so the Sandbox Agent at L2 simply records a test payment and no card appears until a
+rule is added, which is why the demo adds the ₹1,00,000 rule first. And the person who asked for a
+card can never decide it or hand it on, the four-eyes rule, so a hand-over has to start from the
+approver and not from admin, who is the only login allowed to press "Try it". The guide says both.
+
+Earlier, on the evening of 2026-10-18, Nischay ran `uv run alembic upgrade head` on his PC and it
+went from 0015 to 0016, so his copy is current with F3.3 at commit 4fc8f9e. His first attempt failed
+with a refused connection, because the PostgreSQL container was not running; starting Docker Desktop
+and the containers (or `scripts\setup.cmd`, which does both) was all it needed.
+
+**Left open by that thread:** whether the Decisions list should refresh itself every 30 seconds, as
+the menu count already does. He was asked and has not answered; the suggestion was to do it after the
+check, so it is in section 7 of the handover, not built.
 
 ---
 
