@@ -35,6 +35,8 @@ ROOT = Path(__file__).resolve().parent.parent
 VERSIONS = "backend/alembic/versions"
 
 failures: list[str] = []
+OWNER_CHECK = "Migration owner"
+HEAD_CHECK = "One migration head"
 
 
 def report(status: str, check: str, detail: str = "") -> None:
@@ -67,21 +69,21 @@ def check_owner(actor: str | None, owners: list[str]) -> None:
         base_sha, base = base_commit()
         since = git("merge-base", base_sha, "HEAD")
     except RuntimeError as e:
-        report("FAIL", "Migration owner", str(e))
+        report("FAIL", OWNER_CHECK, str(e))
         return
     changed = [f for f in git("diff", "--name-only", f"{since}..HEAD", "--", VERSIONS)
                .splitlines() if f.endswith(".py")]
     if not changed:
-        report("PASS", "Migration owner", f"no migration files changed since {base}")
+        report("PASS", OWNER_CHECK, f"no migration files changed since {base}")
         return
     files = ", ".join(Path(f).name for f in changed)
     if actor is None:
-        report("WARN", "Migration owner",
+        report("WARN", OWNER_CHECK,
                f"migration files changed since {base}: {files}. Check you wrote them.")
     elif actor.lower() in {o.lower() for o in owners}:
-        report("PASS", "Migration owner", f"{actor} may change migrations: {files}")
+        report("PASS", OWNER_CHECK, f"{actor} may change migrations: {files}")
     else:
-        report("FAIL", "Migration owner",
+        report("FAIL", OWNER_CHECK,
                f"{actor} changed {files}. Only {', '.join(owners)} writes "
                "migrations: remove these files and say which model changes need one.")
 
@@ -124,15 +126,17 @@ def check_heads() -> None:
         problems.append(f"{len(heads)} heads: {', '.join(heads) or 'none'}. Re-point the "
                         "newer one's down_revision at the other and renumber it")
     if problems:
-        report("FAIL", "One migration head", "; ".join(problems))
+        report("FAIL", HEAD_CHECK, "; ".join(problems))
     else:
-        report("PASS", "One migration head", f"head is {heads[0]}, {len(revisions)} migrations")
+        report("PASS", HEAD_CHECK, f"head is {heads[0]}, {len(revisions)} migrations")
 
 
 def run_tests() -> None:
     uv, npm = shutil.which("uv"), shutil.which("npm")
     for name, cmd, cwd in (
-        ("Backend tests", [uv or "uv", "run", "pytest", "-q"], ROOT / "backend"),
+        # --no-sync: test the environment setup.cmd installed; nothing is built or fetched.
+        ("Backend tests", [uv or "uv", "run", "--locked", "--no-build", "--no-sync",
+                           "pytest", "-q"], ROOT / "backend"),
         ("Frontend tests", [npm or "npm", "test"], ROOT / "frontend"),
     ):
         print(f"\n==> {name}: {' '.join(cmd[1:])}", flush=True)

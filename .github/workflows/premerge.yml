@@ -59,17 +59,18 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # Install scripts are off for npm. uv cannot take --no-build: http-ece (needed by
-      # pywebpush) is published only as source, so uv builds that one package, from the
-      # exact file whose sha256 is pinned in uv.lock (--locked refuses any other).
+      # Nothing is built or run while installing: npm skips install scripts, and uv
+      # installs only the wheels pinned in uv.lock. http-ece (pywebpush's one source-only
+      # dependency) is left out; it is imported only when a real push is sent, and the
+      # tests replace that sender.
       - name: Install
         run: |
-          cd backend && uv sync --locked
+          cd backend && uv sync --locked --no-build --no-install-package http-ece
           cd ../frontend && npm ci --ignore-scripts
 
       - name: Backend tests (migrates forge_test from empty first)
         working-directory: backend
-        run: uv run pytest -q
+        run: uv run --locked --no-build --no-sync pytest -q
 
       - name: Frontend tests
         working-directory: frontend
