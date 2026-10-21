@@ -1,15 +1,24 @@
 """The discount approval rulebook (F3.4; Z1-Z10 A, 2026-10-21).
 
-No database: the matrix and the chain it works out are plain arithmetic, so these run in
-milliseconds and say exactly what the rulebook means.
+Most of these need no database: the matrix and the chain it works out are plain
+arithmetic, so they run in milliseconds and say exactly what the rulebook means. The last
+few need Postgres, because dated versions, row-level security and the audit chain cannot
+be shown without it.
 """
 
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select, text
+from sqlalchemy.exc import ProgrammingError
 
+from app.audit.chain import verify
 from app.core.errors import ValidationFailed
 from app.cpq import doa
+from app.db import get_sessionmaker, tenant_session
+from app.models import AuditRecord, Tenant
+from tests.test_agents import ctx  # noqa: F401
 
 
 def facts(discount="0", value="100000", margin=None, floor=None) -> doa.Facts:
@@ -189,3 +198,98 @@ def test_the_sample_every_row_says_when_it_applies_and_who_approves():
     for r in doa.SAMPLE_MATRIX["rows"]:
         assert r["when"], r
         assert r["approver_names"], r
+
+
+# The rulebook in the database --------------------------------------------------------------
+# These need Postgres: they are about dated versions, row-level security and the audit
+# chain, none of which can be shown without it.
+
+async def test_a_matrix_is_never_edited_and_a_quote_is_judged_by_the_one_of_its_day(
+        client, ctx):  # noqa: F811
+    tid = ctx["tid"]
+    later = date.today() + timedelta(days=30)
+    async with tenant_session(tid) as s:
+        await doa.save(s, tid, matrix(row(["Sales Manager"], discount="5")), "admin",
+                       effective_from=date.today(), note="to start with")
+        await doa.save(s, tid, matrix(row(["Sales Manager"], discount="5"),
+                                      row(["Finance"], discount="15")), "admin",
+                       effective_from=later, note="tighter from next month")
+        await s.commit()
+
+    async with tenant_session(tid) as s:
+        today = await doa.in_force(s, tid, date.today())
+        assert len(today.matrix["rows"]) == 1  # next month's row is not in force yet
+        assert [v.effective_from for v in await doa.versions(s, tid)] == [later, date.today()]
+
+        # A quote today needs one approval; the same quote next month needs two.
+        now = await doa.quote_chain(s, tid, date.today(), facts(discount="20"))
+        then = await doa.quote_chain(s, tid, later, facts(discount="20"))
+    assert now.roles() == ["Sales Manager"]
+    assert then.roles() == ["Sales Manager", "Finance"]
+
+
+async def test_with_no_matrix_a_discount_is_not_waved_through(client, ctx):  # noqa: F811
+    async with tenant_session(ctx["tid"]) as s:
+        chain = await doa.quote_chain(s, ctx["tid"], date.today(), facts(discount="40"))
+    assert not chain.needed
+    assert any(doa.NO_MATRIX in p for p in chain.problems)
+
+
+async def test_setting_the_matrix_is_written_into_the_audit_chain(client, ctx):  # noqa: F811
+    tid = ctx["tid"]
+    async with tenant_session(tid) as s:
+        saved = await doa.save(s, tid, matrix(row(["Finance"], below_floor=True)), "admin",
+                               effective_from=date.today())
+        await s.commit()
+    async with tenant_session(tid) as s:
+        recs = list(await s.scalars(select(AuditRecord).where(
+            AuditRecord.kind == "doa.matrix.set")))
+        assert len(recs) == 1
+        assert recs[0].record_type == "doa_matrix" and recs[0].record_id == saved.id
+        assert (await verify(s, tid)).ok  # the record did not break the chain
+
+
+async def test_one_company_never_sees_another_companys_rulebook(client, make_tenant):
+    a_slug, a_email, a_pw = await make_tenant()
+    b_slug, b_email, b_pw = await make_tenant()
+    async with get_sessionmaker()() as s:
+        a = (await s.scalar(select(Tenant).where(Tenant.slug == a_slug))).id
+        b = (await s.scalar(select(Tenant).where(Tenant.slug == b_slug))).id
+    async with tenant_session(a) as s:
+        await doa.save(s, a, matrix(row(["Finance"], discount="5")), "admin",
+                       effective_from=date.today())
+        await s.commit()
+    async with tenant_session(b) as s:
+        assert await doa.in_force(s, b, date.today()) is None
+        assert await doa.versions(s, b) == []
+
+
+async def test_contradictory_rows_are_refused_before_they_reach_the_database(
+        client, ctx):  # noqa: F811
+    async with tenant_session(ctx["tid"]) as s:
+        with pytest.raises(ValidationFailed):
+            await doa.save(s, ctx["tid"],
+                           matrix(row(["sm", "fin"], discount="5"),
+                                  row(["fin", "sm"], discount="10")),
+                           "admin", effective_from=date.today())
+
+
+async def test_the_database_itself_refuses_to_edit_or_remove_a_version(
+        client, ctx):  # noqa: F811
+    """Z4 A is not left to the code that writes: the app's own login cannot change a row.
+
+    0001 grants update and delete on every new table by default, so 0018 takes both away
+    again. Without that, "a matrix is never edited" would hold only as long as nobody
+    wrote an UPDATE.
+    """
+    tid = ctx["tid"]
+    async with tenant_session(tid) as s:
+        saved = await doa.save(s, tid, matrix(row(["Finance"], discount="5")), "admin",
+                               effective_from=date.today())
+        await s.commit()
+    for sql in (text("update doa_matrices set note = 'edited' where id = :i"),
+                text("delete from doa_matrices where id = :i")):
+        async with tenant_session(tid) as s:
+            with pytest.raises(ProgrammingError) as e:
+                await s.execute(sql, {"i": saved.id})
+            assert "permission denied" in str(e.value).lower()

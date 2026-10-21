@@ -144,3 +144,28 @@ class PricePolicy(IdMixin, TenantMixin, Base):
     note: Mapped[str | None] = mapped_column(String(300))
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = _now_col()
+
+
+class DoaMatrix(IdMixin, TenantMixin, Base):
+    """A company's delegation of authority from a date (F3.4, Z1-Z10 A): the rows that
+    say who approves a discount, and in what order. A matrix is never edited: a change
+    is a new row from a date (Z4 A), so a quote approved in March can still be explained
+    with the rulebook that applied in March.
+
+    matrix: {"rows": [{"when": {"discount_pct_from": "5", "margin_pct_upto": "18",
+                                "below_floor": true, "value_from": "100000"},
+                       "approvers": ["Sales Manager", "Finance"],
+                       "separate_stages": false,
+                       "note": "why this row exists"}, ...]}
+
+    Each row's conditions must all hold for it to apply, and every matching row's stages
+    are kept, in order (app/cpq/doa.py).
+    """
+
+    __tablename__ = "doa_matrices"
+
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    matrix: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    note: Mapped[str | None] = mapped_column(String(300))
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = _now_col()

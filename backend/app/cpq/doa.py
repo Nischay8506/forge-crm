@@ -41,11 +41,18 @@ card and the screens sit on top of it.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.audit import chain
 from app.core.errors import ValidationFailed
+from app.models import DoaMatrix
 
 # What a row may ask about (Z1 A). Every condition a row sets must hold for it to match.
 CONDITIONS = ("discount_pct_from", "margin_pct_upto", "below_floor", "value_from")
@@ -363,3 +370,66 @@ def _contradictions(rows: list[dict[str, Any]]) -> list[str]:
                     out.append(f"rows {first} and {i} ask for the same two roles in "
                                "opposite orders")
     return sorted(set(out))
+
+
+# The rulebook a company is working to ------------------------------------------------------
+
+async def save(session: AsyncSession, tenant_id: uuid.UUID, data: dict[str, Any], actor: str,
+               *, effective_from: date, note: str | None = None) -> DoaMatrix:
+    """A new dated version of the matrix (never an edit of one that exists; Z4 A).
+
+    The rows are validated and tidied first, and contradictory rows are refused here
+    rather than when a quote happens to match both of them.
+    """
+    row = DoaMatrix(tenant_id=tenant_id, effective_from=effective_from,
+                    matrix=check(data), note=(note or None), created_by=actor)
+    session.add(row)
+    await session.flush()
+    await chain.append(session, tenant_id, "doa.matrix.set", actor=actor,
+                       record_type="doa_matrix", record_id=row.id,
+                       evidence_class="customer_money",
+                       data={"from": effective_from.isoformat(), "matrix": row.matrix,
+                             "note": note})
+    return row
+
+
+async def in_force(session: AsyncSession, tenant_id: uuid.UUID,
+                   day: date) -> DoaMatrix | None:
+    """The matrix a quote on `day` is judged by: the latest version that had started.
+
+    None means the company has written no rulebook yet. That is not "nothing needs
+    approving": the caller decides what to do with a quote it cannot judge, and
+    quote_chain() sends it to a person rather than letting it through.
+    """
+    return (await session.scalars(
+        select(DoaMatrix).where(DoaMatrix.tenant_id == tenant_id,
+                                DoaMatrix.effective_from <= day)
+        .order_by(DoaMatrix.effective_from.desc(), DoaMatrix.created_at.desc())
+        .limit(1))).first()
+
+
+async def versions(session: AsyncSession, tenant_id: uuid.UUID) -> list[DoaMatrix]:
+    """Every version, newest first, so a company can see what changed and when."""
+    return list(await session.scalars(
+        select(DoaMatrix).where(DoaMatrix.tenant_id == tenant_id)
+        .order_by(DoaMatrix.effective_from.desc(), DoaMatrix.created_at.desc())))
+
+
+NO_MATRIX = "no_matrix"
+
+
+async def quote_chain(session: AsyncSession, tenant_id: uuid.UUID, day: date,
+                      f: Facts) -> Chain:
+    """The approval chain for one quote, worked out from the matrix in force on `day`.
+
+    With no matrix at all the quote is not waved through: the chain comes back with a
+    problem naming NO_MATRIX, which the card turns into a decision for a person. A
+    company that has written a matrix and a quote that matches none of its rows are
+    different things, and only the second needs no approval.
+    """
+    row = await in_force(session, tenant_id, day)
+    if row is None:
+        return Chain(stages=[], matched=[],
+                     problems=[f"{NO_MATRIX}: no delegation of authority has been set, so "
+                               "who approves this discount is not known"])
+    return stages_for(row.matrix, f)

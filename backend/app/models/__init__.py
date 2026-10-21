@@ -35,6 +35,7 @@ from app.models.channels import (
 from app.models.cpq import (
     Configuration,
     CostModel,
+    DoaMatrix,
     MachineRate,
     MaterialRate,
     PricePolicy,
@@ -148,6 +149,7 @@ __all__ = [
     "ErpCustomer",
     "Configuration",
     "CostModel",
+    "DoaMatrix",
     "ErpInvoice",
     "ErpItem",
     "ErpOrder",
