@@ -7,6 +7,15 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ## 2026-10-21 (Day 14): hygiene scores follow the calendar (F12.1)
 
+**Note added at 13:45 IST, after this entry was first written.** A second session spent today working
+with Nischay **directly in the project folder on his PC**, and it had already written its own entry for
+2026-10-21 there. Its work: **Y1-Y8 answered** (Y5 changed, so rounding is a per-quote "Round off
+prices" switch, migration 0017), a customer's own ERP price taking no tier discount or quantity break,
+and three fixes from walking the test guide with him. Only its two documents are committed there
+(`9ec3a02`), not the code, and none of it is in this history or on GitHub `main` yet. The two records
+are still to be merged; for today's F3.3 work, that folder's entry is the fuller one. What follows is
+only the part of today that happened in the cloud workspace.
+
 **Decisions (Nischay).** He asked at 05:02Z which files handle Golden Record and Data Steward, and
 where the flow starts and ends. Reading the code for the answer turned up a gap, and of the three ways
 to close it he chose **the nightly re-score on its own**: not the extra "needs checking" list of fields
@@ -35,10 +44,11 @@ documentation this morning rather than in the evening slot, so this entry is wri
 **Problems.** None in the build. His laptop has been off the bridge since 2026-10-19, so his copy is
 still at `4fc8f9e` and `git pull` in the repository folder is what brings it to today.
 
-**Not done, next.** Still waiting on him: **Y1-Y8** (the eight F3.3 details), **G1-G7** (freight, the
-last piece of F3.2), his trial of F3.1, the cost engine and the prices, and the smaller questions in
-[HANDOVER](HANDOVER.md) section 7, including the self-refreshing Decisions list. Next feature either
-way: freight if G1-G7 arrives, otherwise **F3.4, discount approvals** (C1 B).
+**Not done, next.** The two 2026-10-21 records above need merging into one. Still waiting on him:
+**G1-G7** (freight, the last piece of F3.2), his run of Tests 1-3 on his PC, and the smaller questions
+in [HANDOVER](HANDOVER.md) section 7, including the self-refreshing Decisions list. Next feature either
+way: freight if G1-G7 arrives, otherwise **F3.4, discount approvals** (C1 B), which also gives a whole
+quote under its floor a card.
 
 ---
 

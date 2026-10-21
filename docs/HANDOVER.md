@@ -99,7 +99,7 @@ recommendation, and record the answer here.
 | V1 A | Support ERPNext v15 and v16; contract tests run against both | 2026-10-09 |
 | V2 A | A company can have more than one ERP connection; the setup screen adds one at a time | 2026-10-09 |
 | V3 A | The mapping studio maps customers → accounts plus the code lists Phase 2 needs (units, customer groups, territories, payment terms, warehouses, tax templates); rule-based suggestions until the D3 keys are set, then AI-assisted | 2026-10-09 |
-| C2 A, built 2026-10-18 | F3.3 prices a line from the first source that covers it (the customer's own ERP price, then the ERP selling price list, then the cost at the family's target margin), then the tier discount, the quantity break and the rep's ask; the floor is checked on every line and on the whole quote, and anything that cannot stand on its own goes to a person. The eight details it leaves open (Y1-Y8 in `plans/Phase2_M3_F3.3_Price_Questions.md`) were asked on 2026-10-18 and are **not answered**: what is built follows the recommendations, and each is a setting, not a rewrite | 2026-10-18 |
+| C2 A, built 2026-10-18 | F3.3 prices a line from the first source that covers it (the customer's own ERP price, then the ERP selling price list, then the cost at the family's target margin), then the tier discount, the quantity break and the rep's ask; the floor is checked on every line and on the whole quote, and anything that cannot stand on its own goes to a person. The eight details it leaves open (Y1-Y8 in `plans/Phase2_M3_F3.3_Price_Questions.md`) were asked on 2026-10-18 and **answered on 2026-10-21**: Y1-Y4 and Y6-Y8 as recommended, Y5 changed so that rounding is a per-quote switch, and a customer's own ERP price takes no tier discount or quantity break. That day's code and its fuller write-up are in the project folder on his PC (commit `9ec3a02` there), not yet in this history | 2026-10-18, answered 2026-10-21 |
 | Nightly hygiene re-score, built 2026-10-21 | Asked which files handle Golden Record and Data Steward, Nischay was shown the flow and the gap it turned up: a hygiene score only changed when a record was saved, merged, enriched or rescanned. Of the three options he chose **the nightly re-score on its own** — not the extra "needs checking" list of fields that just went stale, which stays a later item, and not leaving it | 2026-10-21 |
 | W1 A | Forge's own code lists for ERP mapping: units use the GST unit codes (UQC) and tax uses the GST rate slabs; customer groups, territories, payment terms and warehouses start as a copy of the first ERP's lists, and later ERPs map onto them | 2026-10-09 |
 | X1 A | Integration defaults kept as built: ERP Connector agent at L2, Outside AI tools agent at L0; alerts after 3 minutes unreachable, 3 failed reads in a row, 15 minutes without a read, or a run stuck 30 minutes (a rejected key alerts at once); nightly comparison after 02:00 IST; ERP customers disabled in the ERP are not made into accounts; "create in ERPNext" sends name, type and GSTIN only | 2026-10-09 |
@@ -776,7 +776,9 @@ Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and i
 first module, **M1 Enquiry, is built for email (2026-10-12)**. **M3 CPQ** is being built one feature at a
 time (C1 B): **F3.1 is built** and waits for Nischay's try, **F3.2's cost engine is built** and
 finished to J1-J4, with freight still to come (G1-G7), and **F3.3, the price and the floor, is built**
-(2026-10-18) with its eight open details waiting on him (Y1-Y8). Tests: 319 backend (plus 3 that run
+(2026-10-18), with **Y1-Y8 answered on 2026-10-21** and that day's follow-up work (per-quote round-off,
+migration 0017, three fixes from the test guide) sitting in the project folder on his PC rather than in
+this history: see section 7. Tests on this history: 319 backend (plus 3 that run
 only against a live ERPNext) and 43 frontend, all passing; every new screen was checked in a browser, on a
 desktop and at phone width (390 px). Nischay's PC was brought to 0016 on the evening of
 2026-10-18 and is current with F3.3; a copy onto any other machine needs `uv run alembic upgrade head`
@@ -1308,10 +1310,17 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 
 ## 7. Next step and open questions
 
-**Now: Nischay answers Y1-Y8** (`plans/Phase2_M3_F3.3_Price_Questions.md` in the Claude project
-files): where the target margin and floor live, what a below-floor line does, tier discounts,
-quantity breaks, rounding, which ERPNext price wins, GST now or with the PDF, and whether a rep can
-type their own ask. F3.3 is built on the recommendations; each answer is a setting, not a rewrite.
+**Y1-Y8 are answered** (2026-10-21, `plans/Phase2_M3_F3.3_Price_Questions.md` in the Claude project
+files). Y1-Y4 and Y6-Y8 as recommended; **Y5 changed**: a policy names the rounding step, and a person
+switches "Round off prices" on per quote, so prices are exact to the paisa otherwise. A further point
+settled the same day: a customer's own ERP price is used as it is, with no tier discount and no quantity
+break. That work was done with him **directly in the project folder on his PC**, with migration 0017 and
+three fixes from walking the test guide; it is recorded in that folder's own commit `9ec3a02` and the
+code there is not committed yet, so none of it is in this history or on GitHub `main`. **The two records
+are still to be merged** — for today's F3.3 detail, his folder's 2026-10-21 entry is the fuller one.
+
+**Now: Nischay runs Tests 1-3 on his PC** (his dev database is already at 0017), then freight once
+G1-G7 are answered.
 
 **And he tries F3.1, the cost engine and the new prices on his PC** ("Sample data"). His PC is already
 on 0016 (he migrated it on the evening of 2026-10-18); he only needs the API, worker and beat running.
