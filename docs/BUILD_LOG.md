@@ -5,6 +5,64 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-21 (Day 14, evening): F3.4 discount approvals — the rulebook and its screen
+
+**All of today's F3.4 work is on the branch `f34-doa-matrix`, not on `main`.** The reason is in
+*Problems* below. Nothing here changes `main`.
+
+**Decisions (Nischay).** He answered **Z1-Z10 all A** at 11:20Z, with two refinements in his own words.
+On Z3, several matching rows **combine**: every required stage and its order is kept, and a role that
+appears twice is not asked twice unless a row explicitly says to keep it separate. On Z6, after four
+working hours the next role up is **told**, but being told is not approving: the original stage stays
+required unless Step 5's authorised delegation moves it, and whether the two-hour median is actually
+met is measured rather than assumed. At 12:05Z he answered the migration question with a single word,
+**"0018"**: he writes every migration himself, and he asked for this one by name.
+
+**Done**
+- **The rulebook engine** (`9642eff`, `app/cpq/doa.py`). A company's delegation of authority is a
+  matrix: rows saying "when a quote looks like this, these roles approve, in this order". A quote is
+  measured three ways (Z1): how deep the discount is, the margin it leaves against the family's floor,
+  and what the quote is worth. Rows that match are merged by a stable topological sort, so every row's
+  own order survives and the same matrix always gives the same chain; two rows that order the same pair
+  of roles against each other are refused when the version is saved, not discovered when a quote
+  happens to match both. 22 tests.
+- **Migration 0018 and the table** (`f1d3758`). `doa_matrices`: one matrix per company, from a date,
+  never edited (Z4). `save`, `in_force`, `versions` and `quote_chain`, with setting a matrix written
+  into the audit chain. **A company that has written no matrix is not the same as a quote that matches
+  no row**: the first comes back with a problem for a person to decide, only the second needs no
+  approval.
+- **The Approval rules screen** (`823535b`, Quotes → Approval rules). The rulebook in force read back
+  in plain words ("a discount of 15% or more and a quote under its floor → Sales Manager, then
+  Finance"), a new version written from a date, every version before it, and a **Try it** that shows
+  what a quote with given numbers would need without saving anything. Roles are held by id, so renaming
+  a role cannot quietly change who approves; the sample names them in words and the screen matches each
+  one. A role nobody is in is saved and said out loud, because a stage nobody can decide would stall
+  every quote that reaches it. New permission `approvals.manage`, separate from seeing the rulebook.
+- 351 backend tests pass, 3 skipped; ruff, tsc, 50 frontend tests, build. Checked in a browser at
+  1280 and 390px.
+
+**Problems.**
+- **0018 revises 0017, and 0017 is only on Nischay's PC.** On `main`, `alembic upgrade head` would fail
+  for everyone, so the work went to a branch. The container ran the suite against a copy of his 0017
+  kept out of git entirely (`.git/info/exclude`), never committed. The branch merges as it stands the
+  moment he pushes his.
+- **"Insert-only" was not actually enforced anywhere.** Migration 0001 grants `forge_app` select,
+  insert, update *and* delete on every new table by default, so the `GRANT SELECT, INSERT` line that
+  0016 uses to mean "never edited" adds nothing. 0018 revokes update and delete on its own table, and a
+  test proves the app's own login cannot edit or delete a version. **`price_policies` and `cost_models`
+  carry the same comment and still have both grants** — worth a line in one of Nischay's own
+  migrations; not changed here, because they belong to F3.2 and F3.3.
+- The browser check earned its place: the screen read `stage.reasons` while the API sends
+  `stage.because`, so Try it crashed. Fixed, and a test now asserts the key names the screen depends on.
+
+**Not done, next.** The **approval card on the quote itself** and the quote's own approval state. They
+need `api/v1/quotes.py`, `cpq/quotes.py`, `cpq/pricing.py`, `models/quotes.py`, `QuoteDetailPage.tsx`,
+`hooks.ts` and `types.ts` — exactly the files Nischay has uncommitted on his PC — so they wait for his
+push rather than giving him a merge to untangle. Still waiting on him besides that: **G1-G7** (freight),
+his run of Tests 1-3, and the smaller questions in [HANDOVER](HANDOVER.md) section 7.
+
+---
+
 ## 2026-10-21 (Day 14): hygiene scores follow the calendar (F12.1)
 
 **Note added at 13:45 IST, after this entry was first written.** A second session spent today working
