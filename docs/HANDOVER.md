@@ -46,7 +46,7 @@ Phase 2 (the money path), in order:
 | Module | What | Status |
 |---|---|---|
 | M1 | Enquiry & Lead Management (F1.1-F1.10, Design File frame 02) | **Built for email 2026-10-12** to N1-N15 and P1-P3 (section 3): F1.1, F1.4-F1.10. F1.2 (WhatsApp) and F1.3 (web form, marketplaces) are on the later list (N2 A, N14); F1.1's 95% check and scan reading wait for D3 and real samples (section 6) |
-| M3 | CPQ: configure, price, quote (F3.1-F3.9, frame 04) | Answered 2026-10-14 (C1-C18, K1-K9) and 2026-10-15 (J1-J4). Built one feature at a time in the guide's order (C1 B). **F3.1 configurator built 2026-10-14**, waiting for Nischay's try on his PC. **F3.2 cost engine built 2026-10-14** to K2-K13 A (cost models, units, the source order, review cards, rate and BOM changes), finished to J1-J4 on 2026-10-15 and 16 (J3 C, the per-connection overhead checkboxes, the sealed cost snapshot); **freight** (K1 D) waits on G1-G7. **F3.3 price and floor built 2026-10-18** to C2 A (the source order, tier and quantity discounts, the rep's ask, the floor on every line and on the quote, approval cards, pricing policies, sealed prices); its eight open details (Y1-Y8) wait on Nischay |
+| M3 | CPQ: configure, price, quote (F3.1-F3.9, frame 04) | Answered 2026-10-14 (C1-C18, K1-K9) and 2026-10-15 (J1-J4). Built one feature at a time in the guide's order (C1 B). **F3.1 configurator built 2026-10-14**, waiting for Nischay's try on his PC. **F3.2 cost engine built 2026-10-14** to K2-K13 A (cost models, units, the source order, review cards, rate and BOM changes), finished to J1-J4 on 2026-10-15 and 16 (J3 C, the per-connection overhead checkboxes, the sealed cost snapshot); **freight** (K1 D) waits on G1-G7. **F3.3 price and floor built 2026-10-18** to C2 A (the source order, tier and quantity discounts, the rep's ask, the floor on every line and on the quote, approval cards, pricing policies, sealed prices); its eight open details (Y1-Y8) answered and built 2026-10-21 (rounding per quote, contract prices as they are), that code still uncommitted on his PC. **F3.4 discount approvals** built 2026-10-21 on branch `f34-doa-matrix` (the rulebook, its table and its screen); the card on the quote waits on that same push |
 | M4 | Order, contract & ERP handoff (F4.1-F4.5) | Not started |
 
 Phase 1 is done when: all six F12 "Done When" checks pass, ERPNext syncs customers, items, orders
@@ -186,6 +186,9 @@ recommendation, and record the answer here.
 
 | Three streams | From 2026-10-16 the work is split three ways by stretch of the sales flow, not by layer, so each person owns whole features end to end. **A Quote to cash** (M3, M4, M6: `app/cpq`, `app/orders`, `features/quotes`, `features/orders`) is Nischay's. **B Demand and insight** (M1 leftovers, M2, M10, M11: `app/enquiries`, `app/pipeline`, `app/analytics`, `features/enquiries`, `features/pipeline`) is teammate 1's, starting at F2.1. **C Customer and after-sales** (M5, M7, M8, M9: `app/accounts`, `app/field`, `app/service`, `features/accounts`, `features/service`) is teammate 2's, starting at F5.1. Full reasoning and the hand-off points: the Claude Doc "Forge CRM work split for three" | 2026-10-16 |
 | Platform owner: Nischay | Nothing in `app/core`, `app/db.py`, `app/rls.py`, `app/models`, `app/agents`, `app/audit`, `app/approvals`, `app/channels`, `app/integrations` or `app/llm` changes without Nischay. Those are Module 12 and all three streams run on them; he is the only person who knows all of it, and platform changes are small and frequent (he chose A on the card) | 2026-10-16 |
+| Y1-Y8 | F3.3's open details, answered as built except Y5. **Y1 A** target margin and floor per family, with a company-wide policy behind them. **Y2 A** a line below its floor goes to a Quote agent card; the quote waits for it. **Y3 A** tier discounts as a % per account tier in the policy. **Y4 A** quantity breaks on the line's own quantity. **Y5 (changed)**: prices are exact to the paisa; the policy names a round-off step (₹1, ₹5, ₹10), and a person ticks "Round off prices" on each quote that should use it (`quote_revisions.round_off`, migration 0017; always rounded up). **Y6 A** customer's own ERP price, then the connection's default selling price list, then cost at target margin, **and** (found in the code, Nischay's answer) a customer's own ERP price takes no tier discount or quantity break, only the rep's ask. **Y7 A** GST with the quote document (F3.5). **Y8 A** the rep may ask for a % off or name a price | 2026-10-21 |
+| Ask on change | A price the rep typed is cleared when the line's product or unit changes (configuration, item code, unit), and the waterfall says so; a % ask stays (from the guide walk-through) | 2026-10-21 |
+| Quote floor with F3.4 | A whole quote under its weighted floor has no card of its own until F3.4's discount approvals (C5 A); the quote screen says so. A line's red tag stays after a countered price clears the floor (his choice, not fixed) | 2026-10-21 |
 | Z1-Z10 A | F3.4's rulebook. **Z1**: a quote is measured by discount depth, the margin against the family's floor, and the quote's worth; payment and special terms become rows with F3.5. **Z2**: approvers are named by role, in order. **Z3** (his words): several matching rows **combine** — every required stage and its order is kept, and a duplicated role is not asked twice unless a row explicitly says to keep it separate. **Z4**: the matrix is insert-only, a new version from a date. **Z5**: one approval carries the quote's discount; a line keeps its own card only where the price could not be worked out at all. **Z6** (his words): after four working hours the next role up is **told**, and being told is not approving — the original stage stays required unless Step 5's authorised delegation (H3) moves it, and the two-hour median is **measured**, not assumed. **Z7**: the card shows the ask, the lines, the floor broken, what the customer owes with its last-synced time, the rep's reason, and the quote's history; competitor pressure is the rep's own claim. **Z8**: Decisions inbox and email. **Z9**: median measured first card to final decision, working hours only. **Z10**: no new screen — the audit trail answers who, when and why | 2026-10-21 |
 | Nischay writes every migration | Teammates never write one. They push features to a project branch; he pulls them and checks project and database integration before merging. He made one exception, by name ("0018"), for F3.4's matrix table, because its feature could not be built or tested without it | 2026-10-21 |
 
@@ -388,9 +391,13 @@ inside a bundle must be named uniquely too, never `tmp.pack`: on 2026-10-16 two 
 the second overwrote the first, and the objects of the earlier commit were lost, so `git log` on the
 device failed with "Could not read <sha>". The repair is to pack the range from the newest commit the
 device can still read up to HEAD under a fresh name and run `git index-pack` on it. When the laptop is
-not connected, as it has been since the afternoon of 2026-10-16, no copy can be made at all: this folder
-is at commit 5415e96 and everything after it (the documentation commits of 2026-10-16 evening, 2026-10-17
-and 2026-10-18) is on GitHub, so `git pull` here is what catches it up.
+not connected, as it was from the afternoon of 2026-10-16, no copy can be made at all; `git pull` from
+GitHub catches this folder up.
+**On 2026-10-21 Claude Code worked in that folder directly**, on Nischay's PC: the Y1-Y8 answers, the
+fixes from walking the test guide and its own copy of these two documents, tested there against the
+Docker Postgres. Its documents are merged into this history; the **code is still uncommitted there**, so
+a cloud session must start from that folder's working tree, not from GitHub, and no bundle may be synced
+over it while it holds work nobody has committed.
 If you edit files here yourself, tell Claude before the next session so it starts from your version.
 Since 2026-10-12 the same history also goes to the GitHub repo (section 1): Claude hands the new
 commits over as a git bundle and they are pushed as they are, never with a `.env` file or a key. A
@@ -542,10 +549,15 @@ backend/
       agent.py           the Cost Engine agent and its review card for incomplete costs (K10 A)
       pricing.py         the price (F3.3): the source order (the customer's ERP price → the ERP
                          selling price list → the cost at the target margin), the tier discount,
-                         the quantity break and the rep's ask, rounding up, the floor on every line
-                         and on the whole quote, the waterfall kept on each line and its seal
+                         the quantity break and the rep's ask (none of the first two on the
+                         customer's own price, Y6), each step carried to the paisa (`_off`),
+                         rounding up to the policy's step only when the quote has "Round off"
+                         ticked (Y5), the floor on every line and on the whole quote, the
+                         waterfall kept on each line and its seal; `revision_status()` is the
+                         one place a quote's price status is worked out
       price_agent.py     the Quote agent and its approval card for a price that cannot stand on
-                         its own (below the floor, no cost, no floor, not priced)
+                         its own (below the floor, no cost, no floor, not priced); deciding a
+                         card sets the quote's status again
       doa.py             who approves a discount, and in what order (F3.4): the matrix a company
                          writes, dated versions of it, the rows a quote matches, and the chain
                          they combine into (every row's order kept, a role not asked twice).
@@ -587,7 +599,10 @@ backend/
                        configurations, 0014 ERPNext workstations and BOMs, material and machine
                        rates, cost models, quotes, revisions and lines, 0015 the cost
                        engine: yield and scrap on rates, BOM versions, cost status and
-                       review cards on lines, reprice marks, cost alerts)
+                       review cards on lines, reprice marks, cost alerts, 0016 pricing
+                       policies, prices, waterfalls, asks and price cards on lines, 0017 the
+                       per-quote round-off switch on revisions, 0018 the discount approval
+                       matrix — 0017 is on his PC and 0018 on branch f34-doa-matrix)
   evals/duplicates.py  synthetic duplicate set and quality report (S4A)
   evals/policy_gate.py chaos test: seeded over-limit calls must all be stopped and escalated
   evals/enquiries.py   M1 test set: 200 synthetic emails and BOMs (EN, HI, TE, mixed) measured
@@ -628,8 +643,11 @@ frontend/
   src/features/products Configurator (on an enquiry line) and OptionsEditor (a family's options and
                        rules, with the checker's problems shown live) (F3.1)
   src/features/quotes  Quotes (M3): list, one quote (lines, cost per unit and "why this cost" for
-                       costs.view, validity and delivery place, revisions), Material rates and
-                       Machine-hour rates (RatesPage)
+                       costs.view, price, margin and "why this price", the rep's Ask, "Round off
+                       prices", the total against the floor, validity and delivery place,
+                       revisions; it reloads when its tab is shown again), Material rates and
+                       Machine-hour rates (RatesPage), Pricing policy (PricePolicyPage),
+                       Approval rules (DoaMatrixPage, F3.4, on branch f34-doa-matrix)
 infra/                 local Postgres + Redis (Docker); erpnext/ = a local ERPNext 15/16 to test with
 docs/                  this file, BUILD_LOG.md
 ```
@@ -767,7 +785,9 @@ docs/                  this file, BUILD_LOG.md
     no policy and no ERP price, the line is left unpriced with the screen to go to, rather than
     guessed. Every discount is a step in the kept waterfall with its own amount, rounding only ever
     goes up, and the margin is checked against the family's floor whichever way the price was found.
-    Anything but "ok" goes to a person on a Quote agent card before the quote can go out.
+    Each step is carried to the paisa (`pricing._off`), so the waterfall adds up to what it shows.
+    Anything but "ok" goes to a person on a Quote agent card before the quote can go out, and the
+    quote's own status comes only from `pricing.revision_status()`, after pricing and after each card.
 45. **Pricing policies are never edited**, like rates and cost models (rule 37): a change is a new
     `price_policies` row from a date, the app role has only SELECT and INSERT on the table, and the
     waterfall names the policy version it used.
@@ -794,9 +814,11 @@ this history, and **F3.4, discount approvals, is built as far as it can go witho
 rulebook, its table and its screen are on the branch `f34-doa-matrix`, not on `main`, because migration
 0018 revises his 0017 (see section 7). Tests on that branch: 351 backend (plus 3 that run
 only against a live ERPNext) and 50 frontend, all passing; on `main` itself, 319 and 43. Every new screen
-was checked in a browser, on a desktop and at phone width (390 px). Nischay's PC was brought to 0016 on the evening of
-2026-10-18 and is current with F3.3; a copy onto any other machine needs `uv run alembic upgrade head`
-(migrations 0013 to 0016), or enquiry and quote pages fail.
+was checked in a browser, on a desktop and at phone width (390 px), except the F3.3 screens of
+2026-10-21, which have not been seen in one yet. **Nischay's PC is on migration 0017** (he migrated it
+on 2026-10-21); any other machine needs `uv run alembic upgrade head` after a pull, or enquiry and
+quote pages fail. The picture of all 69 features and their Done-When checks is the Build Map:
+https://claude.ai/artifact/Auf4tP4LxsDZZobJgn36Lt (version 14, 2026-10-21).
 
 Two things changed on 2026-10-16 that are not features: a clone is set up by one command and described
 by `START_HERE.md` (section 4), and the API now answers every error in one shape, so a missing key
@@ -886,6 +908,29 @@ Engineering defaults Claude chose inside C1-C18 (ask Nischay if one looks wrong)
   J4 the daily email at 09:00 IST.
 - The cost is worked out again every hour at :20 for rates dated ahead. The sample flange weights and
   hole counts are approximate (ASME B16.5-like), for the demonstration only.
+
+### Phase 2, M3 CPQ, F3.3: the price and the floor, built and answered
+Built 2026-10-18 to C2 A (`4fc8f9e`), finished to Y1-Y8 and the guide walk-through on 2026-10-21
+(section 3; BUILD_LOG's "on his PC" entry for that day). **That last day's code is still uncommitted in
+the project folder on his PC**, so what follows describes F3.3 as it stands there, not as `main` has it.
+How a line is priced (`app/cpq/pricing.py`):
+- **List price**, from the first source that covers it: the customer's own ERPNext price, valid today
+  (used **as it is**: no tier discount or quantity break on it, Y6); else the item's rate on the ERP
+  connection's default selling price list; else the cost at the family's target margin (the company
+  policy behind the family's, Y1). With none, the line is "Not priced" and goes to a card.
+- **Then** the account tier's discount, the quantity break the line's own quantity reaches (Y3, Y4) and
+  the rep's ask, a % off or a typed price (Y8). A typed price is cleared when the line's configuration,
+  item code or unit changes; a % stays.
+- **Every step is kept to the paisa, rounded up**, and a discount's amount is the difference, so "why
+  this price" adds up to what it shows. **Round off** to the policy's ₹1, ₹5 or ₹10 happens only on a
+  quote where someone ticked "Round off prices" (Y5, migration 0017), always up.
+- **The floor**: a line below it, with no cost, no floor or no price goes to a Quote agent card (Y2);
+  approve, counter with a price, or send back. The whole quote is weighed against its lines' floor; a
+  whole quote below it has no card of its own **until F3.4's is wired to the quote**. The quote's price
+  status comes from `revision_status()` after pricing and after every card decision. GST comes with the
+  quote document, F3.5 (Y7).
+- Known and left as is: a line whose countered price clears the floor keeps its red "Below the floor"
+  tag, which describes Forge's own price.
 
 ### Phase 2, M3 F3.4 discount approvals: on the branch `f34-doa-matrix`, not on `main`
 Built to Z1-Z10 A (section 3) in commits 9642eff (the engine, on `main`), f1d3758 (migration 0018 and
@@ -1364,6 +1409,14 @@ The moment his 0017 (and the quote code around it) is pushed, the branch merges 
 **approval card on the quote** — the last piece of F3.4 — can be built on top, in the quote files he
 currently has uncommitted.
 
+**Pre-merge checks, waiting for his merge: PR #1** (branch `premerge-checks`). It adds
+`scripts/premerge_check.py` — the same five checks that have to pass before a push, plus the migration
+owner rule and the single-head check — and `.github/workflows/premerge.yml`, which runs them on every
+push and on every pull request to `main`, against a fresh Postgres, with no secrets needed. The owner
+check reads `MIGRATION_OWNERS` (a repository variable, `Nischay8506` by default) and fails any push
+that adds or changes a file in `backend/alembic/versions` unless an owner pushed it. He chose on
+2026-10-21 to set this up **now**, before the first teammate feature lands.
+
 **Worth a line in one of his migrations:** `price_policies` and `cost_models` both say in their
 migration that a version is never edited, but migration 0001's default privileges give `forge_app`
 update and delete on every new table, so neither grant enforces anything. `doa_matrices` (0018) revokes
@@ -1374,16 +1427,19 @@ files). Y1-Y4 and Y6-Y8 as recommended; **Y5 changed**: a policy names the round
 switches "Round off prices" on per quote, so prices are exact to the paisa otherwise. A further point
 settled the same day: a customer's own ERP price is used as it is, with no tier discount and no quantity
 break. That work was done with him **directly in the project folder on his PC**, with migration 0017 and
-three fixes from walking the test guide; it is recorded in that folder's own commit `9ec3a02` and the
-code there is not committed yet, so none of it is in this history or on GitHub `main`. **The two records
-are still to be merged** — for today's F3.3 detail, his folder's 2026-10-21 entry is the fuller one.
+three fixes from walking the test guide. **The two documentary records of 2026-10-21 were merged on the
+evening of that day**, so this file and the build log now hold all of it; what is still only in that
+folder is the **code**.
 
 **Now: Nischay runs Tests 1-3 on his PC** (his dev database is already at 0017), then freight once
-G1-G7 are answered.
+G1-G7 are answered. Test 3 (prices, the floor and round-off) was added to the guide on 2026-10-21 with
+figures taken from an API walk-through on his PC; the guide's one old Fail (Test 2, steps 4-5) is
+explained and re-checked in Test 3, step 9. The screens that changed on 2026-10-21 have not been seen in
+a browser yet — his run is the first look at them.
 
 **And he tries F3.1, the cost engine and the new prices on his PC** ("Sample data"). His PC is already
-on 0016 (he migrated it on the evening of 2026-10-18); he only needs the API, worker and beat running.
-On a machine that has not been migrated, `uv run alembic upgrade head` (0013 to 0016) comes first.
+on 0017 (he migrated it on 2026-10-21); he only needs the API, worker and beat running.
+On a machine that has not been migrated, `uv run alembic upgrade head` comes first.
 - F3.1: Enquiries → Setup → Product families → "+ Flanges" → "Options and rules", and "Configure" on
   an enquiry line.
 - Cost engine: Quotes → Cost models → Flanges → "Start from the flanges sample"; then "Start a quote"
@@ -1407,8 +1463,9 @@ that the person who asked for a card can never decide it or hand it on.
 **Then Claude builds freight** (K1 D) once Nischay answers **G1-G7** in
 `plans/Phase2_M3_F3.2_Freight_Questions.md` in the Claude project files (reference data loading, which
 mapping wins, origin plant, carriers, manual review, export terms, shipments). It is the last piece of
-F3.2; everything else in the cost engine is built, including J1-J4 as answered. **Then F3.4, discount
-approvals**, which is the next feature in M3's order (C1 B) now that F3.3 is built.
+F3.2; everything else in the cost engine is built, including J1-J4 as answered. **F3.4, discount
+approvals**, is already built as far as the quote files allow (section 6); what is left of it is the
+approval card on the quote itself.
 
 **M1 on his PC:** after the copy, `uv sync` and `uv run alembic upgrade head` (0010-0012), restart the
 API, worker and beat, then Enquiries → Setup (templates, the sample button under What we make) and
@@ -1436,8 +1493,10 @@ existing lines, F1.8; an enquiry timer across a holiday, F1.10) were fixed the s
 worth doing, is `plans/Later_List.md` in the Claude project files. A line leaves it only when it is
 built or when Nischay drops it.
 - **A second person approves a cost model version before quotes use it** — with F3.4, when the
-  delegation-of-authority matrix is built. Forge has no approval mechanism outside the Decisions inbox
-  yet, so building one now means building it twice (his extra J3 point).
+  delegation-of-authority matrix is built. **That matrix now exists** (F3.4, 2026-10-21, on branch
+  `f34-doa-matrix`), so the condition is met and this is buildable as soon as that branch lands: a cost
+  model version would get a row in the matrix like any other approval, instead of a second approval
+  mechanism beside the Decisions inbox (his extra J3 point).
 - **A policy that lets an estimated cost price a quote automatically**, without review — once the review
   cards have piled up and we can see which families and values they cover. It is a documented way for an
   unreviewed cost to reach a customer, so the rule should be written from real cases (his extra J3

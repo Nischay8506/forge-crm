@@ -8,7 +8,9 @@ Frontend: React + Vite + Tailwind.
 
 **Picking the project up? Read [docs/HANDOVER.md](docs/HANDOVER.md).** It says where the work stands,
 how to run it, the rules the code follows, and what to do next.
-Day-by-day history is in [docs/BUILD_LOG.md](docs/BUILD_LOG.md).
+Day-by-day history is in [docs/BUILD_LOG.md](docs/BUILD_LOG.md). All 69 features and the state of
+every Done-When check are on the Build Map: https://claude.ai/artifact/Auf4tP4LxsDZZobJgn36Lt
+`docs/USABILITY_TEST.md` is the 15-minute approval-inbox test that F12.3 still needs people for.
 
 Quick commands (details in the handover):
 

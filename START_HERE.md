@@ -122,16 +122,21 @@ cd frontend   npx vitest run
 cd frontend   npm run build
 ```
 
-All five have to pass. Branch off `main`, keep each commit one change, and say in the
-message what a reader would see differently. `docs/HANDOVER.md` section 5 is the code map
-and the rules the code follows: read the part you are touching before you add to it.
+All five have to pass. Keep each commit one change, and say in the message what a reader
+would see differently. `docs/HANDOVER.md` section 5 is the code map and the rules the code
+follows: read the part you are touching before you add to it.
 
-**If your change adds a database migration**, add one per pull request, and run
-`uv run alembic heads` before you merge. It must print exactly **one** line. Two lines
-mean someone else added a migration from the same starting point, and the chain has
-forked: change your file's `down_revision` to their number, renumber and rename your own
-file, and check again. Never merge a second head, because then nobody's
-`alembic upgrade head` works, and `uv run pytest` fails before a single test runs.
+**Where to push** (decided 2026-10-21). Push your feature to the project branch, not to
+`main`. Nischay pulls it, checks it against the rest of the project and the database, and
+merges. That is the one way work reaches `main`.
+
+**Database migrations: Nischay writes every one of them.** Do not add a file to
+`backend/alembic/versions` yourself. If your feature needs a new table or column, push the
+feature and tell him what the schema change is; he writes the migration, and your code can
+then rely on it. The reason is that two people numbering migrations from the same starting
+point forks the chain, and nobody's `uv run alembic upgrade head` works afterwards —
+`uv run pytest` then fails before a single test runs. `uv run alembic heads` must always
+print exactly **one** line.
 
 ## 8. Getting new code later
 
