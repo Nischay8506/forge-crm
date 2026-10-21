@@ -265,3 +265,38 @@ async def test_other_state_registration_becomes_branch_site(client, ctx):
     assert any("branch site" in n for n in r["undo_notes"])
     active = (await client.get(f"{API}/accounts", headers=h)).json()
     assert sorted(x["id"] for x in active) == sorted([a["id"], b["id"]])
+
+
+async def test_nightly_rescore_drops_freshness_once_a_year_passes(client, ctx):
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import update
+
+    from app.models import FieldProvenance
+    from app.steward.hygiene import rescore_all, rescore_tenant
+
+    a = (await client.post(f"{API}/accounts", headers=ctx["h"], json={
+        "name": "Kaveri Valves Pvt Ltd", "gstin": gstin("29", "AAKCK4321K"),
+        "phone": "080 4123 4567", "city": "Bengaluru"})).json()
+    async with tenant_session(ctx["tid"]) as s:
+        # Nothing changed since the write: the job writes nothing.
+        assert (await rescore_tenant(s))["changed"] == 0
+        await s.execute(update(FieldProvenance)
+                        .where(FieldProvenance.record_id == uuid.UUID(a["id"]))
+                        .values(verified_at=datetime.now(UTC) - timedelta(days=400)))
+        before = (await s.get(Account, uuid.UUID(a["id"]))).updated_at
+
+    totals = await rescore_all()
+    assert totals["lowered"] >= 1
+
+    async with tenant_session(ctx["tid"]) as s:
+        acc = await s.get(Account, uuid.UUID(a["id"]))
+        fresh = acc.hygiene_details["freshness"]
+        assert acc.hygiene_score == a["hygiene_score"] - 20
+        assert fresh["verified"] == 0 and "gstin" in fresh["unverified"]
+        assert acc.updated_at > before
+        stamp = acc.updated_at
+        # A second night with nothing new leaves the record alone.
+        assert (await rescore_tenant(s))["changed"] == 0
+    async with tenant_session(ctx["tid"]) as s:
+        assert (await s.get(Account, uuid.UUID(a["id"]))).updated_at == stamp

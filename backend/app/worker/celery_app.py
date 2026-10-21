@@ -41,6 +41,10 @@ celery_app.conf.update(
         "costs-refresh": {"task": "forge.costs_refresh", "schedule": crontab(minute=20)},
         "cost-alert-emails": {"task": "forge.cost_alert_emails",
                               "schedule": crontab(hour=3, minute=30)},
+        # F12.1: hygiene scores again every night at 02:00 IST, so freshness follows the
+        # calendar for records nobody touches.
+        "hygiene-rescore": {"task": "forge.hygiene_rescore",
+                            "schedule": crontab(hour=20, minute=30)},
     },
 )
 celery_app.autodiscover_tasks(["app.worker"], related_name="tasks")

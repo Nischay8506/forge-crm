@@ -4,8 +4,12 @@
   validity     30  identifiers, phone, email, pincode pass their checks
   freshness    20  share of filled key fields verified in the last 365 days
   duplicates   10  no open duplicate candidate involving this record
+
+Scores are worked out on every write, and again each night (`rescore_all`) so that
+freshness follows the calendar for records nobody touches.
 """
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -14,6 +18,8 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Account, Contact, MatchCandidate
+
+log = logging.getLogger(__name__)
 
 WEIGHTS: dict[str, dict[str, int]] = {
     "entity": {"name": 4, "gstin": 10, "pan": 3, "phone": 5, "email": 4, "website": 3,
@@ -24,6 +30,7 @@ WEIGHTS: dict[str, dict[str, int]] = {
     "contact": {"full_name": 6, "email": 10, "phone": 8, "designation": 5, "account_id": 8},
 }
 FRESH_DAYS = 365
+NIGHTLY_BATCH = 500
 
 
 async def _open_candidates(session: AsyncSession, record_id: uuid.UUID) -> int:
@@ -67,10 +74,10 @@ def score(
     return total, details
 
 
-async def refresh_hygiene(
+async def _compute(
     session: AsyncSession, record: Account | Contact, record_type: str,
     extra_warnings: list[str] | None = None,
-) -> int:
+) -> tuple[int, dict[str, Any]]:
     from app.steward.records import clean_account, clean_contact, current_provenance
 
     if record_type == "account":
@@ -85,10 +92,79 @@ async def refresh_hygiene(
         if w not in problems and w not in warnings:
             warnings.append(w)
     prov = await current_provenance(session, record.id)
-    total, details = score(record, record_type, prov,
-                           await _open_candidates(session, record.id), problems, warnings)
+    return score(record, record_type, prov, await _open_candidates(session, record.id),
+                 problems, warnings)
+
+
+async def refresh_hygiene(
+    session: AsyncSession, record: Account | Contact, record_type: str,
+    extra_warnings: list[str] | None = None,
+) -> int:
+    total, details = await _compute(session, record, record_type, extra_warnings)
     record.hygiene_score = total
     record.hygiene_details = details
+    return total
+
+
+def _same(a: dict[str, Any] | None, b: dict[str, Any]) -> bool:
+    """Equal apart from when they were worked out."""
+    if a is None:
+        return False
+    return ({k: v for k, v in a.items() if k != "computed_at"}
+            == {k: v for k, v in b.items() if k != "computed_at"})
+
+
+async def rescore_tenant(session: AsyncSession) -> dict[str, int]:
+    """Score every active record of the session's tenant again (the nightly job).
+
+    Only the passing of time is applied: warnings recorded at the last write are kept,
+    and a record whose score and reasons did not change is not written, so its
+    updated_at stays as it was.
+    """
+    out = {"checked": 0, "changed": 0, "lowered": 0}
+    for record_type, model in (("account", Account), ("contact", Contact)):
+        last: uuid.UUID | None = None
+        while True:
+            stmt = (select(model).where(model.status == "active").order_by(model.id)
+                    .limit(NIGHTLY_BATCH))
+            if last is not None:
+                stmt = stmt.where(model.id > last)
+            rows = list(await session.scalars(stmt))
+            if not rows:
+                break
+            for rec in rows:
+                old = rec.hygiene_details or {}
+                kept = list((old.get("validity") or {}).get("warnings") or [])
+                total, details = await _compute(session, rec, record_type, kept)
+                out["checked"] += 1
+                if rec.hygiene_score == total and _same(rec.hygiene_details, details):
+                    continue
+                out["changed"] += 1
+                if rec.hygiene_score is not None and total < rec.hygiene_score:
+                    out["lowered"] += 1
+                rec.hygiene_score, rec.hygiene_details = total, details
+            last = rows[-1].id
+            await session.flush()
+            session.expunge_all()  # keep memory flat on large tenants
+    return out
+
+
+async def rescore_all() -> dict[str, int]:
+    """The nightly job across tenants; one tenant's failure does not stop the others."""
+    from app.db import get_sessionmaker, tenant_session
+    from app.models import Tenant
+
+    async with get_sessionmaker()() as s:
+        tenant_ids = list(await s.scalars(select(Tenant.id)))
+    total = {"tenants": len(tenant_ids), "checked": 0, "changed": 0, "lowered": 0}
+    for tid in tenant_ids:
+        try:
+            async with tenant_session(tid) as s:
+                for k, v in (await rescore_tenant(s)).items():
+                    total[k] += v
+        except Exception:  # noqa: BLE001 - logged, the next tenant still runs
+            log.exception("hygiene re-score for tenant %s failed", tid)
+    log.info("hygiene re-score: %s", total)
     return total
 
 

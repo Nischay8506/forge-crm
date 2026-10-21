@@ -215,3 +215,18 @@ async def _cost_alert_emails() -> int:
 def cost_alert_emails() -> int:
     """F3.2: one email a day to each owner whose sent quotes' costs changed (K9 A)."""
     return asyncio.run(_cost_alert_emails())
+
+
+async def _hygiene_rescore() -> dict:
+    from app.steward.hygiene import rescore_all
+
+    try:
+        return await rescore_all()
+    finally:
+        await dispose_engine()
+
+
+@celery_app.task(name="forge.hygiene_rescore")
+def hygiene_rescore() -> dict:
+    """F12.1: score every record again so freshness drops when data passes a year."""
+    return asyncio.run(_hygiene_rescore())
