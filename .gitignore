@@ -30,3 +30,6 @@ backend/var/
 
 # TypeScript build cache
 *.tsbuildinfo
+
+# Each person's own CLAUDE.md for Claude Code: local guidance, never shared
+CLAUDE.md
