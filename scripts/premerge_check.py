@@ -1,7 +1,7 @@
 """Checks to run before a teammate's work is merged into main.
 
     uv run --no-project --python 3.12 scripts/premerge_check.py            on your PC
-    uv run --no-project --python 3.12 scripts/premerge_check.py --tests    and run both test suites
+    uv run --no-project --python 3.12 scripts/premerge_check.py --tests    and lint, tests, build
 
 The GitHub Action in .github/workflows/premerge.yml runs the same script on every push,
 on a fresh database.
@@ -16,8 +16,8 @@ migrations their models need, checks the result and merges it. So:
 2. One head: every migration's parent exists, no revision id or file number is used
    twice, and exactly one migration has no child. Two heads make `alembic upgrade head`
    fail on every machine, tests included.
-3. With --tests: the backend tests (tests/conftest.py rebuilds the forge_test database
-   and runs every migration first) and the frontend tests.
+3. With --tests: ruff, the backend tests (tests/conftest.py rebuilds the forge_test
+   database and runs every migration first), tsc, the frontend tests and the build.
 
 It reads the migration files as text, so it needs nothing installed beyond git.
 """
@@ -138,19 +138,24 @@ def check_heads() -> None:
 
 
 def run_tests() -> None:
-    uv, npm = shutil.which("uv"), shutil.which("npm")
+    """All that must pass before pushing: ruff, pytest, tsc, vitest and the build."""
+    uv, npm = shutil.which("uv") or "uv", shutil.which("npm") or "npm"
+    # --no-sync: use the environment setup.cmd installed; nothing is built or fetched.
+    uv_run = [uv, "run", "--locked", "--no-build", "--no-sync"]
+    backend, frontend = ROOT / "backend", ROOT / "frontend"
     for name, cmd, cwd in (
-        # --no-sync: test the environment setup.cmd installed; nothing is built or fetched.
-        ("Backend tests", [uv or "uv", "run", "--locked", "--no-build", "--no-sync",
-                           "pytest", "-q"], ROOT / "backend"),
-        ("Frontend tests", [npm or "npm", "test"], ROOT / "frontend"),
+        ("Backend lint", [*uv_run, "ruff", "check", "app", "tests", "evals"], backend),
+        ("Backend tests", [*uv_run, "pytest", "-q"], backend),
+        ("Frontend types", [npm, "exec", "--no", "--", "tsc", "--noEmit", "-p", "."], frontend),
+        ("Frontend tests", [npm, "test"], frontend),
+        ("Frontend build", [npm, "run", "build"], frontend),
     ):
         print(f"\n==> {name}: {' '.join(cmd[1:])}", flush=True)
         shell = os.name == "nt" and cmd[0].lower().endswith((".cmd", ".bat"))
         done = subprocess.run(subprocess.list2cmdline(cmd) if shell else cmd,
                               cwd=cwd, shell=shell)
         report("PASS" if done.returncode == 0 else "FAIL", name,
-               "" if done.returncode == 0 else "see the test output above")
+               "" if done.returncode == 0 else "see the output above")
 
 
 def main() -> None:
@@ -158,7 +163,8 @@ def main() -> None:
     parser.add_argument("--actor", help="GitHub login that pushed the work (set by the Action)")
     parser.add_argument("--owners", default=os.environ.get("MIGRATION_OWNERS") or "Nischay8506",
                         help="comma-separated GitHub logins allowed to write migrations")
-    parser.add_argument("--tests", action="store_true", help="also run both test suites")
+    parser.add_argument("--tests", action="store_true",
+                        help="also run lint, type check, tests and build")
     args = parser.parse_args()
     owners = [o.strip() for o in args.owners.split(",") if o.strip()]
 

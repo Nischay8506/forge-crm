@@ -1,5 +1,6 @@
 # Pre-merge checks on every push and pull request: the migration owner rule, one
-# migration head, then both test suites on a fresh database. Same script as on a PC:
+# migration head, ruff and tsc, both test suites on a fresh database, and the frontend
+# build (all that must pass before pushing). Same script as on a PC:
 # scripts/premerge_check.py. No secrets are needed; tests/conftest.py uses test-only keys.
 name: Pre-merge checks
 
@@ -68,6 +69,14 @@ jobs:
           cd backend && uv sync --locked --no-build --no-install-package http-ece
           cd ../frontend && npm ci --ignore-scripts
 
+      - name: Backend lint
+        working-directory: backend
+        run: uv run --locked --no-build --no-sync ruff check app tests evals
+
+      - name: Frontend type check
+        working-directory: frontend
+        run: npm exec --no -- tsc --noEmit -p .
+
       - name: Backend tests (migrates forge_test from empty first)
         working-directory: backend
         run: uv run --locked --no-build --no-sync pytest -q
@@ -75,3 +84,7 @@ jobs:
       - name: Frontend tests
         working-directory: frontend
         run: npm test
+
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
