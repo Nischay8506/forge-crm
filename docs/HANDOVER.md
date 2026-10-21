@@ -186,9 +186,12 @@ recommendation, and record the answer here.
 
 | Three streams | From 2026-10-16 the work is split three ways by stretch of the sales flow, not by layer, so each person owns whole features end to end. **A Quote to cash** (M3, M4, M6: `app/cpq`, `app/orders`, `features/quotes`, `features/orders`) is Nischay's. **B Demand and insight** (M1 leftovers, M2, M10, M11: `app/enquiries`, `app/pipeline`, `app/analytics`, `features/enquiries`, `features/pipeline`) is teammate 1's, starting at F2.1. **C Customer and after-sales** (M5, M7, M8, M9: `app/accounts`, `app/field`, `app/service`, `features/accounts`, `features/service`) is teammate 2's, starting at F5.1. Full reasoning and the hand-off points: the Claude Doc "Forge CRM work split for three" | 2026-10-16 |
 | Platform owner: Nischay | Nothing in `app/core`, `app/db.py`, `app/rls.py`, `app/models`, `app/agents`, `app/audit`, `app/approvals`, `app/channels`, `app/integrations` or `app/llm` changes without Nischay. Those are Module 12 and all three streams run on them; he is the only person who knows all of it, and platform changes are small and frequent (he chose A on the card) | 2026-10-16 |
+| Z1-Z10 A | F3.4's rulebook. **Z1**: a quote is measured by discount depth, the margin against the family's floor, and the quote's worth; payment and special terms become rows with F3.5. **Z2**: approvers are named by role, in order. **Z3** (his words): several matching rows **combine** — every required stage and its order is kept, and a duplicated role is not asked twice unless a row explicitly says to keep it separate. **Z4**: the matrix is insert-only, a new version from a date. **Z5**: one approval carries the quote's discount; a line keeps its own card only where the price could not be worked out at all. **Z6** (his words): after four working hours the next role up is **told**, and being told is not approving — the original stage stays required unless Step 5's authorised delegation (H3) moves it, and the two-hour median is **measured**, not assumed. **Z7**: the card shows the ask, the lines, the floor broken, what the customer owes with its last-synced time, the rep's reason, and the quote's history; competitor pressure is the rep's own claim. **Z8**: Decisions inbox and email. **Z9**: median measured first card to final decision, working hours only. **Z10**: no new screen — the audit trail answers who, when and why | 2026-10-21 |
+| Nischay writes every migration | Teammates never write one. They push features to a project branch; he pulls them and checks project and database integration before merging. He made one exception, by name ("0018"), for F3.4's matrix table, because its feature could not be built or tested without it | 2026-10-21 |
 
-Still open (section 7): the freight details G1-G7, D3 new LLM keys, D4 daily update time, and whether
-the cost seal check gets a button on the quote cost view.
+Still open (section 7): the freight details G1-G7, D3 new LLM keys, D4 daily update time, whether
+the cost seal check gets a button on the quote cost view, and whether `price_policies` and
+`cost_models` should be made insert-only in the database the way `doa_matrices` now is.
 
 ## 4. How to run it
 
@@ -543,6 +546,10 @@ backend/
                          and on the whole quote, the waterfall kept on each line and its seal
       price_agent.py     the Quote agent and its approval card for a price that cannot stand on
                          its own (below the floor, no cost, no floor, not priced)
+      doa.py             who approves a discount, and in what order (F3.4): the matrix a company
+                         writes, dated versions of it, the rows a quote matches, and the chain
+                         they combine into (every row's order kept, a role not asked twice).
+                         On branch f34-doa-matrix until migration 0017 is pushed
     files/store.py     stored files (raw emails, attachments): encrypted, local folder now,
                        S3-compatible later (N9 A); rows never deleted, removal blanks the bytes
     sla/engine.py      the timer engine (F1.10): targets on an "always" or "working" clock,
@@ -769,18 +776,25 @@ docs/                  this file, BUILD_LOG.md
     only what the passing of time changes, keeps the warnings from the last write, and does not write a
     record whose score and reasons have not moved, so `updated_at` and the "last changed" column stay
     honest.
+47. **A table that is never edited says so in its grants, not only in its comment** (2026-10-21).
+    Migration 0001 grants `forge_app` select, insert, update and delete on every new table by default,
+    so `GRANT SELECT, INSERT` adds nothing: an insert-only table has to `REVOKE UPDATE, DELETE` as
+    `doa_matrices` does (0018), with a test that the app's own login is refused. `price_policies` and
+    `cost_models` do not yet (section 7).
 
 ## 6. Current state (end of 2026-10-21)
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
 first module, **M1 Enquiry, is built for email (2026-10-12)**. **M3 CPQ** is being built one feature at a
 time (C1 B): **F3.1 is built** and waits for Nischay's try, **F3.2's cost engine is built** and
-finished to J1-J4, with freight still to come (G1-G7), and **F3.3, the price and the floor, is built**
+finished to J1-J4, with freight still to come (G1-G7), **F3.3, the price and the floor, is built**
 (2026-10-18), with **Y1-Y8 answered on 2026-10-21** and that day's follow-up work (per-quote round-off,
 migration 0017, three fixes from the test guide) sitting in the project folder on his PC rather than in
-this history: see section 7. Tests on this history: 319 backend (plus 3 that run
-only against a live ERPNext) and 43 frontend, all passing; every new screen was checked in a browser, on a
-desktop and at phone width (390 px). Nischay's PC was brought to 0016 on the evening of
+this history, and **F3.4, discount approvals, is built as far as it can go without that work**: the
+rulebook, its table and its screen are on the branch `f34-doa-matrix`, not on `main`, because migration
+0018 revises his 0017 (see section 7). Tests on that branch: 351 backend (plus 3 that run
+only against a live ERPNext) and 50 frontend, all passing; on `main` itself, 319 and 43. Every new screen
+was checked in a browser, on a desktop and at phone width (390 px). Nischay's PC was brought to 0016 on the evening of
 2026-10-18 and is current with F3.3; a copy onto any other machine needs `uv run alembic upgrade head`
 (migrations 0013 to 0016), or enquiry and quote pages fail.
 
@@ -872,6 +886,40 @@ Engineering defaults Claude chose inside C1-C18 (ask Nischay if one looks wrong)
   J4 the daily email at 09:00 IST.
 - The cost is worked out again every hour at :20 for rates dated ahead. The sample flange weights and
   hole counts are approximate (ASME B16.5-like), for the demonstration only.
+
+### Phase 2, M3 F3.4 discount approvals: on the branch `f34-doa-matrix`, not on `main`
+Built to Z1-Z10 A (section 3) in commits 9642eff (the engine, on `main`), f1d3758 (migration 0018 and
+the table) and 823535b (the screen). **The last two are on the branch only**, because 0018 revises
+Nischay's 0017, which is on his PC: on `main`, `alembic upgrade head` would fail for everyone. The
+branch merges as it stands once he pushes his 0017.
+- **The rulebook** (`app/cpq/doa.py`). A company's delegation of authority is a matrix: rows saying
+  "when a quote looks like this, these roles approve, in this order". A row can ask for a discount from
+  a depth, a margin up to a ceiling, the quote being under its floor, or the quote being worth from an
+  amount; **all of a row's conditions have to hold** for it to apply.
+- **Rows combine** (Z3). Every matching row's stages are kept, in the order that row asked for, by a
+  stable topological sort, so adding a row can only add approval and the same matrix always gives the
+  same chain. A role two rows both ask for is one stage unless a row ticks "keep each as its own
+  stage". Two rows that order the same pair of roles against each other are **refused when the version
+  is saved**, not discovered when a quote happens to match both.
+- **A quote with no margin known counts as under its floor**; a family with no floor set means nothing
+  is under one. **A company that has written no matrix is not a quote that needs no approval**: it
+  comes back as a problem for a person to decide.
+- **The table** `doa_matrices`: one matrix per company, from a date, never edited (Z4). Unlike
+  `price_policies` and `cost_models`, this one is insert-only **in the database**: migration 0001 grants
+  `forge_app` update and delete on every new table by default, so 0018 revokes both, and a test proves
+  the app's own login cannot edit or delete a version. Setting a matrix is written into the audit chain
+  as `doa.matrix.set`.
+- **The screen**: Quotes → **Approval rules**. The rulebook in force read back in plain words, a new
+  version written from a date, every version before it with who wrote it and when, and **Try it** —
+  what a quote with given numbers would need today, saved nowhere. Roles are held **by id**, so
+  renaming a role cannot quietly change who approves; the sample names them in words and the screen
+  matches each one to a role, leaving blank any it cannot find. A role nobody is in is saved and said
+  out loud, because a stage nobody can decide would stall every quote that reaches it (Z2).
+- **Permission `approvals.manage`** for writing the rulebook; seeing it is `quotes.read`.
+- The clock is the one Step 5 already keeps: four working hours per approval with a reminder at two,
+  and escalation that **tells** the next role up without moving the stage (Z6).
+- **Not built yet**: the approval card on the quote itself and the quote's own approval state. They
+  need the quote files Nischay has uncommitted, so they wait for his push.
 
 ### Phase 2, M1 Enquiry: built for email
 Built to N1-N15, P1-P3 and "Decline only" (section 3) in commits 613bdec (the email path and screens),
@@ -1309,6 +1357,17 @@ Known gaps from Steps 1 and 2 (none block Step 4):
   Groq/Gemini catalogues; observability beyond `llm_calls` is not started.
 
 ## 7. Next step and open questions
+
+**The one thing waiting on Nischay: push 0017.** F3.4's migration 0018 revises it, so everything built
+on 2026-10-21 for discount approvals sits on the branch `f34-doa-matrix` and `main` stays migratable.
+The moment his 0017 (and the quote code around it) is pushed, the branch merges as it stands and the
+**approval card on the quote** — the last piece of F3.4 — can be built on top, in the quote files he
+currently has uncommitted.
+
+**Worth a line in one of his migrations:** `price_policies` and `cost_models` both say in their
+migration that a version is never edited, but migration 0001's default privileges give `forge_app`
+update and delete on every new table, so neither grant enforces anything. `doa_matrices` (0018) revokes
+both and has a test for it; the other two could be made to match.
 
 **Y1-Y8 are answered** (2026-10-21, `plans/Phase2_M3_F3.3_Price_Questions.md` in the Claude project
 files). Y1-Y4 and Y6-Y8 as recommended; **Y5 changed**: a policy names the rounding step, and a person
