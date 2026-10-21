@@ -10,7 +10,7 @@ The rule it guards (Nischay, 21 Oct 2026): every migration is written by the mig
 owner. Teammates push features to a project branch, the owner pulls them, writes the
 migrations their models need, checks the result and merges it. So:
 
-1. Migration owner: no commit after the base branch may add or change a file in
+1. Migration owner: no commit since origin/main may add or change a file in
    backend/alembic/versions unless it was pushed by an owner. On your PC (no --actor)
    the files are only listed, since you are the owner there.
 2. One head: every migration's parent exists, no revision id or file number is used
@@ -50,28 +50,24 @@ def git(*args: str) -> str:
     return done.stdout.strip()
 
 
-def resolve_commit(name: str) -> str:
-    """The commit SHA a branch name or commit id points at. The name is only compared
-    with what git lists (branches, then every commit); it never goes to git itself, so a
-    value such as "--output=x" cannot become a git option."""
-    for line in git("for-each-ref", "--format=%(objectname) %(refname:short) %(refname)",
-                    "refs/heads", "refs/remotes").splitlines():
-        sha, short, full = line.split(" ")
-        if name in (short, full):
-            return sha
-    if re.fullmatch(r"[0-9a-f]{7,64}", name):
-        matches = [sha for sha in git("rev-list", "--all").splitlines() if sha.startswith(name)]
-        if len(matches) == 1:
-            return matches[0]
-    raise RuntimeError(f"no branch or commit named {name!r}")
+def base_commit() -> tuple[str, str]:
+    """What the work is compared with: refs/premerge/base when the Action has set it (a
+    push to main is compared with main before the push), otherwise origin/main. Fixed
+    names only, so nothing typed on the command line reaches git."""
+    for name in ("refs/premerge/base", "refs/remotes/origin/main"):
+        for line in git("for-each-ref", "--format=%(objectname) %(refname)", name).splitlines():
+            sha, _, ref = line.partition(" ")
+            if ref == name:
+                return sha, name.removeprefix("refs/remotes/")
+    raise RuntimeError("origin/main is missing: run `git fetch origin main` first")
 
 
-def check_owner(base: str, actor: str | None, owners: list[str]) -> None:
+def check_owner(actor: str | None, owners: list[str]) -> None:
     try:
-        base_sha = resolve_commit(base)
+        base_sha, base = base_commit()
         since = git("merge-base", base_sha, "HEAD")
     except RuntimeError as e:
-        report("FAIL", "Migration owner", f"cannot compare with {base}: {e}")
+        report("FAIL", "Migration owner", str(e))
         return
     changed = [f for f in git("diff", "--name-only", f"{since}..HEAD", "--", VERSIONS)
                .splitlines() if f.endswith(".py")]
@@ -149,8 +145,6 @@ def run_tests() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--base", default="origin/main",
-                        help="branch the work will be merged into (default origin/main)")
     parser.add_argument("--actor", help="GitHub login that pushed the work (set by the Action)")
     parser.add_argument("--owners", default=os.environ.get("MIGRATION_OWNERS") or "Nischay8506",
                         help="comma-separated GitHub logins allowed to write migrations")
@@ -158,8 +152,8 @@ def main() -> None:
     args = parser.parse_args()
     owners = [o.strip() for o in args.owners.split(",") if o.strip()]
 
-    print(f"Pre-merge checks against {args.base}\n", flush=True)
-    check_owner(args.base, args.actor, owners)
+    print("Pre-merge checks\n", flush=True)
+    check_owner(args.actor, owners)
     check_heads()
     if args.tests:
         run_tests()

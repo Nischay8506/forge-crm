@@ -38,9 +38,14 @@ jobs:
       - name: Migration owner and one head
         env:
           ACTOR: ${{ github.event.pull_request.user.login || github.actor }}
-          # A push to main is compared with what main was before it; anything else with main.
-          BASE: ${{ (github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000') && github.event.before || 'origin/main' }}
-        run: python3 scripts/premerge_check.py --base "$BASE" --actor "$ACTOR"
+          BEFORE: ${{ github.event.before }}
+          IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: |
+          # A push to main is compared with main before the push; anything else with origin/main.
+          if [ "$IS_MAIN_PUSH" = "true" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            git update-ref refs/premerge/base "$BEFORE"
+          fi
+          python3 scripts/premerge_check.py --actor "$ACTOR"
 
       - name: Create the databases (as infra/postgres-init.sql does locally)
         env:
