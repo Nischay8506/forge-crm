@@ -6,6 +6,7 @@ few need Postgres, because dated versions, row-level security and the audit chai
 be shown without it.
 """
 
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -18,7 +19,7 @@ from app.core.errors import ValidationFailed
 from app.cpq import doa
 from app.db import get_sessionmaker, tenant_session
 from app.models import AuditRecord, Tenant
-from tests.test_agents import ctx  # noqa: F401
+from tests.test_agents import API, _user_with_role, ctx  # noqa: F401
 
 
 def facts(discount="0", value="100000", margin=None, floor=None) -> doa.Facts:
@@ -293,3 +294,83 @@ async def test_the_database_itself_refuses_to_edit_or_remove_a_version(
             with pytest.raises(ProgrammingError) as e:
                 await s.execute(sql, {"i": saved.id})
             assert "permission denied" in str(e.value).lower()
+
+
+# The screen behind it ----------------------------------------------------------------------
+
+D = f"{API}/doa"
+
+
+async def _role(client, ctx, name: str, permissions=()) -> str:  # noqa: F811
+    r = await client.post(f"{API}/roles", headers=ctx["h"],
+                          json={"name": name, "permissions": list(permissions)})
+    assert r.status_code in (200, 201), r.text
+    return r.json()["id"]
+
+
+async def test_the_matrix_screen_shows_what_is_in_force_who_is_in_each_role_and_a_sample(
+        client, ctx):  # noqa: F811
+    sm = await _role(client, ctx, "Sales Manager")
+    fin = await _role(client, ctx, "Finance")
+    h = ctx["h"]
+
+    out = (await client.get(f"{D}/matrix", headers=h)).json()
+    assert out["in_force"] is None  # nothing written yet
+    assert out["sample"]["rows"], "a new company has something to start from"
+    assert out["clock"]["target_median_hours"] == "2"
+
+    r = await client.put(f"{D}/matrix", headers=h, json={
+        "effective_from": date.today().isoformat(),
+        "rows": [{"when": {"discount_pct_from": "5"}, "approvers": [sm]},
+                 {"when": {"discount_pct_from": "15"}, "approvers": [sm, fin]}],
+        "note": "to start with"})
+    assert r.status_code == 200, r.text
+    # Nobody is in either role yet, and that is said rather than refused.
+    assert any("Sales Manager" in w for w in r.json()["warnings"])
+
+    out = (await client.get(f"{D}/matrix", headers=h)).json()
+    names = [[a["name"] for a in row["approver_roles"]]
+             for row in out["in_force"]["matrix"]["rows"]]
+    assert names == [["Sales Manager"], ["Sales Manager", "Finance"]]
+    assert len(out["versions"]) == 1
+
+
+async def test_a_role_that_is_not_this_companys_is_refused(client, ctx):  # noqa: F811
+    r = await client.put(f"{D}/matrix", headers=ctx["h"], json={
+        "effective_from": date.today().isoformat(),
+        "rows": [{"when": {"discount_pct_from": "5"}, "approvers": [str(uuid.uuid4())]}]})
+    assert r.status_code == 422, r.text
+    assert "is not a role of this company" in str(r.json())
+
+
+async def test_a_rulebook_can_be_tried_before_a_real_quote_meets_it(client, ctx):  # noqa: F811
+    sm = await _role(client, ctx, "Sales Manager")
+    fin = await _role(client, ctx, "Finance")
+    h = ctx["h"]
+    await client.put(f"{D}/matrix", headers=h, json={
+        "effective_from": date.today().isoformat(),
+        "rows": [{"when": {"discount_pct_from": "5"}, "approvers": [sm]},
+                 {"when": {"below_floor": True}, "approvers": [fin]}]})
+
+    out = (await client.post(f"{D}/matrix/try", headers=h,
+                             json={"discount_pct": "2", "value": "50000"})).json()
+    assert out["needed"] is False and out["stages"] == []
+
+    out = (await client.post(f"{D}/matrix/try", headers=h, json={
+        "discount_pct": "10", "value": "50000",
+        "margin_pct": "9", "floor_margin_pct": "15"})).json()
+    assert out["below_floor"] is True
+    assert [s["role_name"] for s in out["stages"]] == ["Sales Manager", "Finance"]
+    assert out["rows"] == [1, 2]
+    # The screen reads these keys off each stage by name; renaming one here breaks it.
+    assert set(out["stages"][0]) == {"role", "role_name", "rows", "because"}
+    assert out["stages"][0]["because"] == ["a discount of 5% or more"]
+
+
+async def test_setting_the_matrix_needs_its_own_permission(client, ctx):  # noqa: F811
+    _, viewer = await _user_with_role(client, ctx, "Quote Reader", ["quotes.read"])
+    body = {"effective_from": date.today().isoformat(),
+            "rows": [{"when": {"discount_pct_from": "5"},
+                      "approvers": [await _role(client, ctx, "Sales Manager")]}]}
+    assert (await client.put(f"{D}/matrix", headers=viewer, json=body)).status_code == 403
+    assert (await client.get(f"{D}/matrix", headers=viewer)).status_code == 200

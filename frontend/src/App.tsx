@@ -55,6 +55,7 @@ import { SetupPage } from '@/features/enquiries/SetupPage'
 import { TestMailboxPage } from '@/features/enquiries/TestMailboxPage'
 import { CostModelPage, CostModelsPage } from '@/features/quotes/CostModelsPage'
 import { PricePoliciesPage, PricePolicyPage } from '@/features/quotes/PricePolicyPage'
+import { DoaMatrixPage } from '@/features/quotes/DoaMatrixPage'
 import { QuoteDetailPage } from '@/features/quotes/QuoteDetailPage'
 import { QuotesLayout } from '@/features/quotes/QuotesLayout'
 import { QuotesPage } from '@/features/quotes/QuotesPage'
@@ -96,6 +97,7 @@ const router = createBrowserRouter([
           { path: 'cost-models/:familyId', element: <CostModelPage /> },
           { path: 'price-policies', element: <PricePoliciesPage /> },
           { path: 'price-policies/:target', element: <PricePolicyPage /> },
+          { path: 'approval-rules', element: <DoaMatrixPage /> },
         ],
       },
       { path: 'quotes/:id', element: <QuoteDetailPage /> },

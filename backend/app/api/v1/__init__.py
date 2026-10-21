@@ -8,6 +8,7 @@ from app.api.v1 import (
     channels,
     costs,
     decisions,
+    doa,
     enquiries,
     integrations,
     privacy,
@@ -33,4 +34,5 @@ router.include_router(enquiries.router)
 router.include_router(products.router)
 router.include_router(quotes.router)
 router.include_router(costs.router)
+router.include_router(doa.router)
 router.include_router(public.router)
