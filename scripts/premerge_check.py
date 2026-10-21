@@ -52,7 +52,12 @@ def git(*args: str) -> str:
 
 def check_owner(base: str, actor: str | None, owners: list[str]) -> None:
     try:
-        since = git("merge-base", base, "HEAD")
+        # Resolve --base to a commit first: --end-of-options keeps a value such as
+        # "--output=x" from being read as a git option, and later calls get a bare SHA.
+        if base.startswith("-"):
+            raise RuntimeError("a branch or commit name cannot start with '-'")
+        base_sha = git("rev-parse", "--verify", "--quiet", "--end-of-options", f"{base}^{{commit}}")
+        since = git("merge-base", base_sha, "HEAD")
     except RuntimeError as e:
         report("FAIL", "Migration owner", f"cannot compare with {base}: {e}")
         return
