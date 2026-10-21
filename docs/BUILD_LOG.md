@@ -55,6 +55,11 @@ met is measured rather than assumed. At 12:05Z he answered the migration questio
 - The browser check earned its place: the screen read `stage.reasons` while the API sends
   `stage.because`, so Try it crashed. Fixed, and a test now asserts the key names the screen depends on.
 
+**Also decided, late in the day.** M6's backend folder is **`app/partner`** (his word). The work-split
+doc had given stream A `app/channel`, one letter from `app/channels`, the Step 6 messaging platform the
+platform rule puts off limits, so M6 had no name of its own. It is now in that doc, in `START_HERE.md`
+and in the handover's decisions table.
+
 **Not done, next.** The **approval card on the quote itself** and the quote's own approval state. They
 need `api/v1/quotes.py`, `cpq/quotes.py`, `cpq/pricing.py`, `models/quotes.py`, `QuoteDetailPage.tsx`,
 `hooks.ts` and `types.ts` — exactly the files Nischay has uncommitted on his PC — so they wait for his

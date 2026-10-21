@@ -182,7 +182,7 @@ person owns whole features end to end:
 
 | Stream | Modules | Owns these folders |
 |---|---|---|
-| A. Quote to cash | M3 CPQ, M4 order and ERP handoff, M6 dealers | `app/cpq`, `app/orders`, `features/quotes`, `features/orders` |
+| A. Quote to cash | M3 CPQ, M4 order and ERP handoff, M6 dealers | `app/cpq`, `app/orders`, `app/partner`, `features/quotes`, `features/orders` |
 | B. Demand and insight | M1 leftovers, M2 pipeline, M10 forecasting, M11 voice of customer | `app/enquiries`, `app/pipeline`, `app/analytics`, `features/enquiries`, `features/pipeline` |
 | C. Customer and after-sales | M5 accounts, M7 field, M8 service and warranty, M9 installed base | `app/accounts`, `app/field`, `app/service`, `features/accounts`, `features/service` |
 
