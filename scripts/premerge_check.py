@@ -50,13 +50,23 @@ def git(*args: str) -> str:
     return done.stdout.strip()
 
 
+def resolve_commit(name: str) -> str:
+    """The commit SHA a branch or commit name points at. The name goes to git on stdin,
+    never as an argument, so a value such as "--output=x" cannot become a git option;
+    only the SHA git prints back is used afterwards."""
+    if "\n" in name:
+        raise RuntimeError("a commit name cannot contain a line break")
+    done = subprocess.run(["git", "cat-file", "--batch-check=%(objectname) %(objecttype)"],
+                          cwd=ROOT, text=True, capture_output=True, input=f"{name}^{{commit}}\n")
+    sha, _, kind = done.stdout.strip().partition(" ")
+    if done.returncode != 0 or kind != "commit" or not re.fullmatch(r"[0-9a-f]{40,64}", sha):
+        raise RuntimeError(f"no commit named {name!r}")
+    return sha
+
+
 def check_owner(base: str, actor: str | None, owners: list[str]) -> None:
     try:
-        # Resolve --base to a commit first: --end-of-options keeps a value such as
-        # "--output=x" from being read as a git option, and later calls get a bare SHA.
-        if base.startswith("-"):
-            raise RuntimeError("a branch or commit name cannot start with '-'")
-        base_sha = git("rev-parse", "--verify", "--quiet", "--end-of-options", f"{base}^{{commit}}")
+        base_sha = resolve_commit(base)
         since = git("merge-base", base_sha, "HEAD")
     except RuntimeError as e:
         report("FAIL", "Migration owner", f"cannot compare with {base}: {e}")
