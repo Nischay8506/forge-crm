@@ -51,17 +51,19 @@ def git(*args: str) -> str:
 
 
 def resolve_commit(name: str) -> str:
-    """The commit SHA a branch or commit name points at. The name goes to git on stdin,
-    never as an argument, so a value such as "--output=x" cannot become a git option;
-    only the SHA git prints back is used afterwards."""
-    if "\n" in name:
-        raise RuntimeError("a commit name cannot contain a line break")
-    done = subprocess.run(["git", "cat-file", "--batch-check=%(objectname) %(objecttype)"],
-                          cwd=ROOT, text=True, capture_output=True, input=f"{name}^{{commit}}\n")
-    sha, _, kind = done.stdout.strip().partition(" ")
-    if done.returncode != 0 or kind != "commit" or not re.fullmatch(r"[0-9a-f]{40,64}", sha):
-        raise RuntimeError(f"no commit named {name!r}")
-    return sha
+    """The commit SHA a branch name or commit id points at. The name is only compared
+    with what git lists (branches, then every commit); it never goes to git itself, so a
+    value such as "--output=x" cannot become a git option."""
+    for line in git("for-each-ref", "--format=%(objectname) %(refname:short) %(refname)",
+                    "refs/heads", "refs/remotes").splitlines():
+        sha, short, full = line.split(" ")
+        if name in (short, full):
+            return sha
+    if re.fullmatch(r"[0-9a-f]{7,64}", name):
+        matches = [sha for sha in git("rev-list", "--all").splitlines() if sha.startswith(name)]
+        if len(matches) == 1:
+            return matches[0]
+    raise RuntimeError(f"no branch or commit named {name!r}")
 
 
 def check_owner(base: str, actor: str | None, owners: list[str]) -> None:
