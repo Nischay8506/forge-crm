@@ -97,10 +97,12 @@ def _value(tree: ast.Module, name: str):
     return None
 
 
-def check_heads() -> None:
+def _read_migrations(
+    problems: list[str],
+) -> tuple[dict[str, tuple[str, ...]], dict[str, list[str]]]:
+    """Each revision id with its parents, and each file number with the files using it."""
     revisions: dict[str, tuple[str, ...]] = {}
     numbers: dict[str, list[str]] = {}
-    problems: list[str] = []
     for path in sorted((ROOT / VERSIONS).glob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         rev, down = _value(tree, "revision"), _value(tree, "down_revision")
@@ -113,13 +115,17 @@ def check_heads() -> None:
         match = re.match(r"(\d+)_", path.name)
         if match:
             numbers.setdefault(match.group(1), []).append(path.name)
-    for number, names in numbers.items():
-        if len(names) > 1:
-            problems.append(f"number {number} is used by {' and '.join(names)}")
-    for rev, parents in revisions.items():
-        for parent in parents:
-            if parent not in revisions:
-                problems.append(f"{rev} points at {parent}, which does not exist")
+    return revisions, numbers
+
+
+def check_heads() -> None:
+    problems: list[str] = []
+    revisions, numbers = _read_migrations(problems)
+    problems += [f"number {number} is used by {' and '.join(names)}"
+                 for number, names in numbers.items() if len(names) > 1]
+    problems += [f"{rev} points at {parent}, which does not exist"
+                 for rev, parents in revisions.items() for parent in parents
+                 if parent not in revisions]
     children = {p for parents in revisions.values() for p in parents}
     heads = sorted(r for r in revisions if r not in children)
     if len(heads) != 1:
