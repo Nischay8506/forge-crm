@@ -63,16 +63,73 @@ his run of Tests 1-3, and the smaller questions in [HANDOVER](HANDOVER.md) secti
 
 ---
 
-## 2026-10-21 (Day 14): hygiene scores follow the calendar (F12.1)
+## 2026-10-21 (Day 14, on his PC): Y1-Y8 answered, rounding per quote, the test guide walked through
 
-**Note added at 13:45 IST, after this entry was first written.** A second session spent today working
-with Nischay **directly in the project folder on his PC**, and it had already written its own entry for
-2026-10-21 there. Its work: **Y1-Y8 answered** (Y5 changed, so rounding is a per-quote "Round off
-prices" switch, migration 0017), a customer's own ERP price taking no tier discount or quantity break,
-and three fixes from walking the test guide with him. Only its two documents are committed there
-(`9ec3a02`), not the code, and none of it is in this history or on GitHub `main` yet. The two records
-are still to be merged; for today's F3.3 work, that folder's entry is the fuller one. What follows is
-only the part of today that happened in the cloud workspace.
+**Merged in on the evening of 2026-10-21 from the project folder on Nischay's PC, where this work was
+done** (commit `9ec3a02` there, documents only). Day numbering is this history's: that folder called it
+Day 12 because it does not hold the 2026-10-19 and 2026-10-20 entries. **The code is still uncommitted
+in that folder** — migration 0017, the pricing and quote changes and their tests — so none of it is in
+this history or on GitHub yet.
+
+**Decisions (Nischay):** Y1-Y4 and Y6-Y8 as recommended. **Y5 changed**: "to the paisa, give round up
+as an option", then "a user from the company should decide whether to round it off or not", settled as
+the policy naming the step and a person switching it on per quote. One more point found in the code and
+answered: a customer's own ERP price is used as it is. Later, from the walk-through: "Ask on change"
+and "Quote floor with F3.4" (HANDOVER section 3).
+
+**Done**
+- **Round off per quote** (migration 0017, `quote_revisions.round_off`): prices are exact to the paisa
+  until someone ticks "Round off prices" on the quote; each line is then rounded up to its policy's
+  step. Ticking or unticking prices the draft again and is in the `quote.priced` record (`why`,
+  `round_off`); the waterfall carries `round_off`, so it is inside the price seal. The Pricing policy
+  screen's field is now "Round off to", used only where a quote has the box ticked.
+- **A customer's own ERP price takes no tier discount or quantity break** (`pricing.price_line`); the
+  waterfall says so in a note. Price-list and cost-plus prices are unchanged; the rep's ask still
+  applies to all three.
+
+**The test guide walked through (afternoon).** The one Fail in the Configurator and Cost Engine guide
+("updating only once") was the bug fixed on 2026-10-15 (`c636e55`): the test now changes a line's
+configuration three more times and the draft follows every one. Walking the guide's figures through the
+API found four faults; Nischay chose three fixes and two answers:
+- **A decided price card sets the quote's status again** (`pricing.revision_status`, used by pricing and
+  by `price_agent`): countered at a price that clears the floor, the quote still said below_floor.
+- **Every step of "why this price" adds up to the paisa**: each step is carried rounded up to the paisa
+  and a discount's amount is the difference, so a list step no longer reads ₹333.33 beside a ₹333.34
+  price.
+- **The quote page reloads when its tab is shown again**, so an enquiry configured in another tab shows
+  on the quote without F5.
+- Not fixed, by his choice: a line whose countered price clears the floor keeps the red "Below the
+  floor" tag, which describes the price Forge worked out.
+- **Answer:** a typed ask price is cleared when the product or unit changes (configuration, item code or
+  unit; `quotes.drop_typed_price`), and the waterfall says so; a % ask stays.
+- **Answer:** a whole quote below its floor waits for F3.4 (C5 A decides at quote level); the screen now
+  says so instead of promising an approval that has no card yet.
+- The guide has a new **Test 3: prices, the floor and round-off**, with figures taken from the walk, and
+  five rows in its results table.
+- Nischay's dev database upgraded to 0017.
+- Checks at the end of that day, **in his folder**: 321 backend passed (3 skipped, live ERPNext only),
+  ruff clean, `alembic heads` one line (0017), tsc clean, 43 frontend passed, the build passes.
+
+**Problems**
+- One full run there ended with a `TimeoutError` in
+  `test_integrations_api.py::test_mapping_studio_and_account_tabs` while the frontend checks ran beside
+  it (11 m 45 s instead of about 5 m). It passed alone, with its file, and in a clean full run: load on
+  the PC, not a fault, but a test that can time out under load.
+- The screens changed that day were checked by tsc, the build and the API walk-through, **not yet in a
+  browser**; Nischay's run of Test 3 is the first look at them.
+
+**Not done, next.** Commit that code and push it; the discount approvals built in the cloud workspace
+the same evening wait on its migration 0017.
+
+---
+
+## 2026-10-21 (Day 14, morning): hygiene scores follow the calendar (F12.1)
+
+**Note.** Three separate pieces of work happened on 2026-10-21 and each has its own entry above: this
+one (the morning, in the cloud workspace), the F3.3 work done with Nischay in the project folder on his
+PC, and F3.4 in the evening. **The two records for the day were merged on the evening of 2026-10-21**:
+his folder's entry was brought into this history, so nothing is missing here any more. Its *code* is
+still uncommitted in that folder. What follows is only the morning's work.
 
 **Decisions (Nischay).** He asked at 05:02Z which files handle Golden Record and Data Steward, and
 where the flow starts and ends. Reading the code for the answer turned up a gap, and of the three ways

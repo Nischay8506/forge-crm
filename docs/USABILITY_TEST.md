@@ -62,3 +62,12 @@ notes. Send them to Claude (or add them to `docs/BUILD_LOG.md`). With two or thr
 overall median under 60 seconds, the Done-When is met and Claude marks F12.3 done on the Build Map.
 
 If a participant got stuck on a card, that card's design is the thing to fix, whatever the median.
+
+## Results so far
+
+| Participant | Date | Median | Notes |
+|---|---|---|---|
+| Nischay | 2026-10-10 | — | Ran the whole script himself, including step 5 on a phone: the inbox reads and taps fine there. No card left him stuck. |
+
+**Still needed for the Done-When:** two or three more people, each on their own fresh company, with an
+overall median under 60 seconds. Until then F12.3 stays pending on the Build Map (decision H8 C).
