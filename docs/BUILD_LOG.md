@@ -5,6 +5,43 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-21 (Day 14): hygiene scores follow the calendar (F12.1)
+
+**Decisions (Nischay).** He asked at 05:02Z which files handle Golden Record and Data Steward, and
+where the flow starts and ends. Reading the code for the answer turned up a gap, and of the three ways
+to close it he chose **the nightly re-score on its own**: not the extra "needs checking" list of fields
+that have just gone stale, which stays a later item, and not leaving it alone. He also asked for the
+documentation this morning rather than in the evening slot, so this entry is written at 13:30 IST.
+
+**Done**
+- **Hygiene scores are worked out again every night** (`d07128e`, `app/steward/hygiene.py`,
+  `rescore_tenant` and `rescore_all`, Celery task `forge.hygiene_rescore` at 02:00 IST). A score was
+  only worked out when a record was saved, merged, enriched or rescanned, so a record nobody touched
+  kept its "verified in the last year" points long after its fields passed a year old, and the tenant
+  dashboard read better than the data. The job now scores every active company and contact again, in
+  batches of 500 per company. It applies only what the passing of time changes: the warnings from the
+  last write are kept, and a record whose score and reasons have not moved is not written at all, so
+  `updated_at` and the "last changed" column stay honest. 319 backend tests pass, 3 skipped, including
+  a new one for this.
+- **The Golden Record and Steward file map**, written as a page and changing no code:
+  https://claude.ai/artifact/Hf5YEJdD6ysrsJ4ocxeAeQ. Every way a company or contact arrives (a save on
+  the screen, a CSV import, the ERP sync) goes through `steward/records.py`, which checks the values,
+  records where each field came from, scores hygiene and puts an event in the outbox. A job reads that
+  outbox every two seconds and passes the event through `steward/handlers.py` to `steward/service.py`,
+  which looks for duplicates (`candidates.py`, scored in `matching.py`). Each pair ends in one of four
+  places: merged by `merge.py` with an audit record, an approval card in Decisions, blocked by a kill
+  switch or a rule, or the Steward review queue as a likely match.
+
+**Problems.** None in the build. His laptop has been off the bridge since 2026-10-19, so his copy is
+still at `4fc8f9e` and `git pull` in the repository folder is what brings it to today.
+
+**Not done, next.** Still waiting on him: **Y1-Y8** (the eight F3.3 details), **G1-G7** (freight, the
+last piece of F3.2), his trial of F3.1, the cost engine and the prices, and the smaller questions in
+[HANDOVER](HANDOVER.md) section 7, including the self-refreshing Decisions list. Next feature either
+way: freight if G1-G7 arrives, otherwise **F3.4, discount approvals** (C1 B).
+
+---
+
 ## 2026-10-20 (Day 13): nothing built
 
 Nothing was built, nothing is in progress, and Nischay has not written since the project check on

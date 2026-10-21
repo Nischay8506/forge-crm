@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-20
+Last updated: 2026-10-21
 
 ---
 
@@ -34,7 +34,7 @@ Phase 1 steps:
 | Step | What | Status |
 |---|---|---|
 | 0 | Foundations: repo, migrations, tenancy (RLS), login + RBAC, event outbox, worker, LLM gateway, UI shell | **Done 2026-10-08** (see section 6 for what is still open) |
-| 1 | F12.1 Golden Record & Data Steward (dedup/merge/enrich, hygiene score, adjudication screen) | **Done 2026-10-08**, with one accepted gap: ≥95% auto-resolve not met on the synthetic set (54% with S3A); re-measure on real legacy data before Phase 2 (decision S5 A) |
+| 1 | F12.1 Golden Record & Data Steward (dedup/merge/enrich, hygiene score, adjudication screen) | **Done 2026-10-08**, with one accepted gap: ≥95% auto-resolve not met on the synthetic set (54% with S3A); re-measure on real legacy data before Phase 2 (decision S5 A). **2026-10-21:** hygiene scores are now worked out again every night, so freshness follows the calendar even on records nobody touches |
 | 2 | F12.2 Agent Runtime, Policy Engine, Autonomy **+ minimal audit chain** (decision 6A) | **Done 2026-10-08**: both F12.2 "Done When" checks pass (section 6). U1-U4 confirmed as built |
 | 3 | F12.6 Integration Framework & Connector SDK, ERPNext adapter (decision 5A) | **Built 2026-10-09**: both F12.6 "Done When" checks pass in Claude's environment on a real ERPNext 16 (section 6). Waiting for Nischay's own check in Docker Desktop (`infra/erpnext/README.md`). Defaults kept as built (X1 A) |
 | 4 | F12.4 Audit replay UI, redaction, retention | **Built 2026-10-09**: both F12.4 acceptance checks pass in Claude's environment (section 6), built to R1-R8 (all A) and Nischay's Step 4 safeguards. Retention periods need legal validation before production (section 7) |
@@ -100,6 +100,7 @@ recommendation, and record the answer here.
 | V2 A | A company can have more than one ERP connection; the setup screen adds one at a time | 2026-10-09 |
 | V3 A | The mapping studio maps customers → accounts plus the code lists Phase 2 needs (units, customer groups, territories, payment terms, warehouses, tax templates); rule-based suggestions until the D3 keys are set, then AI-assisted | 2026-10-09 |
 | C2 A, built 2026-10-18 | F3.3 prices a line from the first source that covers it (the customer's own ERP price, then the ERP selling price list, then the cost at the family's target margin), then the tier discount, the quantity break and the rep's ask; the floor is checked on every line and on the whole quote, and anything that cannot stand on its own goes to a person. The eight details it leaves open (Y1-Y8 in `plans/Phase2_M3_F3.3_Price_Questions.md`) were asked on 2026-10-18 and are **not answered**: what is built follows the recommendations, and each is a setting, not a rewrite | 2026-10-18 |
+| Nightly hygiene re-score, built 2026-10-21 | Asked which files handle Golden Record and Data Steward, Nischay was shown the flow and the gap it turned up: a hygiene score only changed when a record was saved, merged, enriched or rescanned. Of the three options he chose **the nightly re-score on its own** — not the extra "needs checking" list of fields that just went stale, which stays a later item, and not leaving it | 2026-10-21 |
 | W1 A | Forge's own code lists for ERP mapping: units use the GST unit codes (UQC) and tax uses the GST rate slabs; customer groups, territories, payment terms and warehouses start as a copy of the first ERP's lists, and later ERPs map onto them | 2026-10-09 |
 | X1 A | Integration defaults kept as built: ERP Connector agent at L2, Outside AI tools agent at L0; alerts after 3 minutes unreachable, 3 failed reads in a row, 15 minutes without a read, or a run stuck 30 minutes (a rejected key alerts at once); nightly comparison after 02:00 IST; ERP customers disabled in the ERP are not made into accounts; "create in ERPNext" sends name, type and GSTIN only | 2026-10-09 |
 | Order | Step 4 starts before Nischay's own Step 3 check; he runs that check whenever he can and anything it finds is fixed alongside | 2026-10-09 |
@@ -268,6 +269,8 @@ uv run python -m app.cli new-seal-key       # prints s<date>:<key>; put it in AU
 - It also works quote costs out again every hour at :20 (for rates dated ahead, F3.2) and sends each
   quote owner's "reprice recommended" email at 09:00 IST (K9 A); without it rates dated ahead wait
   for the next quote change, and nobody is emailed.
+- It scores every active company and contact again at 02:00 IST (F12.1); without it a record nobody
+  touches keeps its freshness points after its data passes a year old.
 
 Approval-inbox notifications (Step 5, H5) are optional. Step 5 added the `pywebpush` package, so run
 `uv sync` once after copying. Then:
@@ -434,7 +437,7 @@ backend/
       embeddings.py      meaning match (S2A), optional, review only
       records.py         create/update with validation, provenance and outbox events
       merge.py           merge with survivorship, branch-site rule, undo; REFERENCES registry
-      hygiene.py         hygiene score per record and tenant dashboard
+      hygiene.py         hygiene score per record and tenant dashboard; the nightly re-score
       service.py         the steward loop for one record (find -> auto-merge or queue -> rescore)
       handlers.py        outbox subscriptions; importer.py CSV migration mode; enrichment.py
       agent.py           the Data Steward as an agent: its merge tool and charter (T7)
@@ -761,14 +764,19 @@ docs/                  this file, BUILD_LOG.md
 45. **Pricing policies are never edited**, like rates and cost models (rule 37): a change is a new
     `price_policies` row from a date, the app role has only SELECT and INSERT on the table, and the
     waterfall names the policy version it used.
+46. **Anything scored partly on how old a value is, is scored again on a schedule**, not only when a
+    record is touched (2026-10-21). `hygiene.rescore_all` runs nightly in batches per company, applies
+    only what the passing of time changes, keeps the warnings from the last write, and does not write a
+    record whose score and reasons have not moved, so `updated_at` and the "last changed" column stay
+    honest.
 
-## 6. Current state (end of 2026-10-20)
+## 6. Current state (end of 2026-10-21)
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
 first module, **M1 Enquiry, is built for email (2026-10-12)**. **M3 CPQ** is being built one feature at a
 time (C1 B): **F3.1 is built** and waits for Nischay's try, **F3.2's cost engine is built** and
 finished to J1-J4, with freight still to come (G1-G7), and **F3.3, the price and the floor, is built**
-(2026-10-18) with its eight open details waiting on him (Y1-Y8). Tests: 318 backend (plus 3 that run
+(2026-10-18) with its eight open details waiting on him (Y1-Y8). Tests: 319 backend (plus 3 that run
 only against a live ERPNext) and 43 frontend, all passing; every new screen was checked in a browser, on a
 desktop and at phone width (390 px). Nischay's PC was brought to 0016 on the evening of
 2026-10-18 and is current with F3.3; a copy onto any other machine needs `uv run alembic upgrade head`
@@ -1249,7 +1257,8 @@ Known gaps (none block Step 4):
   and sites moved to the kept record, full undo. Same PAN with another state's GSTIN becomes a branch
   site under the company instead of overwriting its GSTIN
 - Hygiene score per record (completeness 40, validity 30, verified in the last year 20, no open
-  duplicates 10) and a tenant dashboard
+  duplicates 10) and a tenant dashboard; scored again every night at 02:00 IST so a record nobody
+  opens still loses its freshness points when its data passes a year old (2026-10-21)
 - CSV import from the old system (runs in the worker), enrichment with proposals a person accepts
 - Screens: Accounts, account detail, create/edit with live duplicate check, Contacts, Data Steward
   (review queue, side-by-side review, merge history with undo, imports, hygiene)
