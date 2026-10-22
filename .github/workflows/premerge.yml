@@ -1,0 +1,90 @@
+# Pre-merge checks on every push and pull request: the migration owner rule, one
+# migration head, ruff and tsc, both test suites on a fresh database, and the frontend
+# build (all that must pass before pushing). Same script as on a PC:
+# scripts/premerge_check.py. No secrets are needed; tests/conftest.py uses test-only keys.
+name: Pre-merge checks
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+# Read-only: the checks never write to the repository.
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    env:
+      # Who may add or change files in backend/alembic/versions (comma-separated logins).
+      MIGRATION_OWNERS: ${{ vars.MIGRATION_OWNERS || 'Nischay8506' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Migration owner and one head
+        env:
+          ACTOR: ${{ github.event.pull_request.user.login || github.actor }}
+          BEFORE: ${{ github.event.before }}
+          IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: |
+          # A push to main is compared with main before the push; anything else with origin/main.
+          if [ "$IS_MAIN_PUSH" = "true" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            git update-ref refs/premerge/base "$BEFORE"
+          fi
+          python3 scripts/premerge_check.py --actor "$ACTOR"
+
+      - name: Create the databases (as infra/postgres-init.sql does locally)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f infra/postgres-init.sql
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Nothing is built or run while installing: npm skips install scripts, and uv
+      # installs only the wheels pinned in uv.lock. http-ece (pywebpush's one source-only
+      # dependency) is left out; it is imported only when a real push is sent, and the
+      # tests replace that sender.
+      - name: Install
+        run: |
+          cd backend && uv sync --locked --no-build --no-install-package http-ece
+          cd ../frontend && npm ci --ignore-scripts
+
+      - name: Backend lint
+        working-directory: backend
+        run: uv run --locked --no-build --no-sync ruff check app tests evals
+
+      - name: Frontend type check
+        working-directory: frontend
+        run: npm exec --no -- tsc --noEmit -p .
+
+      - name: Backend tests (migrates forge_test from empty first)
+        working-directory: backend
+        run: uv run --locked --no-build --no-sync pytest -q
+
+      - name: Frontend tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
