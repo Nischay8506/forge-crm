@@ -201,6 +201,7 @@ function Detail({ q }: { q: QuoteDetail }) {
             </div>
           ))}
           {editing === "new" && form}
+          <RoundOff q={q} busy={call.isPending} onChange={(on) => call.mutate({ method: "patch", path: "", body: { round_off: on } })} />
           <Totals q={q} />
           {costs && rev.costed_at && <p className="text-[11.5px] text-ink-300">Costs worked out {formatDateTime(rev.costed_at)}</p>}
           {rev.priced_at && <p className="text-[11.5px] text-ink-300">Priced {formatDateTime(rev.priced_at)}</p>}
@@ -255,6 +256,25 @@ function TermsForm({ q, busy, onSave, onCancel }: {
   )
 }
 
+/** Prices are exact to the paisa until a person rounds them off for this quote (Y5);
+ *  each line is then rounded up to the step its pricing policy names. */
+function RoundOff({ q, busy, onChange }: { q: QuoteDetail; busy: boolean; onChange: (on: boolean) => void }) {
+  const rev = q.active
+  const steps = [...new Set(rev.lines.map((l) => l.price?.policy?.rounding).filter((s): s is string => !!s && s !== "0.01"))]
+  const stepText = steps.length ? steps.map((s) => `₹${s}`).join(" / ") : null
+  if (!q.may.work && !rev.round_off) return null
+  return (
+    <div className="mt-2 flex flex-wrap items-center justify-end gap-x-2 text-[12.5px]">
+      <label className="inline-flex items-center gap-1.5 text-ink-700">
+        <input type="checkbox" checked={rev.round_off} disabled={!q.may.work || busy || (!stepText && !rev.round_off)}
+          onChange={(e) => onChange(e.target.checked)} />
+        Round off prices{stepText ? ` (up to the next ${stepText})` : ""}
+      </label>
+      {!stepText && !rev.round_off && <span className="text-ink-300">The pricing policy rounds to the paisa; set a step there to round off.</span>}
+    </div>
+  )
+}
+
 /** The quote as a whole against the floor its lines weigh out to (C2 A). */
 function Totals({ q }: { q: QuoteDetail }) {
   const t = q.active.totals
@@ -275,7 +295,12 @@ function Totals({ q }: { q: QuoteDetail }) {
           no quantity, no price, or no cost to work the margin from.
         </p>
       )}
-      {below && <p className="text-right text-[12px] text-red-500">The quote is below its floor, so it needs an approval before it goes out.</p>}
+      {below && (
+        <p className="text-right text-[12px] text-red-500">
+          The quote as a whole is below its floor. Send it for approval at the top of this page, or change
+          the prices.
+        </p>
+      )}
     </div>
   )
 }

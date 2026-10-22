@@ -1,4 +1,4 @@
-import type { CostSource, CostStatus, PriceSource, PriceStatus, QuoteStatus } from "./types"
+import type { CostSource, CostStatus, LineAsk, PriceSource, PriceStatus, QuoteStatus } from "./types"
 
 export const STATUS_TONE: Record<QuoteStatus, "teal" | "gold" | "green" | "red" | "amber" | "neutral"> = {
   draft: "neutral", pending_approval: "amber", sent: "teal", accepted: "green", lost: "red", expired: "neutral",
@@ -87,9 +87,10 @@ export function approvalText(status: string): string {
 }
 
 /** What the rep asked for on a line, in words. */
-export function askText(ask: { discount_pct?: string; unit_price?: string } | null): string {
+export function askText(ask: LineAsk | null): string {
   if (!ask) return ""
   if (ask.unit_price !== undefined) return `asked ${rupees(ask.unit_price)}`
   if (ask.discount_pct !== undefined) return `asked ${percent(ask.discount_pct)} off`
+  if (ask.cleared) return `had asked ${rupees(ask.cleared.unit_price)}; cleared because ${ask.cleared.why}`
   return ""
 }

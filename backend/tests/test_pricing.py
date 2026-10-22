@@ -97,10 +97,18 @@ async def test_the_tier_discount_the_quantity_break_and_the_rounding_come_off_th
     _, q = await _flanges_quote(client, h, [
         ("Weld neck flange", 40, {"size": "150", "class": "300", "material": "F316",
                                   "facing": "RF"})])
-    # A standard customer: only the quantity break, which 40 reaches.
+    # A standard customer: only the quantity break, which 40 reaches. Exact to the paisa
+    # until someone switches rounding on for the quote (Y5).
+    plain = q["active"]["lines"][0]
+    assert q["active"]["round_off"] is False
+    assert [s["kind"] for s in plain["price"]["steps"]] == ["list", "discount"]
+    q = (await client.patch(f"{Q}/{q['id']}", headers=h, json={"round_off": True})).json()
+    assert q["active"]["round_off"] is True
     line = q["active"]["lines"][0]
+    assert line["price"]["round_off"] is True
     _, cost = _flange_cost("19.1", 12, "1.5")
     after_break = cost_plus(cost, "30") * Decimal("0.96")
+    assert Decimal(line["unit_price"]) >= Decimal(plain["unit_price"])
     assert line["price"]["steps"][-1]["label"] == "Rounded up to the next ₹5"
     assert Decimal(line["unit_price"]) % 5 == 0
     assert Decimal(line["unit_price"]) >= after_break
@@ -165,6 +173,80 @@ async def test_a_price_under_the_floor_goes_for_approval_and_a_countered_price_i
     assert again["price_review"]["id"] == card_id
 
 
+async def test_a_countered_price_that_clears_the_floor_clears_the_quote(client, ctx):  # noqa: F811
+    # Found walking the test guide (21 Oct): the card was decided, the total cleared its
+    # floor, and the quote itself still said below_floor.
+    h = ctx["h"]
+    await set_policy(client, h, policy(target="20", floor="18"))
+    _, q = await _flanges_quote(client, h, [
+        ("Weld neck flange", 40, {"size": "150", "class": "300", "material": "F316",
+                                  "facing": "RF"})])
+    line = q["active"]["lines"][0]
+    asked = (await client.put(f"{Q}/{q['id']}/lines/{line['id']}/ask", headers=h,
+                              json={"discount_pct": "10"})).json()
+    assert asked["active"]["price_status"] == "below_floor"
+    card_id = asked["active"]["lines"][0]["price_review"]["id"]
+    r = await decide(client, h, card_id, "counter", values={"unit_price": line["unit_price"]})
+    assert r.status_code == 200, r.text
+    got = (await client.get(f"{Q}/{q['id']}", headers=h)).json()["active"]
+    assert got["lines"][0]["unit_price"] == line["unit_price"]
+    assert got["totals"]["status"] == "ok" and got["price_status"] == "ok"
+
+
+async def test_every_step_of_the_waterfall_adds_up_to_the_paisa(client, ctx):  # noqa: F811
+    h, tid = ctx["h"], ctx["tid"]
+    await set_policy(client, h, policy(
+        target="23", floor="5", tiers={"key": "3.3"},
+        breaks=[{"from_qty": "10", "discount_pct": "2.7"}]))
+    _, q = await _flanges_quote(client, h, [
+        ("Weld neck flange", 40, {"size": "150", "class": "300", "material": "F316",
+                                  "facing": "RF"})])
+    await _account(tid, q["id"], tier="key")
+    line = (await client.put(f"{Q}/{q['id']}/lines/{q['active']['lines'][0]['id']}/ask",
+                             headers=h, json={"discount_pct": "1.9"})).json()
+    line = line["active"]["lines"][0]
+    steps = line["price"]["steps"]
+    assert [s["kind"] for s in steps] == ["list", "discount", "discount", "ask"]
+    assert steps[0]["price"] == line["list_price"] == line["price"]["list_price"]
+    for before, step in zip(steps, steps[1:], strict=False):
+        assert Decimal(before["price"]) + Decimal(step["amount"]) == Decimal(step["price"])
+    assert steps[-1]["price"] == line["unit_price"]
+
+
+async def test_a_typed_price_is_cleared_when_the_product_changes(client, ctx):  # noqa: F811
+    h = ctx["h"]
+    await set_policy(client, h, policy(target="25", floor="5"))
+    flange = {"size": "150", "class": "300", "material": "F316", "facing": "RF"}
+    fam, q = await _flanges_quote(client, h, [("Weld neck flange", 40, flange)])
+    line = q["active"]["lines"][0]
+    path = f"{Q}/{q['id']}/lines/{line['id']}/ask"
+
+    async def configure(values):
+        r = await client.post(f"{API}/products/configurations", headers=h, json={
+            "family_id": fam["id"], "enquiry_line_id": line["enquiry_line_id"],
+            "values": values})
+        assert r.status_code == 201, r.text
+        return (await client.get(f"{Q}/{q['id']}", headers=h)).json()["active"]["lines"][0]
+
+    # A price the rep typed was for the F316 flange: it goes when the line becomes F304.
+    await client.put(path, headers=h, json={"unit_price": "15000"})
+    got = await configure(dict(flange, material="F304"))
+    assert got["ask"] == {"cleared": {"unit_price": "15000",
+                                      "why": "the line was configured as FL-150-300-F304-RF"}}
+    assert [s["kind"] for s in got["price"]["steps"]] == ["list"]
+    assert any("₹15,000" in n and "cleared" in n for n in got["price"]["notes"])
+    # A % off still means the same off the new price, so it stays.
+    await client.put(path, headers=h, json={"discount_pct": "5"})
+    got = await configure(flange)
+    assert got["ask"] == {"discount_pct": "5"}
+    assert got["price"]["steps"][-1]["label"] == "The rep asked for 5% off"
+    # The same for an item code or unit changed by hand on the quote line.
+    await client.put(path, headers=h, json={"unit_price": "15000"})
+    got = (await client.patch(f"{Q}/{q['id']}/lines/{line['id']}", headers=h,
+                              json={"unit": "set"})).json()["active"]["lines"][0]
+    assert got["ask"]["cleared"]["why"] == "the unit changed"
+
+
 async def test_a_line_with_no_cost_and_no_erp_price_cannot_be_priced(client, ctx):  # noqa: F811
     h = ctx["h"]
     await set_policy(client, h, policy())
@@ -225,7 +307,8 @@ async def test_the_whole_quote_is_checked_against_the_floor_its_lines_weigh_out_
 async def test_a_customer_price_in_the_erp_beats_the_price_list_and_the_cost(
         client, ctx):  # noqa: F811
     h, tid = ctx["h"], ctx["tid"]
-    await set_policy(client, h, policy(target="25", floor="5"))
+    await set_policy(client, h, policy(target="25", floor="5", tiers={"strategic": "5"},
+                                       breaks=[{"from_qty": "1", "discount_pct": "3"}]))
     fake = FakeERPNext()
     seed_demo(fake)
     fake.add("Customer", {
@@ -256,8 +339,10 @@ async def test_a_customer_price_in_the_erp_beats_the_price_list_and_the_cost(
         assert got["price_source"] == "price_list", got["price"]
         assert "the price list Standard Selling" in got["price"]["steps"][0]["label"]
         assert got["price"]["notes"][0].startswith("The price came from ERPNext Pune")
+        # A price-list price still takes the quantity break.
+        assert [s["kind"] for s in got["price"]["steps"]] == ["list", "discount"]
 
-        account_id = await _account(tid, q["id"])
+        account_id = await _account(tid, q["id"], tier="strategic")
         async with tenant_session(tid) as s:
             cust = await s.scalar(select(ErpCustomer).where(
                 ErpCustomer.external_id == "Konark Pipes"))
@@ -267,6 +352,10 @@ async def test_a_customer_price_in_the_erp_beats_the_price_list_and_the_cost(
         assert mine["price_source"] == "contract" and mine["unit_price"] == "9000.00"
         assert "a price for this customer" in mine["price"]["steps"][0]["label"]
         assert "valid until 2027-03-31" in mine["price"]["steps"][0]["label"]
+        # The customer's own price is already negotiated: a strategic customer reaching a
+        # quantity break gets neither discount on top of it (Y6).
+        assert [s["kind"] for s in mine["price"]["steps"]] == ["list"]
+        assert any("used as it is" in n for n in mine["price"]["notes"])
     finally:
         use_transport(erp.url, None)
 

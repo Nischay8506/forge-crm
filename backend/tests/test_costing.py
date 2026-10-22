@@ -327,6 +327,25 @@ async def test_configuring_a_line_after_the_quote_started_updates_the_draft(clie
             AuditRecord.record_id == uuid.UUID(q["id"]))))
         assert "quote.line.configured" in kinds
 
+    # Changed again, and again (Nischay's test guide, 15 Oct: "it is updating only once"):
+    # the draft follows every change, and back to the first one too.
+    seen = {got["variant_code"]: got["unit_cost"]}
+    for values, code in ((dict(flange, material="F304"), "FL-150-300-F304-RF"),
+                         (dict(flange, material="F304", **{"class": "600"}),
+                          "FL-150-600-F304-RF"),
+                         (flange, "FL-150-300-F316-RF")):
+        r = await client.post(f"{API}/products/configurations", headers=h, json={
+            "family_id": fam["id"], "enquiry_line_id": one["enquiry_line_id"],
+            "values": values})
+        assert r.status_code == 201, r.text
+        got = (await client.get(f"{Q}/{q['id']}", headers=h)).json()["active"]["lines"][0]
+        assert got["variant_code"] == code and got["cost_status"] == "complete", got
+        if code in seen:
+            assert got["unit_cost"] == seen[code]
+        else:
+            assert got["unit_cost"] not in seen.values()
+            seen[code] = got["unit_cost"]
+
     # A sent revision never changes, whatever happens to the enquiry.
     async with tenant_session(tid) as s:
         quote = await s.get(Quote, uuid.UUID(q["id"]))

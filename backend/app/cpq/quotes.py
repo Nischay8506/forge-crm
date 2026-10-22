@@ -157,12 +157,25 @@ async def set_ask(session: AsyncSession, q: Quote, rev: QuoteRevision, ln: Quote
     await session.flush()
 
 
+def drop_typed_price(ln: QuoteLine, why: str) -> str | None:
+    """A price the rep typed was for the line as it was: when its product or unit changes
+    the price is cleared, and the waterfall says so. A % off still means the same off the
+    new price, so it stays. Returns the price cleared, if any."""
+    typed = (ln.ask or {}).get("unit_price")
+    if typed is None:
+        return None
+    ln.ask = {"cleared": {"unit_price": typed, "why": why}}
+    return typed
+
+
 async def change_line(session: AsyncSession, q: Quote, rev: QuoteRevision, ln: QuoteLine,
                       data: dict[str, Any]) -> list[str]:
     must_be_draft(q, rev)
     changed = [k for k in LINE_FIELDS if k in data and getattr(ln, k) != data[k]]
     for k in changed:
         setattr(ln, k, data[k])
+    if moved := [k for k in ("item_code", "unit") if k in changed]:
+        drop_typed_price(ln, " and ".join(f"the {k.replace('_', ' ')} changed" for k in moved))
     if changed:
         # Anything the cost depends on changed: the cost must be worked out again.
         ln.unit_cost = ln.cost_source = ln.cost_status = None
@@ -195,6 +208,7 @@ async def follow_configuration(session: AsyncSession, line: EnquiryLine, cfg: Co
     ln.variant_code, ln.description = cfg.variant_code, _describe(line, cfg)
     ln.unit_cost = ln.cost_source = ln.cost_status = None
     ln.cost_flag = None
+    cleared = drop_typed_price(ln, f"the line was configured as {cfg.variant_code}")
     ln.updated_at = datetime.now(UTC)
     rev.costed_at = None
     await session.flush()
@@ -202,7 +216,8 @@ async def follow_configuration(session: AsyncSession, line: EnquiryLine, cfg: Co
                        record_type="quote", record_id=q.id, account_id=q.account_id,
                        evidence_class="customer_money",
                        data={"number": q.number, "revision": rev.number,
-                             "line": ln.position, "from": before, "to": cfg.variant_code})
+                             "line": ln.position, "from": before, "to": cfg.variant_code,
+                             "ask_cleared": cleared})
     return q, rev
 
 

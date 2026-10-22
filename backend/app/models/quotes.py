@@ -9,7 +9,17 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, SmallInteger, String, func
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -64,6 +74,9 @@ class QuoteRevision(IdMixin, TenantMixin, Base):
     priced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # F3.3: ok, or below_floor when any line or the quote as a whole is under its floor.
     price_status: Mapped[str | None] = mapped_column(String(12))
+    # Y5: prices are exact to the paisa unless a person switches rounding on for this
+    # revision; the step (₹1, ₹5, ₹10) comes from the pricing policy.
+    round_off: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # A sent revision whose costs changed since (a rate, K9 A; a BOM, K11 A).
     reprice_reason: Mapped[str | None] = mapped_column(String(500))
     reprice_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

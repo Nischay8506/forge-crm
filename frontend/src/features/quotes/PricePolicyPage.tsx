@@ -16,7 +16,7 @@ import type { PricePolicyData, PricePolicyDetail } from "./types"
 
 const TIERS = ["standard", "key", "strategic"] as const
 const ROUNDINGS = [
-  { value: "0.01", label: "to the paisa" },
+  { value: "0.01", label: "no rounding (the paisa)" },
   { value: "1", label: "up to the next ₹1" },
   { value: "5", label: "up to the next ₹5" },
   { value: "10", label: "up to the next ₹10" },
@@ -134,7 +134,7 @@ function Editor({ target, d }: { target: string; d: PricePolicyDetail }) {
             <Input value={form.floor_margin_pct} inputMode="decimal" disabled={!mayManage}
               onChange={(e) => setForm({ ...form, floor_margin_pct: e.target.value })} />
           </Field>
-          <Field label="Round the price">
+          <Field label="Round off to" hint='Used only on quotes where someone ticks "Round off prices"'>
             <select className="h-9 w-full rounded-md border border-line bg-surface-0 px-2 text-[13px]" value={form.rounding}
               disabled={!mayManage} onChange={(e) => setForm({ ...form, rounding: e.target.value })}>
               {ROUNDINGS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}

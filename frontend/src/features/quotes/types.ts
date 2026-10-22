@@ -108,10 +108,18 @@ export interface QuoteLineView {
   unit_price: string | null
   amount: string | null
   margin_pct: string | null
-  ask: { discount_pct?: string; unit_price?: string } | null
+  ask: LineAsk | null
   price?: PriceWaterfall | null
   /** The Decisions card a person with prices.approve decides (C2 A). */
   price_review?: { id: string; status: string; decided_by: string | null; note: string | null } | null
+}
+
+/** The rep's ask on a line; a typed price is cleared (and kept here) when the product
+ *  or unit changes. */
+export interface LineAsk {
+  discount_pct?: string
+  unit_price?: string
+  cleared?: { unit_price: string; why: string }
 }
 
 export interface QuoteDetail extends QuoteRow {
@@ -127,6 +135,7 @@ export interface QuoteDetail extends QuoteRow {
     sent_at: string | null
     priced_at: string | null
     price_status: "ok" | "below_floor" | null
+    round_off: boolean
     totals: QuoteTotals
     reprice_reason: string | null
     reprice_at: string | null

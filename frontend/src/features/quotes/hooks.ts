@@ -15,6 +15,9 @@ export function useQuote(id: string | undefined) {
     queryKey: ["quote", id],
     queryFn: async () => (await api.get<QuoteDetail>(`/quotes/${id}`)).data,
     enabled: !!id,
+    // The enquiry it came from is often open in another tab: configuring a line there
+    // changes this quote, so it reloads when its tab is shown again.
+    refetchOnWindowFocus: true,
   })
 }
 

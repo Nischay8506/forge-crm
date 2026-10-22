@@ -8,7 +8,8 @@ A line's list price comes from the first of these that covers it:
   none        nothing could price it; the line goes to a person
 
 Then the adjustments, in this order: the account's tier discount, the quantity break the
-line reaches, and the rep's own ask. The price is rounded up as the policy says, and the
+line reaches, and the rep's own ask. A customer's own ERP price is already negotiated, so
+only the rep's ask comes off it (Y6). The price is rounded up as the policy says, and the
 margin is worked out against the line's cost and checked against the family's floor,
 whichever way the price was found. A line whose cost is not known cannot pass the floor
 on its own: it goes for approval, as does a line below its floor and a line nothing could
@@ -64,6 +65,7 @@ CENT = Decimal("0.01")
 QTY_PLACES = Decimal("0.0001")
 # Every price is a round number of paisa; a company can ask for rounder ones.
 ROUNDINGS = ("0.01", "1", "5", "10")
+PAISA = "0.01"
 MAX_BREAKS = 20
 MAX_PRICE = Decimal("1e12")
 # A cost Forge trusts to price from: worked out in full, or accepted by a person (K10 A).
@@ -76,7 +78,7 @@ SAMPLE_POLICY = {
     "tier_discounts": {"standard": "0", "key": "2", "strategic": "5"},
     "qty_breaks": [{"from_qty": "50", "discount_pct": "2"},
                    {"from_qty": "200", "discount_pct": "4"}],
-    "rounding": "1",
+    "rounding": "1",  # the step when a quote has "Round off" ticked (Y5)
 }
 
 
@@ -274,6 +276,7 @@ class Book:
     prices: dict[str, list[ErpPrice]] = field(default_factory=dict)  # item code (upper) -> rows
     customer_ids: set[str] = field(default_factory=set)
     connections: dict[uuid.UUID, dict[str, Any]] = field(default_factory=dict)
+    round_off: bool = False  # the revision's own switch (Y5); the step is the policy's
 
     @classmethod
     async def load(cls, session: AsyncSession, q: Quote, lines: list[QuoteLine],
@@ -360,8 +363,15 @@ def _latest(rows: list[ErpPrice]) -> ErpPrice:
 
 def _round(value: Decimal, rounding: str) -> Decimal:
     """Rounding only ever goes up, so it can never push a line under its floor."""
-    step = Decimal(rounding if rounding in ROUNDINGS else "0.01")
+    step = Decimal(rounding if rounding in ROUNDINGS else PAISA)
     return (value / step).quantize(Decimal(1), ROUND_CEILING) * step
+
+
+def _off(price: Decimal, pct_off: Decimal) -> tuple[Decimal, Decimal]:
+    """A discount off a price kept to the paisa: the new price rounded up, and the cut as
+    the difference, so every step of the waterfall adds up to the paisa it shows."""
+    new = _round(price * (100 - pct_off) / 100, PAISA)
+    return new, price - new
 
 
 def _margin(price: Decimal, cost: Decimal) -> Decimal:
@@ -388,7 +398,7 @@ def price_line(book: Book, ln: QuoteLine) -> dict[str, Any]:
                             f"in {ln.unit or 'no unit'}: {e}")
             rate = None
         if rate is not None:
-            source, price = found.source, rate
+            source, price = found.source, _round(rate, PAISA)
             where = ("a price for this customer" if found.source == "contract"
                      else f"the price list {found.price_list}")
             until = (f", valid until {found.valid_upto.isoformat()}"
@@ -401,7 +411,7 @@ def price_line(book: Book, ln: QuoteLine) -> dict[str, Any]:
     if price is None:
         if unit_cost is not None and policy is not None and policy.target_margin_pct < 100:
             source = "cost_plus"
-            price = unit_cost / (1 - policy.target_margin_pct / 100)
+            price = _round(unit_cost / (1 - policy.target_margin_pct / 100), PAISA)
             steps.append({"kind": "list",
                           "label": f"{rs(unit_cost)} cost at the "
                                    f"{pct(policy.target_margin_pct)}% target margin"
@@ -418,37 +428,45 @@ def price_line(book: Book, ln: QuoteLine) -> dict[str, Any]:
                   "(Quotes → Pricing policy).")
 
     list_price = price
-    if price is not None and policy is not None:
+    if price is not None and source == "contract" and policy is not None \
+            and (policy.tier_discount(book.tier) or policy.qty_break(ln.qty)):
+        # The customer's own price is already negotiated: no tier or quantity discount on
+        # top of it (Y6). The rep's ask still applies.
+        notes.append("This customer's own price is used as it is: the tier discount and "
+                     "quantity breaks are not taken off it.")
+    if price is not None and policy is not None and source != "contract":
         tier_pct = policy.tier_discount(book.tier)
         if tier_pct:
-            cut = price * tier_pct / 100
-            price -= cut
+            price, cut = _off(price, tier_pct)
             steps.append({"kind": "discount", "pct": pct(tier_pct),
                           "label": f"{book.tier or 'standard'} customer discount "
                                    f"{pct(tier_pct)}%",
                           "amount": money(-cut), "price": money(price)})
         band = policy.qty_break(ln.qty)
         if band is not None and band[1]:
-            cut = price * band[1] / 100
-            price -= cut
+            price, cut = _off(price, band[1])
             steps.append({"kind": "discount", "pct": pct(band[1]),
                           "label": f"Quantity break from {format(band[0].normalize(), 'f')}"
                                    f" {ln.unit or ''}".rstrip() + f": {pct(band[1])}%",
                           "amount": money(-cut), "price": money(price)})
     ask = ln.ask or {}
+    if (gone := ask.get("cleared")) and gone.get("unit_price"):
+        notes.append(f"The rep's price of {rs(_dec(gone['unit_price']))} was cleared because "
+                     f"{gone.get('why') or 'the line changed'}; ask again if it still stands.")
     if price is not None and ask:
         if (want := _dec(ask.get("unit_price"))) is not None:
+            want = _round(want, PAISA)
             steps.append({"kind": "ask", "label": f"The rep's price: {rs(want)}",
                           "amount": money(want - price), "price": money(want)})
             price = want
         elif (cut_pct := _dec(ask.get("discount_pct"))) is not None:
-            cut = price * cut_pct / 100
-            price -= cut
+            price, cut = _off(price, cut_pct)
             steps.append({"kind": "ask", "pct": pct(cut_pct),
                           "label": f"The rep asked for {pct(cut_pct)}% off",
                           "amount": money(-cut), "price": money(price)})
     if price is not None:
-        rounding = policy.rounding if policy else "0.01"
+        # Exact to the paisa unless a person switched rounding on for this quote (Y5).
+        rounding = policy.rounding if (policy and book.round_off) else "0.01"
         rounded = _round(price, rounding)
         if rounded != price and rounding != "0.01":  # to the paisa is not worth a line
             steps.append({"kind": "rounding",
@@ -487,7 +505,7 @@ def price_line(book: Book, ln: QuoteLine) -> dict[str, Any]:
         "qty": None if qty is None else format(qty.normalize(), "f"), "unit": ln.unit,
         "amount": money(price * qty) if (price is not None and qty is not None) else None,
         "unit_cost": money(unit_cost), "margin_pct": pct(margin),
-        "floor_margin_pct": pct(floor_pct), "tier": book.tier,
+        "floor_margin_pct": pct(floor_pct), "tier": book.tier, "round_off": book.round_off,
         "policy": policy.out() if policy else None,
         "at": book.day.isoformat(), "steps": steps, "notes": notes, "problems": problems,
     }
@@ -547,6 +565,21 @@ def totals(lines: list[QuoteLine]) -> dict[str, Any]:
             "status": status, "lines_left_out": left_out}
 
 
+def approved(ln: QuoteLine) -> bool:
+    """A person approved the price this line has now (the card's key is the line's)."""
+    p = ln.price or {}
+    key = (p.get("approval") or {}).get("key")
+    return bool(key) and key == p.get("review_key")
+
+
+def revision_status(lines: list[QuoteLine]) -> str:
+    """below_floor while any line waits for a price approval or the whole quote is under
+    the floor its lines weigh out to; ok otherwise. Worked out after pricing and after
+    every price card decided, so the two can never disagree."""
+    waiting = any(ln.price_status in NEEDS_APPROVAL and not approved(ln) for ln in lines)
+    return "below_floor" if waiting or totals(lines)["status"] == "below_floor" else "ok"
+
+
 async def price_revision(session: AsyncSession, q: Quote, rev: QuoteRevision, actor: str,
                          why: str = "priced") -> dict[str, Any]:
     """Price every line of a draft revision and keep each waterfall on its line. A line
@@ -558,6 +591,7 @@ async def price_revision(session: AsyncSession, q: Quote, rev: QuoteRevision, ac
     quotes.must_be_draft(q, rev)
     lines = await quotes.lines_of(session, rev)
     book = await Book.load(session, q, lines, await quotes.today(session, q.tenant_id))
+    book.round_off = rev.round_off
     approve: list[QuoteLine] = []
     summary: list[dict[str, Any]] = []
     line_seals: dict[str, str] = {}
@@ -592,17 +626,15 @@ async def price_revision(session: AsyncSession, q: Quote, rev: QuoteRevision, ac
                         "floor_margin_pct": out["floor_margin_pct"]})
         line_seals[str(ln.position)] = out["seal"]
     whole = totals(lines)
-    waiting = any(x["status"] in NEEDS_APPROVAL and not x["approved"] for x in summary)
     rev.priced_at = datetime.now(UTC)
-    rev.price_status = "below_floor" if (
-        waiting or whole["status"] == "below_floor") else "ok"
+    rev.price_status = revision_status(lines)
     await session.flush()
     await chain.append(session, q.tenant_id, "quote.priced", actor=actor,
                        record_type="quote", record_id=q.id, account_id=q.account_id,
                        evidence_class="customer_money",
                        data={"number": q.number, "revision": rev.number, "why": why,
                              "at": book.day.isoformat(), "tier": book.tier,
-                             "lines": summary, "totals": whole,
+                             "round_off": book.round_off, "lines": summary, "totals": whole,
                              # Self-contained and in the chain's plain skeleton, so the
                              # seals stay readable once the rest is trimmed (R5).
                              "price_seals": {"revision": rev.number, "lines": line_seals}})

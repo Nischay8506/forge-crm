@@ -123,6 +123,11 @@ async def _run(session: AsyncSession, ctx: AgentContext, a: ApproveArgs) -> dict
                              / Decimal(a.unit_price) * 100).quantize(Decimal("0.001"))
     ln.updated_at = datetime.now(UTC)
     await session.flush()
+    # The quote's own status follows the decision (a countered price can clear the floor).
+    from app.cpq import pricing, quotes
+
+    rev.price_status = pricing.revision_status(await quotes.lines_of(session, rev))
+    await session.flush()
     return {"quote_id": str(a.quote_id), "line_id": str(a.line_id),
             "unit_price": a.unit_price or a.priced}
 

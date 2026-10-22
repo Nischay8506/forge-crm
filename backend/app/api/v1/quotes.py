@@ -56,6 +56,7 @@ class RevisionIn(BaseModel):
     valid_until: date | None = None
     delivery_terms: str | None = Field(default=None, max_length=20)
     destination: dict[str, Any] | None = None
+    round_off: bool | None = None  # Y5: round prices up to the policy's step
 
 
 class LineIn(BaseModel):
@@ -171,6 +172,7 @@ async def _detail(db: AsyncSession, q: Quote, current: CurrentUser) -> dict[str,
                        "delivery_terms": rev.delivery_terms, "destination": rev.destination,
                        "costed_at": rev.costed_at, "sent_at": rev.sent_at,
                        "priced_at": rev.priced_at, "price_status": rev.price_status,
+                       "round_off": rev.round_off,
                        "totals": pricing.totals(lines),
                        "reprice_reason": rev.reprice_reason, "reprice_at": rev.reprice_at,
                        "lines": [line(ln) for ln in lines]},
@@ -209,6 +211,11 @@ async def edit_revision(quote_id: uuid.UUID, body: RevisionIn,
                            if d.get(k)} or None
         rev.costed_at = None
     await db.flush()
+    if data.get("round_off") is not None and data["round_off"] != rev.round_off:
+        rev.round_off = data["round_off"]
+        await pricing.price_revision(
+            db, q, rev, _actor(current),
+            why="rounding switched on" if rev.round_off else "rounding switched off")
     return await _detail(db, q, current)
 
 
