@@ -1,13 +1,13 @@
 """Allow a local classifier and a separate review-mail outcome.
 
-Revision ID: 0016
-Revises: 0015
+Revision ID: 0019
+Revises: 0018
 """
 
 from alembic import op
 
-revision = "0016"
-down_revision = "0015"
+revision = "0019"
+down_revision = "0018"
 branch_labels = None
 depends_on = None
 
