@@ -10,6 +10,7 @@ who approves. The setup sample names roles in words instead, and the screen turn
 name into one of this company's role ids.
 """
 
+import uuid
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -20,14 +21,15 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import CurrentUser, require_permission
-from app.core.errors import ValidationFailed
-from app.cpq import doa, quotes
+from app.core.errors import NotFound, ValidationFailed
+from app.cpq import doa, doa_agent, quotes
 from app.db import get_db
-from app.models import Role, UserRole
+from app.models import Quote, Role, UserRole
 
 router = APIRouter(prefix="/doa", tags=["approvals"])
 
 VIEW = require_permission("quotes.read")
+WORK = require_permission("quotes.work")
 MANAGE = require_permission("approvals.manage")
 
 
@@ -161,3 +163,83 @@ async def try_matrix(body: TryIn, current: CurrentUser = Depends(VIEW),
     for s in out["stages"]:
         s["role_name"] = roles.get(s["role"], {}).get("name", "a role that no longer exists")
     return {"at": day, "needed": chain.needed, "below_floor": f.below_floor, **out}
+
+
+# One quote's discount ----------------------------------------------------------------------
+
+class AskIn(BaseModel):
+    """What the rep says, in their own words (Z7 A). Both are shown to the approver as the
+    rep's claim: Forge does not check either of them."""
+
+    why: str | None = Field(default=None, max_length=1000)
+    competitor: str | None = Field(default=None, max_length=300)
+    revision: int | None = None
+
+
+async def _quote(db: AsyncSession, quote_id: uuid.UUID) -> Quote:
+    q = await db.get(Quote, quote_id)
+    if q is None:
+        raise NotFound("Quote not found")
+    return q
+
+
+async def _state(db: AsyncSession, q: Quote, revision: int | None,
+                 roles: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    rev = await quotes.revision(db, q, revision)
+    got = await doa_agent.look(db, q, rev)
+    chain = got["chain"].out()
+    for s in chain["stages"]:
+        r = roles.get(s["role"])
+        s["role_name"] = r["name"] if r else "a role that no longer exists"
+        s["people"] = r["people"] if r else 0
+    card = got["card"]
+    return {
+        "quote_id": str(q.id), "number": q.number, "revision": rev.number,
+        "at": got["at"], "fingerprint": got["fingerprint"],
+        "matrix_id": got["matrix_id"], "below_floor": got["below_floor"],
+        "needed": got["chain"].needed or bool(got["chain"].problems),
+        "settled": got["settled"], **got["facts"], **chain,
+        "no_matrix": any(p.startswith(doa.NO_MATRIX) for p in chain["problems"]),
+        "recommendation": doa_agent.recommendation(got),
+        "card": None if card is None else {
+            "id": str(card.id), "status": card.status,
+            "step": card.step_index + 1, "of": len(card.steps),
+            "requested_by": card.requested_by, "created_at": card.created_at,
+            "decided_by": card.decided_by, "decided_at": card.decided_at,
+            "note": card.note, "why": card.args.get("why"),
+            "competitor": card.args.get("competitor"),
+            "allowed_pct": card.args.get("discount_pct_allowed"),
+            # A card raised against numbers the quote no longer has is not its approval.
+            "stale": card.args.get("fingerprint") != got["fingerprint"],
+        },
+    }
+
+
+@router.get("/quote/{quote_id}")
+async def quote_discount(quote_id: uuid.UUID, revision: int | None = Query(None),
+                         current: CurrentUser = Depends(VIEW),
+                         db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """This quote's discount, and what the rulebook asks for before it can go out.
+
+    Nothing is raised or changed by looking: the rep can see who will have to sign a
+    discount off before they ask anyone.
+    """
+    return await _state(db, await _quote(db, quote_id), revision, await _roles(db))
+
+
+@router.post("/quote/{quote_id}/approval")
+async def ask_discount_approval(quote_id: uuid.UUID, body: AskIn,
+                                current: CurrentUser = Depends(WORK),
+                                db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """Send this quote's discount for approval (Z5 A: one card for the quote).
+
+    Asking twice for the same quote does not raise a second card; asking again after the
+    quote changed supersedes the old card, because an approver should never be deciding
+    about numbers the quote has moved on from.
+    """
+    q = await _quote(db, quote_id)
+    rev = await quotes.revision(db, q, body.revision)
+    quotes.must_be_draft(q, rev)
+    await doa_agent.ask_approval(db, q, rev, _actor(current),
+                                 why=body.why, competitor=body.competitor)
+    return await _state(db, q, rev.number, await _roles(db))

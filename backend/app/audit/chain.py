@@ -59,6 +59,9 @@ SKELETON_KEYS = frozenset({
     "cost_seals",
     # F3.3: the same for each line's price, the number the customer is given.
     "price_seals",
+    # F3.4: what a discount approval actually allowed, so a discount given years ago can
+    # still be found and explained (Z10 A). The rep's own words stay in the evidence.
+    "discount_approval",
     # Step 5 (F12.3): a decision's place in its chain, timing and card fingerprint.
     "approval_steps", "sla_hours", "recommended", "counter_of", "step", "steps",
     "on_behalf_of", "card_hash", "decision_ms", "fields", "option",

@@ -64,6 +64,8 @@ PERMISSIONS: dict[str, str] = {
     "prices.manage": "Set each family's target margin, floor, tier discounts and quantity "
                      "breaks",
     "prices.approve": "Approve a quote line priced below its floor",
+    "discounts.approve": "Sign off a quote's discount, where the delegation of "
+                         "authority names your role",
     "approvals.manage": "Set who has to approve a discount, and in what order "
                         "(the delegation of authority)",
 }

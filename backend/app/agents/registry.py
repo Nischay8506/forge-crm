@@ -11,8 +11,10 @@ the Agents screens), never these definitions.
 """
 
 import importlib
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel
@@ -44,6 +46,8 @@ class Fact:
 FACTS: dict[str, Fact] = {f.key: f for f in (
     Fact("amount", "Amount (INR)", "money"),
     Fact("discount_pct", "Discount %", "number"),
+    Fact("margin_pct", "Margin %", "number"),
+    Fact("floor_margin_pct", "Floor margin %", "number"),
     Fact("account_tier", "Account tier", "choice", ACCOUNT_TIERS),
     Fact("match_score", "Match score (0-100)", "number"),
     Fact("linked_records", "Linked records moved", "number"),
@@ -101,6 +105,12 @@ class ToolDef:
     # A rule no one can approve past, given the facts: the reason it is blocked, or
     # None. E.g. a message about an enquiry that promises a price (decision N7 A).
     block_when: Callable[[dict[str, Any]], str | None] | None = None
+    # Who approves this tool's cards, when that comes from a company's own rulebook
+    # rather than from its policy rules: the roles in order, and the deadline. Given the
+    # facts, so a countered action is chained by its own numbers (F3.4, Z3 A). The
+    # discount matrix is the one rulebook like this today (app/cpq/doa.py).
+    chain_for: Callable[[dict[str, Any]],
+                        tuple[list[uuid.UUID], Decimal | None]] | None = None
 
 
 @dataclass(frozen=True)
@@ -154,7 +164,8 @@ def register_agent(agent: AgentDef) -> AgentDef:
 # Modules that register agents and tools when imported. Add new agents here.
 DEFINITION_MODULES = ("app.steward.agent", "app.agents.sandbox", "app.integrations.agent",
                       "app.integrations.mcp_tools", "app.privacy.agent", "app.language.agent",
-                      "app.enquiries.agent", "app.cpq.agent", "app.cpq.price_agent")
+                      "app.enquiries.agent", "app.cpq.agent",
+                      "app.cpq.doa_agent", "app.cpq.price_agent")
 
 
 def load_definitions() -> None:

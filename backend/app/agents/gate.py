@@ -105,8 +105,18 @@ async def evaluate(session: AsyncSession, ctx: AgentContext, tool: ToolDef,
         g.check("policy", False, "; ".join(ask_rules))
         g.outcome, g.reasons = "ask_person", list(ask_rules)
         g.approval_steps = policy.chain_for(rules)
-        g.approver_role_id = g.approval_steps[0] if g.approval_steps else None
         g.sla_hours = policy.sla_for(rules)
+        # A tool whose approvers are a company's own rulebook says so itself (F3.4): the
+        # discount matrix, not a policy rule, decides who signs a discount off. It is
+        # read from the facts, so a countered discount is chained by its own numbers and
+        # cannot slip through on the chain the first ask happened to need.
+        if tool.chain_for is not None:
+            steps, sla = tool.chain_for(facts)
+            if steps:
+                g.approval_steps = steps
+            if sla is not None:
+                g.sla_hours = sla
+        g.approver_role_id = g.approval_steps[0] if g.approval_steps else None
     else:
         g.check("policy", True, "; ".join(sentences) if sentences else "No rule applies")
 

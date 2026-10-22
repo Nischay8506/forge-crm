@@ -10,6 +10,7 @@ import { Empty, ErrorText, Loading } from "@/components/ui/States"
 import { Tag } from "@/components/ui/Tag"
 import { formatDate, formatDateTime } from "@/lib/utils"
 import { CostView } from "./CostView"
+import { DiscountApproval } from "./DiscountApproval"
 import { PriceView } from "./PriceView"
 import { useQuote } from "./hooks"
 import { COST_STATUS, PRICE_STATUS, SOURCE_LABELS, STATUS_TONE, approvalText, askText, percent, placeText, reviewText, revisionText, rupees } from "./labels"
@@ -116,6 +117,8 @@ function Detail({ q }: { q: QuoteDetail }) {
           {rev.reprice_at && <p className="text-[12px]">Noticed {formatDateTime(rev.reprice_at)}. A new revision is made in F3.7; until then, look at the costs below.</p>}
         </div>
       )}
+
+      <DiscountApproval quoteId={q.id} revision={rev.number} />
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">

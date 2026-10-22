@@ -37,6 +37,7 @@ from app.agents.registry import (
     register_tool,
 )
 from app.core.errors import AppError
+from app.cpq import doa_agent
 from app.models import Decision, Quote, QuoteLine, QuoteRevision
 
 AGENT_KEY = "quote"
@@ -145,7 +146,7 @@ register_agent(AgentDef(
             "tier discount, the quantity break and the rep's ask on top. It checks every "
             "line and the whole quote against the floor, and a line that cannot stand on "
             "its own always goes to a person who approves prices.",
-    tools=(APPROVE_TOOL,),
+    tools=(APPROVE_TOOL, doa_agent.DISCOUNT_TOOL),
     default_level=L2, max_level=L2,
     triggers=("a quote is priced", "a cost or a pricing policy changes"),
     model_tier=None,

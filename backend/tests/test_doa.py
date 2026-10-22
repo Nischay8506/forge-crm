@@ -19,7 +19,8 @@ from app.core.errors import ValidationFailed
 from app.cpq import doa
 from app.db import get_sessionmaker, tenant_session
 from app.models import AuditRecord, Tenant
-from tests.test_agents import API, _user_with_role, ctx  # noqa: F401
+from tests.conftest import login
+from tests.test_agents import API, _user_with_role, ctx, decide  # noqa: F401
 
 
 def facts(discount="0", value="100000", margin=None, floor=None) -> doa.Facts:
@@ -374,3 +375,253 @@ async def test_setting_the_matrix_needs_its_own_permission(client, ctx):  # noqa
                       "approvers": [await _role(client, ctx, "Sales Manager")]}]}
     assert (await client.put(f"{D}/matrix", headers=viewer, json=body)).status_code == 403
     assert (await client.get(f"{D}/matrix", headers=viewer)).status_code == 200
+
+
+# One quote's discount, and the card it raises (Z5 A, Z7 A) ---------------------------------
+
+TARGET, FLOOR = "30", "10"
+
+
+async def _matrix(client, ctx, *rows: dict, at: str | None = None) -> dict:  # noqa: F811
+    r = await client.put(f"{API}/doa/matrix", headers=ctx["h"],
+                         json={"rows": list(rows),
+                               "effective_from": at or date.today().isoformat()})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+async def _discounted_quote(client, ctx, ask: str = "20"):  # noqa: F811
+    """A quote the rep has asked `ask` percent off, priced and ready to be approved.
+
+    At a 30% target and a 10% floor, 20% off still clears the floor, so the only reason an
+    approval is needed is the depth of the discount itself.
+    """
+    from tests.test_pricing import Q, _flanges_quote, policy, set_policy
+
+    h = ctx["h"]
+    await set_policy(client, h, policy(target=TARGET, floor=FLOOR))
+    _, q = await _flanges_quote(client, h, [
+        ("Weld neck flange", 40, {"size": "150", "class": "300", "material": "F316",
+                                  "facing": "RF"})])
+    line = q["active"]["lines"][0]
+    r = await client.put(f"{Q}/{q['id']}/lines/{line['id']}/ask", headers=h,
+                         json={"discount_pct": ask})
+    assert r.status_code == 200, r.text
+    return q["id"], r.json()
+
+
+async def _approver(client, ctx, name: str, role_ids: list[str]) -> dict:  # noqa: F811
+    """A person in the roles the matrix names, who may decide a card. The chain is by
+    role (Z2 A), so being in the role is what makes them an approver, not a permission."""
+    email = f"{name.lower().replace(' ', '')}@{ctx['slug']}.example.com"
+    r = await client.post(f"{API}/users", headers=ctx["h"], json={
+        "email": email, "full_name": name, "password": "Passw0rd!x", "role_ids": role_ids})
+    assert r.status_code == 201, r.text
+    return await login(client, ctx["slug"], email, "Passw0rd!x")
+
+
+async def _ask(client, h, quote_id: str, **body) -> dict:
+    r = await client.post(f"{API}/doa/quote/{quote_id}/approval", headers=h, json=body)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+async def test_a_quotes_discount_raises_one_card_with_the_chain_the_matrix_asks_for(
+        client, ctx):  # noqa: F811
+    """Z5 A: one card for the quote, not one per discounted line."""
+    h = ctx["h"]
+    sm = await _role(client, ctx, "Sales Manager")
+    fin = await _role(client, ctx, "Finance")
+    await _matrix(client, ctx,
+                  {"when": {"discount_pct_from": "5"}, "approvers": [sm],
+                   "note": "Any discount worth the name"},
+                  {"when": {"discount_pct_from": "15"}, "approvers": [sm, fin]})
+    quote_id, priced = await _discounted_quote(client, ctx)
+    assert priced["active"]["lines"][0]["price_status"] == "ok"  # the floor is not the issue
+
+    got = await _ask(client, h, quote_id, why="Repeat buyer, 3 orders last year",
+                     competitor="Tata quoted 8% less")
+    assert got["needed"] is True and got["below_floor"] is False
+    assert [s["role_name"] for s in got["stages"]] == ["Sales Manager", "Finance"]
+    assert got["rows"] == [1, 2]
+    assert Decimal(got["discount_pct"]) == Decimal("20")
+    assert got["discounted_line_count"] == 1
+    assert got["card"]["status"] == "pending" and got["card"]["step"] == 1
+    assert got["card"]["of"] == 2 and got["card"]["stale"] is False
+
+    card = (await client.get(f"{API}/decisions/{got['card']['id']}", headers=h)).json()
+    assert card["title"] == f"Approve 20% off {priced['number']} R1"
+    assert card["reasons"][0].startswith("The rulebook asks for this: Any discount")
+    shown = {f["label"]: f["value"] for f in card["facts"]}
+    assert Decimal(shown["Discount %"]) == Decimal("20")
+    assert shown["Amount (INR)"].startswith("₹")
+    assert Decimal(shown["Margin %"]) > Decimal(shown["Floor margin %"])
+    # The rep's words travel with the card, as the rep's words (Z7 A).
+    assert card["args"]["why"] == "Repeat buyer, 3 orders last year"
+    assert card["args"]["competitor"] == "Tata quoted 8% less"
+    assert card["card_hash"]  # fingerprinted, so the card is checked on submit (H7)
+    assert "their own words, not something Forge checked" in card["recommendation"]
+
+
+async def test_the_same_quote_asked_twice_does_not_collect_two_cards(client, ctx):  # noqa: F811
+    h = ctx["h"]
+    sm = await _role(client, ctx, "Sales Manager")
+    await _matrix(client, ctx, {"when": {"discount_pct_from": "5"}, "approvers": [sm]})
+    quote_id, _ = await _discounted_quote(client, ctx)
+    first = await _ask(client, h, quote_id, why="Asked once")
+    again = await _ask(client, h, quote_id, why="Asked twice")
+    assert again["card"]["id"] == first["card"]["id"]
+    assert again["card"]["why"] == "Asked once"  # the card a person may already have read
+
+
+async def test_a_discount_the_rulebook_says_nothing_about_needs_no_approval(
+        client, ctx):  # noqa: F811
+    h = ctx["h"]
+    sm = await _role(client, ctx, "Sales Manager")
+    await _matrix(client, ctx, {"when": {"discount_pct_from": "25"}, "approvers": [sm]})
+    quote_id, _ = await _discounted_quote(client, ctx, ask="20")
+    got = await _ask(client, h, quote_id)
+    assert got["needed"] is False and got["card"] is None and got["stages"] == []
+
+
+async def test_with_no_rulebook_the_discount_still_goes_to_a_person(client, ctx):  # noqa: F811
+    """A company that has written no matrix has not thereby approved every discount."""
+    h = ctx["h"]
+    quote_id, _ = await _discounted_quote(client, ctx)
+    got = await _ask(client, h, quote_id)
+    assert got["needed"] is True and got["no_matrix"] is True
+    assert got["stages"] == [] and got["card"]["status"] == "pending"
+    card = (await client.get(f"{API}/decisions/{got['card']['id']}", headers=h)).json()
+    assert "no delegation of authority has been set" in card["reasons"][0]
+    assert "Quotes → Approval rules" in card["recommendation"]
+
+
+async def test_the_rep_who_asked_can_never_sign_their_own_discount_off(client, ctx):  # noqa: F811
+    """Four eyes: the admin who asked holds discounts.approve and still cannot decide."""
+    h = ctx["h"]
+    sm = await _role(client, ctx, "Sales Manager")
+    await _matrix(client, ctx, {"when": {"discount_pct_from": "5"}, "approvers": [sm]})
+    quote_id, _ = await _discounted_quote(client, ctx)
+    got = await _ask(client, h, quote_id)
+    mine = (await client.get(f"{API}/decisions/{got['card']['id']}", headers=h)).json()
+    assert not mine["can_decide"] and "you asked for it" in str(mine["why_not"])
+
+
+async def test_a_countered_discount_is_chained_by_its_own_numbers(client, ctx):  # noqa: F811
+    """The safety property behind Z3: countering 20% down to 6% must not keep Finance's
+    stage just because the first ask needed it, nor drop a stage 6% still needs."""
+    h = ctx["h"]
+    can = ["quotes.read", "costs.view", "discounts.approve", "decisions.decide"]
+    sm = await _role(client, ctx, "Sales Manager", can)
+    fin = await _role(client, ctx, "Finance", can)
+    await _matrix(client, ctx,
+                  {"when": {"discount_pct_from": "5"}, "approvers": [sm]},
+                  {"when": {"discount_pct_from": "15"}, "approvers": [sm, fin]})
+    quote_id, priced = await _discounted_quote(client, ctx)
+    got = await _ask(client, h, quote_id)
+    assert [s["role_name"] for s in got["stages"]] == ["Sales Manager", "Finance"]
+
+    manager = await _approver(client, ctx, "Sales Manager Person", [sm])
+    finance = await _approver(client, ctx, "Finance Person", [fin])
+
+    # The manager approves their step; Finance is offered the counter and takes it.
+    assert (await decide(client, manager, got["card"]["id"], "approve")).status_code == 200
+    mine = (await client.get(f"{API}/decisions/{got['card']['id']}", headers=finance)).json()
+    assert mine["can_decide"] and mine["step"] == 2
+    assert mine["counter_fields"][0]["key"] == "discount_pct_allowed"
+    r = await decide(client, finance, got["card"]["id"], "counter",
+                     values={"discount_pct_allowed": "6"}, note="6% is as far as we go")
+    assert r.status_code == 200, r.text
+    assert r.json()["counter_result"]["status"] == "waiting", r.text
+
+    # 6% is not 20%: the chain is worked out again from the matrix, so Finance's own stage
+    # falls away and the quote goes back to the Sales Manager, who alone has to see it.
+    new_id = r.json()["counter_result"]["decision_id"]
+    new = (await client.get(f"{API}/decisions/{new_id}", headers=finance)).json()
+    assert new["status"] == "pending"
+    assert [x["role"] for x in new["steps"]] == ["Sales Manager"]
+    assert new["args"]["discount_pct_allowed"] == "6.00"
+    shown = {f["label"]: f["value"] for f in new["facts"]}
+    assert Decimal(shown["Discount %"]) == Decimal("6")
+    # The margin on the card is the margin 6% off would leave, not the one 20% off left.
+    assert Decimal(shown["Margin %"]) > Decimal(priced["active"]["lines"][0]["margin_pct"])
+
+
+async def test_an_approved_discount_writes_what_was_allowed_into_the_audit_chain(
+        client, ctx):  # noqa: F811
+    h, tid = ctx["h"], ctx["tid"]
+    sm = await _role(client, ctx, "Sales Manager", [
+        "quotes.read", "costs.view", "discounts.approve", "decisions.decide"])
+    await _matrix(client, ctx, {"when": {"discount_pct_from": "5"}, "approvers": [sm]})
+    quote_id, _ = await _discounted_quote(client, ctx)
+    got = await _ask(client, h, quote_id, why="Repeat buyer")
+    approver = await _approver(client, ctx, "Discount Approver", [sm])
+    r = await decide(client, approver, got["card"]["id"], "approve", note="Fine at 20%")
+    assert r.status_code == 200, r.text
+
+    async with tenant_session(tid) as s:
+        recs = list(await s.scalars(select(AuditRecord).where(
+            AuditRecord.kind == "quote.discount.approved")))
+        assert len(recs) == 1
+        # The numbers stay in the chain's plain skeleton; the rep's words do not (Z10 A).
+        data = recs[0].data["discount_approval"]
+        assert Decimal(data["discount_pct"]) == Decimal("20")
+        assert data["allowed_pct"] is None and Decimal(data["given_away"]) > 0
+        assert "why" not in recs[0].data
+        assert (await verify(s, tid)).ok
+
+    after = (await client.get(f"{API}/doa/quote/{quote_id}", headers=h)).json()
+    assert after["settled"] is True and after["card"]["status"] == "approved"
+
+
+async def test_a_quote_changed_after_the_card_was_raised_is_asked_again(client, ctx):  # noqa: F811
+    h = ctx["h"]
+    from tests.test_pricing import Q
+
+    sm = await _role(client, ctx, "Sales Manager")
+    await _matrix(client, ctx, {"when": {"discount_pct_from": "5"}, "approvers": [sm]})
+    quote_id, priced = await _discounted_quote(client, ctx)
+    first = await _ask(client, h, quote_id)
+
+    line = priced["active"]["lines"][0]["id"]
+    r = await client.put(f"{Q}/{quote_id}/lines/{line}/ask", headers=h,
+                         json={"discount_pct": "25"})
+    assert r.status_code == 200, r.text
+    stale = (await client.get(f"{API}/doa/quote/{quote_id}", headers=h)).json()
+    assert stale["card"]["id"] == first["card"]["id"] and stale["card"]["stale"] is True
+
+    again = await _ask(client, h, quote_id)
+    assert again["card"]["id"] != first["card"]["id"]
+    assert Decimal(again["discount_pct"]) == Decimal("25")
+    gone = (await client.get(f"{API}/decisions/{first['card']['id']}", headers=h)).json()
+    assert gone["status"] == "superseded"
+
+
+async def test_looking_at_a_quotes_discount_raises_nothing(client, ctx):  # noqa: F811
+    """The rep can see who will have to sign a discount off before asking anyone."""
+    h = ctx["h"]
+    sm = await _role(client, ctx, "Sales Manager")
+    await _matrix(client, ctx, {"when": {"discount_pct_from": "5"}, "approvers": [sm],
+                               "note": "Any discount worth the name"})
+    quote_id, _ = await _discounted_quote(client, ctx)
+    got = (await client.get(f"{API}/doa/quote/{quote_id}", headers=h)).json()
+    assert got["needed"] is True and got["card"] is None
+    assert got["stages"][0]["role_name"] == "Sales Manager"
+    assert got["stages"][0]["because"] == ["Any discount worth the name"]
+    assert got["stages"][0]["people"] == 0  # nobody is in it yet, and it says so
+
+
+async def test_the_quotes_discount_is_the_whole_quotes_not_its_deepest_line():
+    """Z5 A: five lines at 20% off and one at nothing come to the quote's real depth."""
+    from app.cpq import doa_agent
+
+    lines = [doa_agent._AsIf(position=1, description="Deep", qty=Decimal(1), unit="no",
+                             list_price=Decimal(100), unit_price=Decimal(50),
+                             margin_pct=None, price=None, ask=None),
+             doa_agent._AsIf(position=2, description="Full price", qty=Decimal(3),
+                             unit="no", list_price=Decimal(100), unit_price=Decimal(100),
+                             margin_pct=None, price=None, ask=None)]
+    got = doa_agent.quote_facts(lines, {"total": "350.00", "margin_pct": None,
+                                        "floor_margin_pct": None})
+    assert Decimal(got["discount_pct"]) == Decimal("12.5")  # 50 off 400, not 50% off one line
+    assert got["given_away"] == "50.00" and got["discounted_line_count"] == 1

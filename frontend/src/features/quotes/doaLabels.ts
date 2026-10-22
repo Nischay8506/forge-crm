@@ -53,3 +53,43 @@ export function matrixBody(rows: EditRow[]) {
     }))
     .filter((r) => r.approvers.length > 0)
 }
+
+export type Stage = { role: string; role_name: string; people: number; because: string[] }
+
+/** An amount of money, to the paisa, the way the rest of the quote shows it: ₹1,26,071.60.
+ *  rupees() is for the rulebook's round thresholds; this is for what a quote actually
+ *  gives away, where a figure an approver decides on should not be quietly rounded. */
+export function money(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—"
+  const n = Number(value)
+  if (!Number.isFinite(n)) return `₹${value}`
+  return `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+/** The chain in one sentence: who has to sign this off, in order. */
+export function chainLine(stages: Stage[]): string {
+  const names = stages.map((s) => s.role_name)
+  if (names.length === 0) return "Nobody: this quote can go out as it is"
+  if (names.length === 1) return names[0]
+  return `${names.slice(0, -1).join(", then ")}, then ${names[names.length - 1]}`
+}
+
+/** What the discount costs, in the words a rep and an approver both use. */
+export function discountLine(d: {
+  discount_pct: string
+  given_away: string | null
+  amount: string | null
+  discounted_line_count: number
+}): string {
+  const lines = d.discounted_line_count === 1 ? "1 line" : `${d.discounted_line_count} lines`
+  const off = `${plainPct(d.discount_pct)}% off`
+  if (!d.given_away || !d.amount) return `${off} on ${lines}`
+  return `${off} on ${lines}: ${money(d.given_away)} given away on a quote worth ${money(d.amount)}`
+}
+
+/** 20%, not 20.00%, and 7.5% rather than 7.50%: the same reading the card's title gets. */
+export function plainPct(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "0"
+  const n = Number(value)
+  return Number.isFinite(n) ? String(n) : value
+}
