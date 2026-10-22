@@ -4,7 +4,13 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-14
+Last updated: 2026-10-19
+
+Email intake update (2026-10-19): new messages now pass a local three-way classifier
+before LLM extraction. Uncertain classification or unavailable extraction goes to
+**Other mail > Review mail**, replacing the older automatic no-AI enquiry fallback
+described below. Migration 0016 adds the allowed outcome/source values. See
+[EMAIL_CLASSIFICATION.md](EMAIL_CLASSIFICATION.md) for files, benchmarks and operation.
 
 ---
 

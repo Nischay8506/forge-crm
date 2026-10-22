@@ -1,0 +1,36 @@
+{"id": "validation-enquiry-001", "split": "validation", "label": "enquiry", "subject": "Price offer for steel", "body": "We request a quotation for 120 stainless steel bolts delivered to Pune.", "synthetic": true}
+{"id": "validation-enquiry-002", "split": "validation", "label": "enquiry", "subject": "Factory purchase request", "body": "Please quote your rates for twenty pumps with freight and payment terms.", "synthetic": true}
+{"id": "validation-enquiry-003", "split": "validation", "label": "enquiry", "subject": "Procurement of valves", "body": "Send your commercial offer for supply of 50 industrial valves.", "synthetic": true}
+{"id": "validation-enquiry-004", "split": "validation", "label": "enquiry", "subject": "New tender for tubes", "body": "We invite your bid for 300 metres of carbon steel tubing.", "synthetic": true}
+{"id": "validation-enquiry-005", "split": "validation", "label": "enquiry", "subject": "Machining purchase", "body": "Can you manufacture the components in our drawing? Please send a quotation.", "synthetic": true}
+{"id": "validation-enquiry-006", "split": "validation", "label": "enquiry", "subject": "RFQ motors", "body": "Kindly provide pricing and lead time for ten electric motors.", "synthetic": true}
+{"id": "validation-enquiry-007", "split": "validation", "label": "enquiry", "subject": "Buying replacement parts", "body": "We want to buy maintenance kits. Please confirm price and availability.", "synthetic": true}
+{"id": "validation-enquiry-008", "split": "validation", "label": "enquiry", "subject": "Structural steel purchase", "body": "Our plant requires 8 tonnes of beams. Submit your best quotation.", "synthetic": true}
+{"id": "validation-enquiry-009", "split": "validation", "label": "enquiry", "subject": "Purchase of plates", "body": "Please provide a quote for aluminium plates with taxes.", "synthetic": true}
+{"id": "validation-enquiry-010", "split": "validation", "label": "enquiry", "subject": "New order rates", "body": "We plan to procure another batch of rods. Send current unit prices.", "synthetic": true}
+{"id": "validation-enquiry-011", "split": "validation", "label": "enquiry", "subject": "Quote compressor service", "body": "Please quote a paid repair service for our industrial compressor.", "synthetic": true}
+{"id": "validation-enquiry-012", "split": "validation", "label": "enquiry", "subject": "Availability for purchase", "body": "Are bearings in stock? We require 80 pieces and request your price.", "synthetic": true}
+{"id": "validation-other-001", "split": "validation", "label": "other", "subject": "Productivity digest", "body": "Enjoy this week's newsletter on calendar organisation and workspace habits. Unsubscribe below.", "synthetic": true}
+{"id": "validation-other-002", "split": "validation", "label": "other", "subject": "New jobs for you", "body": "Browse software engineering vacancies and submit your resume to recruiters.", "synthetic": true}
+{"id": "validation-other-003", "split": "validation", "label": "other", "subject": "Authentication code", "body": "Your one time sign in verification code is 123456.", "synthetic": true}
+{"id": "validation-other-004", "split": "validation", "label": "other", "subject": "Invoice paid", "body": "Our bank transfer settles your outstanding invoice. Remittance advice follows.", "synthetic": true}
+{"id": "validation-other-005", "split": "validation", "label": "other", "subject": "Shipment tracking", "body": "Please share dispatch status for our already confirmed purchase order.", "synthetic": true}
+{"id": "validation-other-006", "split": "validation", "label": "other", "subject": "Damaged goods complaint", "body": "The material you delivered yesterday is defective. Arrange quality inspection.", "synthetic": true}
+{"id": "validation-other-007", "split": "validation", "label": "other", "subject": "We supply pipes", "body": "Our company sells industrial pipes. Please buy from our catalogue at wholesale rates.", "synthetic": true}
+{"id": "validation-other-008", "split": "validation", "label": "other", "subject": "Calendar reminder", "body": "Your internal planning meeting begins shortly. Join the call.", "synthetic": true}
+{"id": "validation-other-009", "split": "validation", "label": "other", "subject": "Reset account access", "body": "You requested a password reset. Follow this secure link.", "synthetic": true}
+{"id": "validation-other-010", "split": "validation", "label": "other", "subject": "Weekend plans", "body": "Would you like to meet for lunch on Saturday?", "synthetic": true}
+{"id": "validation-other-011", "split": "validation", "label": "other", "subject": "Market newsletter", "body": "Today's steel price commentary and industry news are available. Unsubscribe here.", "synthetic": true}
+{"id": "validation-other-012", "split": "validation", "label": "other", "subject": "Recruitment interview", "body": "Your job application was shortlisted. Confirm your interview time.", "synthetic": true}
+{"id": "validation-review-001", "split": "validation", "label": "review", "subject": "Hi", "body": "Please help.", "synthetic": true}
+{"id": "validation-review-002", "split": "validation", "label": "review", "subject": "Following up again", "body": "Could we discuss the pending matter?", "synthetic": true}
+{"id": "validation-review-003", "split": "validation", "label": "review", "subject": "Document for consideration", "body": "Please look at the attachment and advise us.", "synthetic": true}
+{"id": "validation-review-004", "split": "validation", "label": "review", "subject": "Talk about our project", "body": "We would appreciate a call about the next steps.", "synthetic": true}
+{"id": "validation-review-005", "split": "validation", "label": "review", "subject": "Attention needed", "body": "Kindly check and revert.", "synthetic": true}
+{"id": "validation-review-006", "split": "validation", "label": "review", "subject": "Discussion about equipment", "body": "We want to talk about our options.", "synthetic": true}
+{"id": "validation-review-007", "split": "validation", "label": "review", "subject": "Need clarification", "body": "Please clarify what we discussed previously.", "synthetic": true}
+{"id": "validation-review-008", "split": "validation", "label": "review", "subject": "Brief question", "body": "Can you share some information?", "synthetic": true}
+{"id": "validation-review-009", "split": "validation", "label": "review", "subject": "Regarding material", "body": "Can your team contact us?", "synthetic": true}
+{"id": "validation-review-010", "split": "validation", "label": "review", "subject": "Urgent callback", "body": "Please call our office.", "synthetic": true}
+{"id": "validation-review-011", "split": "validation", "label": "review", "subject": "For discussion", "body": "Sharing this for your review.", "synthetic": true}
+{"id": "validation-review-012", "split": "validation", "label": "review", "subject": "More details", "body": "We have questions and would like to connect.", "synthetic": true}

@@ -1,0 +1,60 @@
+{"id": "test-enquiry-001", "split": "test", "label": "enquiry", "subject": "Price for warehouse expansion", "body": "Our purchase department needs 18 tonnes of structural beams. Please quote your best rates including freight to Nagpur.", "synthetic": true}
+{"id": "test-enquiry-002", "split": "test", "label": "enquiry", "subject": "Offer for brass fittings", "body": "Kindly submit a quotation for 90 brass elbows and 60 reducers for our maintenance project.", "synthetic": true}
+{"id": "test-enquiry-003", "split": "test", "label": "enquiry", "subject": "Supply of steel coils", "body": "We want to buy 12 MT steel coils. Send your commercial offer and payment terms.", "synthetic": true}
+{"id": "test-enquiry-004", "split": "test", "label": "enquiry", "subject": "Pump procurement", "body": "Please confirm availability and unit price for five industrial water pumps.", "synthetic": true}
+{"id": "test-enquiry-005", "split": "test", "label": "enquiry", "subject": "RFQ drawing attached", "body": "Manufacture these machined parts to our drawing and send a commercial quotation for 200 pieces.", "synthetic": true}
+{"id": "test-enquiry-006", "split": "test", "label": "enquiry", "subject": "Material sourcing request", "body": "We are sourcing stainless steel sheets. Please advise your price per kg and minimum order.", "synthetic": true}
+{"id": "test-enquiry-007", "split": "test", "label": "enquiry", "subject": "Bid for equipment supply", "body": "Submit your tender pricing for industrial compressors listed in the BOQ.", "synthetic": true}
+{"id": "test-enquiry-008", "split": "test", "label": "enquiry", "subject": "Quotation request for seals", "body": "We require replacement seals for our factory machines. Send prices for 300 units.", "synthetic": true}
+{"id": "test-enquiry-009", "split": "test", "label": "enquiry", "subject": "Need industrial fasteners", "body": "Please quote bolts and nuts listed in the spreadsheet for our new plant.", "synthetic": true}
+{"id": "test-enquiry-010", "split": "test", "label": "enquiry", "subject": "Valve purchase pricing", "body": "Kindly offer your best rates for Class 600 valves and delivery lead time.", "synthetic": true}
+{"id": "test-enquiry-011", "split": "test", "label": "enquiry", "subject": "Budget offer for fabrication", "body": "We need a budgetary quotation for fabrication of four steel platforms.", "synthetic": true}
+{"id": "test-enquiry-012", "split": "test", "label": "enquiry", "subject": "Stock and rates", "body": "Do you have carbon steel bars available? We want to purchase 2 tonnes and need a quote.", "synthetic": true}
+{"id": "test-enquiry-013", "split": "test", "label": "enquiry", "subject": "New purchase of tubes", "body": "Please send quotation for 75 copper tubes with taxes and freight.", "synthetic": true}
+{"id": "test-enquiry-014", "split": "test", "label": "enquiry", "subject": "Order planning", "body": "We plan to buy hydraulic cylinders. Please submit your unit prices for 45 pieces.", "synthetic": true}
+{"id": "test-enquiry-015", "split": "test", "label": "enquiry", "subject": "Maintenance service offer", "body": "Please quote a paid maintenance service for twelve motors.", "synthetic": true}
+{"id": "test-enquiry-016", "split": "test", "label": "enquiry", "subject": "Buying forgings", "body": "Our factory requires carbon steel forgings. Provide a price quotation for 500 kg.", "synthetic": true}
+{"id": "test-enquiry-017", "split": "test", "label": "enquiry", "subject": "Repeat procurement rates", "body": "Please confirm current rates before we place another purchase order for bearings.", "synthetic": true}
+{"id": "test-enquiry-018", "split": "test", "label": "enquiry", "subject": "Supply tender for pipes", "body": "We request your bid for supply of 40 steel pipes for our project.", "synthetic": true}
+{"id": "test-enquiry-019", "split": "test", "label": "enquiry", "subject": "Price request for gearboxes", "body": "Send your commercial quotation for eight gearboxes and expected lead time.", "synthetic": true}
+{"id": "test-enquiry-020", "split": "test", "label": "enquiry", "subject": "Procurement quote", "body": "Kindly quote industrial motors with delivery and payment terms.", "synthetic": true}
+{"id": "test-other-001", "split": "test", "label": "other", "subject": "Reading digest", "body": "This newsletter contains calendar tips and office productivity articles. Unsubscribe below.", "synthetic": true}
+{"id": "test-other-002", "split": "test", "label": "other", "subject": "Vacancy notification", "body": "New developer jobs match your profile. Upload your resume and apply on our career portal.", "synthetic": true}
+{"id": "test-other-003", "split": "test", "label": "other", "subject": "Sign in code", "body": "Your verification code is 673291. Never share this login code.", "synthetic": true}
+{"id": "test-other-004", "split": "test", "label": "other", "subject": "Past invoice settled", "body": "We have paid the outstanding invoice. Bank remittance advice is enclosed.", "synthetic": true}
+{"id": "test-other-005", "split": "test", "label": "other", "subject": "Track our shipment", "body": "Please update delivery status against existing order PO879.", "synthetic": true}
+{"id": "test-other-006", "split": "test", "label": "other", "subject": "Material quality issue", "body": "The goods supplied last week have cracks. We are raising a complaint for inspection.", "synthetic": true}
+{"id": "test-other-007", "split": "test", "label": "other", "subject": "Introduction from supplier", "body": "We sell industrial motors and pumps. Buy from our wholesale catalogue.", "synthetic": true}
+{"id": "test-other-008", "split": "test", "label": "other", "subject": "Planning meeting alert", "body": "Your internal project meeting starts at ten. Join with the calendar link.", "synthetic": true}
+{"id": "test-other-009", "split": "test", "label": "other", "subject": "Password recovery", "body": "Use this link to reset your account password.", "synthetic": true}
+{"id": "test-other-010", "split": "test", "label": "other", "subject": "Account notification", "body": "Your registration has been completed. Welcome to the platform.", "synthetic": true}
+{"id": "test-other-011", "split": "test", "label": "other", "subject": "Steel market digest", "body": "Read today's market news about steel and pipe prices. Unsubscribe from this newsletter.", "synthetic": true}
+{"id": "test-other-012", "split": "test", "label": "other", "subject": "Hiring invitation", "body": "Our recruiter invites you for a job interview after reviewing your CV.", "synthetic": true}
+{"id": "test-other-013", "split": "test", "label": "other", "subject": "Outstanding invoice reminder", "body": "Please arrange payment for last month's delivered goods.", "synthetic": true}
+{"id": "test-other-014", "split": "test", "label": "other", "subject": "Dispatched parcel", "body": "Your existing purchase order was shipped today. Track the courier here.", "synthetic": true}
+{"id": "test-other-015", "split": "test", "label": "other", "subject": "Public holiday", "body": "Our office is closed tomorrow for the holiday. This is an internal notice.", "synthetic": true}
+{"id": "test-other-016", "split": "test", "label": "other", "subject": "Training course promotion", "body": "Subscribe to our online webinar and receive a promotional discount.", "synthetic": true}
+{"id": "test-other-017", "split": "test", "label": "other", "subject": "Social media alert", "body": "A colleague liked your latest post. View notifications online.", "synthetic": true}
+{"id": "test-other-018", "split": "test", "label": "other", "subject": "Supplier pipe catalogue", "body": "Our company sells pipes, valves and fittings. Please buy from our catalogue.", "synthetic": true}
+{"id": "test-other-019", "split": "test", "label": "other", "subject": "Delivery document request", "body": "Please send the test certificate for material already delivered against our invoice.", "synthetic": true}
+{"id": "test-other-020", "split": "test", "label": "other", "subject": "Statement of account", "body": "Attached is your invoice statement with due dates and overdue balance.", "synthetic": true}
+{"id": "test-review-001", "split": "test", "label": "review", "subject": "Please assist", "body": "We need some advice.", "synthetic": true}
+{"id": "test-review-002", "split": "test", "label": "review", "subject": "Yesterday's discussion", "body": "Can you call about the matter we discussed?", "synthetic": true}
+{"id": "test-review-003", "split": "test", "label": "review", "subject": "For consideration", "body": "Please review the attached document.", "synthetic": true}
+{"id": "test-review-004", "split": "test", "label": "review", "subject": "About a project", "body": "Our team would like to discuss the options.", "synthetic": true}
+{"id": "test-review-005", "split": "test", "label": "review", "subject": "Follow up needed", "body": "Please let us know your thoughts.", "synthetic": true}
+{"id": "test-review-006", "split": "test", "label": "review", "subject": "Contact us", "body": "Could you arrange a call?", "synthetic": true}
+{"id": "test-review-007", "split": "test", "label": "review", "subject": "Question for your team", "body": "Can you clarify the next steps?", "synthetic": true}
+{"id": "test-review-008", "split": "test", "label": "review", "subject": "Material discussion request", "body": "We have questions about the specifications.", "synthetic": true}
+{"id": "test-review-009", "split": "test", "label": "review", "subject": "Urgent attention", "body": "Please get back to us.", "synthetic": true}
+{"id": "test-review-010", "split": "test", "label": "review", "subject": "As discussed yesterday", "body": "Sharing this for reference.", "synthetic": true}
+{"id": "test-review-011", "split": "test", "label": "review", "subject": "Can you advise", "body": "We need your assistance with this matter.", "synthetic": true}
+{"id": "test-review-012", "split": "test", "label": "review", "subject": "Pending discussion", "body": "Waiting for an update from your team.", "synthetic": true}
+{"id": "test-review-013", "split": "test", "label": "review", "subject": "Regarding specifications", "body": "Please clarify before we proceed.", "synthetic": true}
+{"id": "test-review-014", "split": "test", "label": "review", "subject": "Hello team", "body": "Can we speak tomorrow?", "synthetic": true}
+{"id": "test-review-015", "split": "test", "label": "review", "subject": "Please check the file", "body": "Kindly review and revert.", "synthetic": true}
+{"id": "test-review-016", "split": "test", "label": "review", "subject": "Business call", "body": "We would like to connect about our project.", "synthetic": true}
+{"id": "test-review-017", "split": "test", "label": "review", "subject": "Further information", "body": "Could you share details?", "synthetic": true}
+{"id": "test-review-018", "split": "test", "label": "review", "subject": "Your opinion needed", "body": "What do you think about this?", "synthetic": true}
+{"id": "test-review-019", "split": "test", "label": "review", "subject": "Need callback", "body": "Please call our office regarding yesterday's conversation.", "synthetic": true}
+{"id": "test-review-020", "split": "test", "label": "review", "subject": "About equipment", "body": "Can we discuss our requirements?", "synthetic": true}

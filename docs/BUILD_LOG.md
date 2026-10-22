@@ -5,6 +5,24 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-19: M1 local classification before extraction
+
+Added a local TF-IDF/nearest-centroid classifier and explicit supplier-pitch rule.
+Training: 122 synthetic English emails. Development validation: 35/36. Separate
+final synthetic test: 60/60, balanced across enquiry/review/other. These are demo
+results, not evidence of real-customer accuracy above 95%.
+
+New accepted emails use the existing LLM reader with explicit subject/body and
+unknown-company instructions. Uncertain mail, missing AI credentials, empty
+extraction and classifier/extractor disagreement go to a separate review-mail list.
+Existing conversation replies bypass new-mail classification. Added review counts,
+review/dismiss controls using existing actions, and migration 0016 for allowed values.
+No new runtime dependency or tables. Local migration applied.
+
+Details, file map and reproducible evaluation: [EMAIL_CLASSIFICATION.md](EMAIL_CLASSIFICATION.md).
+Next: configure a Gemini or Groq extraction key, restart API/worker, and evaluate
+an anonymised real-mail holdout before trusting autonomous production filtering.
+
 ## 2026-10-14 (Day 7): M3 answers in; F3.1 configurator built; F3.2 cost engine built (freight to come)
 
 **Decisions (Nischay):** C1-C18 at 07:10Z: C1 B (build in the guide's order, one feature at a time:

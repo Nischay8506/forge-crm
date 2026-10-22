@@ -1,0 +1,45 @@
+{
+  "scope": "English synthetic demonstration only; not real-mail accuracy",
+  "split": "test",
+  "training_rows": 122,
+  "held_out_rows": 60,
+  "accuracy": 1.0,
+  "target": ">0.95",
+  "passes": true,
+  "per_class": {
+    "enquiry": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "support": 20
+    },
+    "other": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "support": 20
+    },
+    "review": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "support": 20
+    }
+  },
+  "confusion": {
+    "enquiry": {
+      "enquiry": 20,
+      "other": 0,
+      "review": 0
+    },
+    "other": {
+      "enquiry": 0,
+      "other": 20,
+      "review": 0
+    },
+    "review": {
+      "enquiry": 0,
+      "other": 0,
+      "review": 20
+    }
+  },
+  "failures": [],
+  "training_sha256": "38aa999462794925bd49a3eadd8e136865b491b4ca5f41bc591b75906aa6a483"
+}

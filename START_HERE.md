@@ -98,8 +98,11 @@ outside service:
 - **AI steps** (reading an email enquiry, deciding whether we can make it, translation,
   "Draft it for me") need `GROQ_API_KEY`, `GEMINI_API_KEY` or `ANTHROPIC_API_KEY` in
   `backend\.env`. Without them Forge skips the model and the rules still run: you add
-  enquiry lines by hand, and the buttons that need a model say so. Ask Nischay for keys
-  if your part needs them.
+  enquiry lines by hand, and the buttons that need a model say so. New incoming email
+  is first classified locally; uncertain mail and enquiries needing an unavailable
+  extractor go to **Enquiries > Other mail > Review mail**. For the current email
+  extraction routes, use `GEMINI_API_KEY` or `GROQ_API_KEY`. See
+  [Email classification](docs/EMAIL_CLASSIFICATION.md) for training and setup.
 - **ERPNext** (customers, BOMs, workstations) needs a connection on the Integrations page.
   `infra/erpnext/` has a compose file for a local ERPNext if you need one.
 - **Real email** stays off until an admin switches it on. Everything Forge sends lands in

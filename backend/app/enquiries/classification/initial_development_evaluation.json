@@ -1,0 +1,75 @@
+{
+  "scope": "English synthetic demonstration only; not real-mail accuracy",
+  "training_rows": 108,
+  "held_out_rows": 36,
+  "accuracy": 0.8611111111111112,
+  "target": ">0.95",
+  "passes": false,
+  "per_class": {
+    "enquiry": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "support": 12
+    },
+    "other": {
+      "precision": 1.0,
+      "recall": 0.5833333333333334,
+      "support": 12
+    },
+    "review": {
+      "precision": 0.7058823529411765,
+      "recall": 1.0,
+      "support": 12
+    }
+  },
+  "confusion": {
+    "enquiry": {
+      "enquiry": 12,
+      "other": 0,
+      "review": 0
+    },
+    "other": {
+      "enquiry": 0,
+      "other": 7,
+      "review": 5
+    },
+    "review": {
+      "enquiry": 0,
+      "other": 0,
+      "review": 12
+    }
+  },
+  "failures": [
+    {
+      "id": "test-other-002",
+      "expected": "other",
+      "actual": "review",
+      "score": 0.6165
+    },
+    {
+      "id": "test-other-003",
+      "expected": "other",
+      "actual": "review",
+      "score": 0.5302
+    },
+    {
+      "id": "test-other-007",
+      "expected": "other",
+      "actual": "review",
+      "score": 0.646
+    },
+    {
+      "id": "test-other-010",
+      "expected": "other",
+      "actual": "review",
+      "score": 0.4419
+    },
+    {
+      "id": "test-other-012",
+      "expected": "other",
+      "actual": "review",
+      "score": 0.4279
+    }
+  ],
+  "training_sha256": "566e70519e28449b50219eb926643c4844eba32ad262695fc5c8947e7d52bb52"
+}

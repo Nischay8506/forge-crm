@@ -215,6 +215,8 @@ async def counts(current: CurrentUser = Depends(READ),
         InboundEmail.outcome == "other", InboundEmail.relabelled_at.is_(None))) or 0
     out["failed"] = await db.scalar(select(func.count()).select_from(InboundEmail).where(
         InboundEmail.stage == "failed")) or 0
+    out["mail_review"] = await db.scalar(select(func.count()).select_from(InboundEmail).where(
+        InboundEmail.outcome == "review", InboundEmail.erased_at.is_(None))) or 0
     return out
 
 
@@ -822,6 +824,8 @@ async def other_mail(label: str | None = None, show: str = Query("other"),
     stmt = select(InboundEmail).where(InboundEmail.erased_at.is_(None))
     if show == "other":
         stmt = stmt.where(InboundEmail.outcome == "other")
+    elif show == "review":
+        stmt = stmt.where(InboundEmail.outcome == "review")
     elif show == "automatic":
         stmt = stmt.where(InboundEmail.outcome.in_(("auto", "receipt")))
     elif show == "failed":

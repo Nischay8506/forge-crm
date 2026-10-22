@@ -141,15 +141,19 @@ async def _notices(tid, title_part):
 
 # Reading without the AI -------------------------------------------------------------
 
-async def test_without_an_ai_key_every_email_becomes_an_enquiry_for_a_person_to_check(
+async def test_without_ai_mail_waits_for_review_and_can_be_manually_converted(
         client, ctx):
     h, tid = ctx["h"], ctx["tid"]
     out = await _mail(client, h)
-    assert out["outcome"] == "enquiry" and out["label_source"] == "rules"
+    assert out["outcome"] == "review" and out["enquiry_id"] is None
+    # A person can still explicitly promote and check the rules' extraction.
+    converted = await client.post(f"{E}/mail/{out['email_id']}/convert", headers=h)
+    assert converted.status_code == 200, converted.text
+    out.update(converted.json())
     assert out["ref"].startswith(f"ENQ-{datetime.now(UTC).year}-")
     e = await _enquiry(client, h, out["enquiry_id"])
     assert e["needs_review"] is True
-    assert e["review_reasons"][0] == "Not read by AI: no AI key yet (open question D3)"
+    assert "Not read by AI: no AI key yet (open question D3)" in e["review_reasons"]
     assert [ln["description"] for ln in e["lines"]] == [
         "MS Plate 10mm x 1500 x 6300, IS 2062 E250", "ISMB 200", "ISMC 150"]
     first = e["lines"][0]
@@ -485,19 +489,17 @@ async def test_no_message_about_an_enquiry_may_promise_a_price(client, ctx, ai):
 
 async def test_other_mail_is_kept_converted_and_complaints_are_told(client, ctx, ai):
     h, tid = ctx["h"], ctx["tid"]
-    ai(reading(label="payment", confidence=0.95, could_be_enquiry=False, lines=[]),
-       reading(label="complaint", confidence=0.9, could_be_enquiry=False, lines=[]),
-       reading(label="vendor_mail", confidence=0.6, could_be_enquiry=True, lines=[]))
+    ai(reading(label="vendor_mail", confidence=0.6, could_be_enquiry=True, lines=[]))
     pay = await _mail(client, h, subject="Payment for invoice 4471", body="Paid by NEFT.")
     assert pay["outcome"] == "other" and pay["label"] == "payment"
-    bad = await _mail(client, h, subject="Rusted plates received", body="Half are rusted.")
+    bad = await _mail(client, h, subject="Customer complaint",
+                      body="The supplied plates are damaged and defective. "
+                      "This is a quality complaint.")
     assert bad["outcome"] == "other"
     assert await _notices(tid, "A customer complaint arrived")
-    # Unsure, and it could be an enquiry: it becomes one, for a person to check.
+    # Classifier and extractor disagree: keep mail in a separate review queue.
     maybe = await _mail(client, h, subject="Our products", body="Can you also send rates?")
-    assert maybe["outcome"] == "enquiry"
-    e = await _enquiry(client, h, maybe["enquiry_id"])
-    assert "was not sure (60%)" in e["review_reasons"][0]
+    assert maybe["outcome"] == "review" and maybe["enquiry_id"] is None
     other = (await client.get(f"{E}/mail/other", headers=h)).json()
     assert {o["label"] for o in other} == {"payment", "complaint"}
     # One click makes Other mail an enquiry; a relabel is kept with the original.
@@ -511,12 +513,12 @@ async def test_other_mail_is_kept_converted_and_complaints_are_told(client, ctx,
     assert conv["review_reasons"][0] == "Moved from Other mail by a person"
     assert [m for m in conv["messages"] if m["direction"] == "out"] == []  # a person checks
     # And an enquiry that is not one goes back to Other mail with the person's label.
-    r = await client.post(f"{E}/{e['id']}/not-enquiry", headers=h, json={"label": "spam"})
+    r = await client.post(f"{E}/{conv['id']}/not-enquiry", headers=h, json={"label": "spam"})
     assert r.json()["status"] == "closed"
     assert r.json()["close_reason"] == "Not an enquiry: spam mail"
 
 
-async def test_a_model_that_cannot_be_reached_is_tried_three_times_then_rules_read_it(
+async def test_a_model_that_cannot_be_reached_is_tried_three_times_then_mail_needs_review(
         client, ctx, ai):
     h, tid = ctx["h"], ctx["tid"]
     ai(RuntimeError("timeout"), RuntimeError("timeout"), RuntimeError("timeout"))
@@ -526,10 +528,11 @@ async def test_a_model_that_cannot_be_reached_is_tried_three_times_then_rules_re
     assert await intake.process_due(tid, now) == {}  # waits a minute before trying again
     assert await intake.process_due(tid, now + timedelta(minutes=2)) == {"retry": 1}
     got = await intake.process_due(tid, now + timedelta(minutes=10))
-    assert got == {"enquiry": 1}
+    assert got == {"review": 1}
     async with tenant_session(tid) as s:
-        e = await s.scalar(select(Enquiry))
-        assert e.review_reasons[0] == "Not read by AI: the AI could not be reached after 3 tries"
+        email = await s.get(InboundEmail, uuid.UUID(out["email_id"]))
+        assert email.enquiry_id is None
+        assert email.label_reason == "Not read by AI: the AI could not be reached after 3 tries"
 
 
 async def test_an_answer_that_does_not_fit_is_asked_for_again(client, ctx, ai):
@@ -590,6 +593,10 @@ async def test_excel_and_pdf_attachments_are_read_and_kept_encrypted(client, ctx
     out = await _mail(client, h, subject="Enquiry - see attached BOM",
                       body="Dear team, please see the attached BOM and quote.\nRegards,\nAnil",
                       files=files)
+    assert out["outcome"] == "review"
+    converted = await client.post(f"{E}/mail/{out['email_id']}/convert", headers=h)
+    assert converted.status_code == 200, converted.text
+    out.update(converted.json())
     e = await _enquiry(client, h, out["enquiry_id"])
     by_file = {}
     for ln in e["lines"]:
@@ -683,9 +690,11 @@ async def test_routing_owner_away_product_line_region_and_round_robin(client, ct
     one = await _mail(client, h, sender="olu@owned.example.in", subject="Need plates")
     two = await _mail(client, h, sender="n@newco.example.in", subject="Need beams")
     three = await _mail(client, h, sender="d@deccan.example.in", subject="Gaskets",
-                        body="Please quote 5 nos rubber gaskets.\nRegards,\nD")
+                        body="Please send a price quotation for supply of 5 rubber gaskets.\n"
+                        "Regards,\nD")
     four = await _mail(client, h, sender="x@else.example.in", subject="Gaskets please",
-                       body="Please quote 5 nos rubber gaskets.\nRegards,\nX")
+                       body="Please send a price quotation for supply of 5 rubber gaskets.\n"
+                       "Regards,\nX")
     rules_ = {}
     for o in (one, two, three, four):
         e = await _enquiry(client, h, o["enquiry_id"])
@@ -906,6 +915,10 @@ async def test_a_manual_enquiry_is_routed_and_its_quote_timer_runs(client, ctx):
     out = await _mail(client, h, sender="new.buyer@kaveri.example.in", name="Anand Rao",
                       subject="Need angles", body="Please quote ISA 65x65x6 - 10 MT.\n"
                       "Regards,\nAnand Rao\nKaveri Structurals Pvt Ltd")
+    assert out["outcome"] == "review"
+    converted = await client.post(f"{E}/mail/{out['email_id']}/convert", headers=h)
+    assert converted.status_code == 200, converted.text
+    out.update(converted.json())
     e = await _enquiry(client, h, out["enquiry_id"])
     assert e["contact"] is None
     r = await client.post(f"{E}/{e['id']}/add-customer", headers=h)

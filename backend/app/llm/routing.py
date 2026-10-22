@@ -36,16 +36,17 @@ ROUTES: dict[str, list[Route]] = {
         Route("gemini", "gemini-2.5-flash"),
     ],
     # Reading incoming email (M1, F1.1): labelling and extracting the requirement from
-    # English, Hindi, Telugu and mixed text. Gemini Flash first (it reads Indian
-    # languages well), the larger Groq model as the fallback.
+    # English, Hindi, Telugu and mixed text. Gemini 2.5 Flash rejects new users;
+    # use the verified current Flash route, then Flash-Lite during capacity spikes.
     "extraction": [
-        Route("gemini", "gemini-2.5-flash"),
+        Route("gemini", "gemini-3.8-flash"),
+        Route("gemini", "gemini-3.5-flash-lite"),
         Route("groq", "llama-3.3-70b-versatile"),
     ],
     # Reading pictures: scanned PDFs, photos and drawings attached to enquiries (N10 A).
     # Gemini only; the Groq models do not read images.
     "vision": [
-        Route("gemini", "gemini-2.5-flash"),
+        Route("gemini", "gemini-3.8-flash"),
     ],
     # Speech to text (decision L10 A): Whisper on Groq. Sarvam AI can be added as a
     # provider here if Telugu comes out poorly.
