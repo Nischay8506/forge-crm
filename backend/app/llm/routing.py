@@ -19,34 +19,39 @@ class Route:
 
 
 ROUTES: dict[str, list[Route]] = {
+    # Groq retired Llama 3.1 8B and 3.3 70B for free and developer accounts on 2026-08-16,
+    # and Gemini 2.5 Flash and Pro answer 404 to keys created since. Every chain below ends
+    # in a model checked with a real key on 2026-10-22.
     # Classification, extraction, short replies
     "fast": [
-        Route("groq", "llama-3.1-8b-instant"),
-        Route("gemini", "gemini-2.5-flash"),
+        Route("groq", "openai/gpt-oss-20b"),
+        Route("gemini", "gemini-3.5-flash-lite"),
     ],
     # Planning, drafting, multi-step reasoning
     "reasoning": [
-        Route("gemini", "gemini-2.5-pro"),
-        Route("groq", "llama-3.3-70b-versatile"),
+        Route("groq", "openai/gpt-oss-120b"),
+        Route("gemini", "gemini-3.8-flash"),
+        Route("gemini", "gemini-3.5-flash-lite"),
     ],
     # Customer messages written natively in English and Indian languages (decision L5 A:
     # Gemini writes Indian languages). No Groq fallback: its models write Telugu poorly.
     "writing": [
-        Route("gemini", "gemini-2.5-pro"),
-        Route("gemini", "gemini-2.5-flash"),
+        Route("gemini", "gemini-3.8-flash"),
+        Route("gemini", "gemini-3.5-flash-lite"),
     ],
     # Reading incoming email (M1, F1.1): labelling and extracting the requirement from
-    # English, Hindi, Telugu and mixed text. Gemini 2.5 Flash rejects new users;
-    # use the verified current Flash route, then Flash-Lite during capacity spikes.
+    # English, Hindi, Telugu and mixed text. Flash first, Flash-Lite when Flash is busy
+    # (it answers 503 at peak times on the free tier), then Groq.
     "extraction": [
         Route("gemini", "gemini-3.8-flash"),
         Route("gemini", "gemini-3.5-flash-lite"),
-        Route("groq", "llama-3.3-70b-versatile"),
+        Route("groq", "openai/gpt-oss-120b"),
     ],
     # Reading pictures: scanned PDFs, photos and drawings attached to enquiries (N10 A).
     # Gemini only; the Groq models do not read images.
     "vision": [
         Route("gemini", "gemini-3.8-flash"),
+        Route("gemini", "gemini-3.5-flash-lite"),
     ],
     # Speech to text (decision L10 A): Whisper on Groq. Sarvam AI can be added as a
     # provider here if Telugu comes out poorly.
@@ -61,5 +66,5 @@ ROUTES: dict[str, list[Route]] = {
 }
 
 PRICES_PER_MTOK: dict[str, tuple[float, float]] = {
-    # "groq/llama-3.1-8b-instant": (input_usd, output_usd),
+    # "groq/openai/gpt-oss-20b": (input_usd, output_usd),
 }
