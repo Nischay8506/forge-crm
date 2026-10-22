@@ -90,6 +90,11 @@ returned 200 and extracted synthetic pipe/quantity/company fields correctly; the
 primary also briefly returned a capacity-related 503, motivating the lighter fallback.
 Real customer-document vision extraction has not been verified.
 
+Update 2026-10-22: Groq removed `llama-3.3-70b-versatile` from free and developer
+accounts, so the extraction route's last step is now Groq's `openai/gpt-oss-120b`, and
+vision gained `gemini-3.5-flash-lite` as a fallback. The full list of routes is in
+`backend/app/llm/routing.py` and HANDOVER section 4.
+
 Expected fresh-mail smoke tests:
 
 - Newsletter: **Other mail**, no product extraction call.

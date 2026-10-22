@@ -5,6 +5,94 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-22 (Day 15): one history again, F3.4 finished, stream B merged, AI keys that work
+
+**The fork is closed.** Everything that sat on Nischay's PC or on a branch on 2026-10-21 is on `main`
+now, and his PC follows `main` (below). Migrations run 0016 → 0017 → 0018 → 0019 with one head.
+
+**Decisions (Nischay)**
+- **"commit 0017"** (06:58Z): his migration, byte for byte, committed from the cloud workspace so 0018
+  has a parent on GitHub (`5fb6a28`).
+- **"lets get quote code on to main"**: his 21 Oct quote and pricing code (`bd08a6a`, below).
+- **F3.4's card is asked by hand (A)**: the rep types their reason and presses **Send for approval**;
+  pricing a quote never raises a discount card on its own.
+- **PR #1 merged** by him at 07:12Z: the pre-merge checks and their GitHub Action are on `main`.
+- **"lets integarte my teammates work"**: stream B's `email-agent` branch merged, its migration
+  renumbered 0016 → 0019 (he owns migrations, so the renumber is his to confirm; the check warns).
+  The two wording glitches found in it go **to the teammate** (10:11Z, GitHub issue #3, assigned to
+  S-Manas8).
+- **Vision later** (08:49Z): "it the vision part stay when we going for api key we optmise that time".
+- **Open by itself** (10:23Z): without an AI key, an enquiry the local classifier is sure about opens
+  by itself again, the rules reading its lines and the enquiry marked for checking, as before the merge.
+  M1 is stream B's, so a note for the teammate is drafted and waits for his "send".
+- **D3, for development**: he made free Gemini and Groq keys and put them in `backend\.env` on his PC
+  (10:32Z). Free Gemini prompts may be read by Google, so real customer mail waits for a paid key.
+- **"Change all"**: Forge's model routes moved to models his keys can reach (`8019512`).
+- **Demo pricing by a setup script (A)** (11:52Z), so the Test mailbox samples come out priced.
+
+**Done**
+- **F3.4 finished** (`c3e9a04`): the quote's own discount, measured on the whole quote against its list
+  prices, the chain the matrix in force asks for (shown on the quote before anyone is asked), and one
+  card per quote (Z5 A) with what it gives away, the lines, the floor it breaks, the ERP figures with
+  their last-synced time and the rep's reason and competitor claim marked as the rep's words. The chain
+  reaches Step 5's gate through a new `ToolDef.chain_for`, so a counter is re-chained by its own
+  numbers: countering 20% to 6% can drop Finance's stage. What was allowed is sealed into the audit
+  chain's plain skeleton (Z10 A). No new column: the card *is* the quote's approval state, found by the
+  revision and fingerprinted, so a changed quote is asked again and a stale card says so.
+- **His quote code** (`bd08a6a`): per-quote "Round off prices" reading 0017's column, contract prices
+  left alone (Y6), `pricing.revision_status()` in one place. Two files main had also touched were merged
+  three-way, so his round-off control and F3.4's panel both stand.
+- **Pre-merge checks** (PR #1, `8790afd`): `scripts/premerge_check.py` (ruff, pytest, tsc, vitest,
+  build, the migration-owner rule and the one-head check) and `.github/workflows/premerge.yml` on every
+  push and pull request, against a fresh Postgres, with a read-only token and pinned actions. SonarCloud
+  passes on it.
+- **Stream B merged** (`7718e79`, `2cfbfef`): new mail is classified locally (TF-IDF, no new
+  dependency) before any model call; anything uncertain goes to **Enquiries > Other mail > Review mail**.
+- **AI routes** (`8019512`, only `app/llm/routing.py`): fast gpt-oss-20b then Gemini 3.5 Flash-Lite;
+  reasoning gpt-oss-120b, Gemini 3.8 Flash, Flash-Lite; writing Gemini 3.8 Flash then Flash-Lite (Gemini
+  only, L5); email reading Gemini 3.8 Flash, Flash-Lite, gpt-oss-120b; pictures gained Flash-Lite as a
+  fallback. Speech and embeddings unchanged.
+- **The email classifier tested** (`tests/Email_Classifier_Test_2026-10-22.md` in the Claude project
+  files): across 150 enquiries it never sent one to Other mail; English 84 of 85 recognised; Hindi and
+  Telugu go to Review mail (59 of 65), because it is trained on English only; on 10 fresh non-enquiries
+  5 went to the right place, 4 to Review mail and one "we supply" pitch was read as an enquiry. An
+  unsure complaint sits in Review mail without telling anyone.
+- **His PC is on `main`.** His clone had no remote at all. It now tracks `origin/main` at `8019512`, his
+  old commit is kept on the branch `pc-backup-1021`, and his database is migrated to 0019. From now on
+  `git pull` is the route.
+- **Two helper scripts on his PC**, in `Forge Project\forge-checks\` (copies in `tools/` in the Claude
+  project files), run from `backend`: `check_ai_models.py` asks every route's models a one-line question
+  and prints works or FAILED with the reason, never a key; `demo_pricing.py` adds demo pricing through
+  Forge's own API (a Steel sections and plates family costed per MT with an EOT crane at ₹800 an hour,
+  steel rates, an 8% / 4% steel policy, the Flanges sample and the company sample policy). On a fresh
+  company the English RFQ then comes to ₹31,49,804, the Hindi TMT mail to ₹12,90,522 and the Telugu
+  flanges to ₹10,99,525.
+- **F3.5's questions written**: Q1-Q11 in `plans/Phase2_M3_F3.5_Quote_Document_Questions.md`.
+- Checks on `main`: ruff, 379 backend tests (3 skipped, live ERPNext only), tsc, 55 frontend tests,
+  the build, and the pre-merge check's one head at 0019. Browser-checked at 1280 and 390px.
+
+**Problems**
+- **The merge commit kept the old revision ids.** The rename was staged before the ids were edited, and
+  the edit was never added, so `main` briefly had two migrations claiming 0016. Local checks read the
+  working tree and passed; the new Action read the commit and failed, which is what it is for.
+  `2cfbfef` committed the edit. Lesson: after editing a staged file, add it again, and check with
+  `git show HEAD:<path>`.
+- **Six of eight chat models were gone for a new key.** Groq removed Llama 3.1 8B and 3.3 70B from free
+  and developer accounts on 2026-08-16, and Gemini 2.5 Flash and 2.5 Pro answer 404 to new keys, so
+  translation, "can we make it" and "Draft it for me" had no working model. Gemini 3.8 Flash often
+  answers 503 (busy) on the free tier, which is why every route ends in Flash-Lite.
+- **A discount card can show ₹0.** On his PC the English RFQ's lines had no price (no ERP price, cost
+  model or pricing policy for them), so the quote came to ₹0, and Send for approval still raised
+  "Approve 0% off" because no rulebook is set. The card then says Amount ₹0, and Margin % and Floor
+  margin % show the word "None". Asked how to handle it (section 7); nothing changed yet.
+
+**Not done, next.** Nischay runs `demo_pricing.py` and prices the English RFQ, tries a real enquiry
+email getting its automatic reply, and runs Tests 1-3. Open with him: the ₹0 card, F3.5 Q1-Q11, G1-G7,
+the teammate note, and the smaller questions in [HANDOVER](HANDOVER.md) section 7. Claude builds F3.5
+once Q1-Q11 are answered, and freight once G1-G7 are.
+
+---
+
 ## 2026-10-21 (Day 14, evening): F3.4 discount approvals — the rulebook and its screen
 
 **All of today's F3.4 work is on the branch `f34-doa-matrix`, not on `main`.** The reason is in

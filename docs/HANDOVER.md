@@ -4,13 +4,16 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-21
+Last updated: 2026-10-22
 
 Email intake update (2026-10-19, stream B): new messages now pass a local three-way classifier
 before LLM extraction. Uncertain classification or unavailable extraction goes to
 **Other mail > Review mail**, replacing the older automatic no-AI enquiry fallback
 described below. Migration 0019 adds the allowed outcome/source values. See
-[EMAIL_CLASSIFICATION.md](EMAIL_CLASSIFICATION.md) for files, benchmarks and operation.
+[EMAIL_CLASSIFICATION.md](EMAIL_CLASSIFICATION.md) for files, benchmarks and operation. Merged into
+`main` on 2026-10-22. Nischay then chose **"Open by itself"**: without an AI key, an enquiry the
+classifier is sure about should open by itself again, the rules reading its lines. That is stream B's to
+build; a note for the teammate waits for his "send" (section 7).
 
 ---
 
@@ -26,7 +29,10 @@ described below. Migration 0019 adds the allowed outcome/source values. See
 | Build guide (source of the requirements) | `Forge Project\Forge_CRM_Developer_Build_Guide.docx` |
 | Old prototype (reference only, never edit) | `Forge Project\CRM\CRM`. Review of it: `CRM_Code_Review.md` in the Claude project files |
 | Phase 1 plan: starting point and flow | `Phase1_Starting_Point_and_Flow.md` in the Claude project files (`plans/`) |
-| Each step's questions and the options Nischay picked | `plans/` in the Claude project files: `Step2_…` to `Step6_…`, `Phase2_M1_Enquiry_Questions.md` (N1-N15), `Phase2_M3_CPQ_Questions.md` (C1-C18), `Phase2_M3_F3.2_Cost_Questions.md` (K1-K9), `Phase2_M3_F3.2_Freight_Questions.md` (G1-G7, waiting for answers), `Phase2_M3_F3.2_Cost_Defaults_Questions.md` (J1-J4, the cost engine's defaults, answered 2026-10-15), `Later_List.md` (work deliberately put off, with the condition that would make it worth doing) |
+| Each step's questions and the options Nischay picked | `plans/` in the Claude project files: `Step2_…` to `Step6_…`, `Phase2_M1_Enquiry_Questions.md` (N1-N15), `Phase2_M3_CPQ_Questions.md` (C1-C18), `Phase2_M3_F3.2_Cost_Questions.md` (K1-K9), `Phase2_M3_F3.2_Freight_Questions.md` (G1-G7, waiting for answers), `Phase2_M3_F3.2_Cost_Defaults_Questions.md` (J1-J4, the cost engine's defaults, answered 2026-10-15), `Phase2_M3_F3.3_Price_Questions.md` (Y1-Y8), `Phase2_M3_F3.4_Approval_Questions.md` (Z1-Z10), `Phase2_M3_F3.5_Quote_Document_Questions.md` (Q1-Q11, waiting for answers), `Later_List.md` (work deliberately put off, with the condition that would make it worth doing) |
+
+| Test write-ups | `tests/` in the Claude project files, e.g. `Email_Classifier_Test_2026-10-22.md` (stream B's classifier on 200 + 20 emails) |
+| Helper scripts on Nischay's PC | `Forge Project\forge-checks\` (copies in `tools/` in the Claude project files), run from `backend` with `uv run python ..\..\forge-checks\<script>`: `check_ai_models.py` (does every model route answer with the keys in `backend\.env`; never prints a key) and `demo_pricing.py` (adds the demo pricing data that makes the Test mailbox samples come out priced) |
 
 The old prototype's `backend/.env` holds live keys. Do not copy it; use new keys in `backend/.env`.
 
@@ -51,8 +57,8 @@ Phase 2 (the money path), in order:
 
 | Module | What | Status |
 |---|---|---|
-| M1 | Enquiry & Lead Management (F1.1-F1.10, Design File frame 02) | **Built for email 2026-10-12** to N1-N15 and P1-P3 (section 3): F1.1, F1.4-F1.10. F1.2 (WhatsApp) and F1.3 (web form, marketplaces) are on the later list (N2 A, N14); F1.1's 95% check and scan reading wait for D3 and real samples (section 6) |
-| M3 | CPQ: configure, price, quote (F3.1-F3.9, frame 04) | Answered 2026-10-14 (C1-C18, K1-K9) and 2026-10-15 (J1-J4). Built one feature at a time in the guide's order (C1 B). **F3.1 configurator built 2026-10-14**, waiting for Nischay's try on his PC. **F3.2 cost engine built 2026-10-14** to K2-K13 A (cost models, units, the source order, review cards, rate and BOM changes), finished to J1-J4 on 2026-10-15 and 16 (J3 C, the per-connection overhead checkboxes, the sealed cost snapshot); **freight** (K1 D) waits on G1-G7. **F3.3 price and floor built 2026-10-18** to C2 A (the source order, tier and quantity discounts, the rep's ask, the floor on every line and on the quote, approval cards, pricing policies, sealed prices); its eight open details (Y1-Y8) answered and built 2026-10-21 (rounding per quote, contract prices as they are), that code still uncommitted on his PC. **F3.4 discount approvals** built 2026-10-21 on branch `f34-doa-matrix` (the rulebook, its table and its screen); the card on the quote waits on that same push |
+| M1 | Enquiry & Lead Management (F1.1-F1.10, Design File frame 02) | **Built for email 2026-10-12** to N1-N15 and P1-P3 (section 3): F1.1, F1.4-F1.10. F1.2 (WhatsApp) and F1.3 (web form, marketplaces) are on the later list (N2 A, N14); F1.1's 95% check and scan reading wait for real samples and a paid AI key (section 6). Since 2026-10-22 new mail is classified locally first, with Review mail for anything unsure (stream B, migration 0019) |
+| M3 | CPQ: configure, price, quote (F3.1-F3.9, frame 04) | Answered 2026-10-14 (C1-C18, K1-K9) and 2026-10-15 (J1-J4). Built one feature at a time in the guide's order (C1 B). **F3.1 configurator built 2026-10-14**, waiting for Nischay's try on his PC. **F3.2 cost engine built 2026-10-14** to K2-K13 A (cost models, units, the source order, review cards, rate and BOM changes), finished to J1-J4 on 2026-10-15 and 16 (J3 C, the per-connection overhead checkboxes, the sealed cost snapshot); **freight** (K1 D) waits on G1-G7. **F3.3 price and floor built 2026-10-18** to C2 A (the source order, tier and quantity discounts, the rep's ask, the floor on every line and on the quote, approval cards, pricing policies, sealed prices); its eight open details (Y1-Y8) answered and built 2026-10-21 (rounding per quote, contract prices as they are), on `main` since 2026-10-22. **F3.4 discount approvals built** 2026-10-21 and 22 (the rulebook, its table, its screen and the card on the quote). **F3.5 the quote document** is next; its questions Q1-Q11 wait for answers |
 | M4 | Order, contract & ERP handoff (F4.1-F4.5) | Not started |
 
 Phase 1 is done when: all six F12 "Done When" checks pass, ERPNext syncs customers, items, orders
@@ -198,10 +204,21 @@ recommendation, and record the answer here.
 | `app/partner` | M6 dealers gets its own backend folder, `app/partner`, named by Nischay. The work-split doc had given stream A `app/channel`, one letter from `app/channels`, which is the Step 6 messaging platform and off limits under the platform rule | 2026-10-21 |
 | Z1-Z10 A | F3.4's rulebook. **Z1**: a quote is measured by discount depth, the margin against the family's floor, and the quote's worth; payment and special terms become rows with F3.5. **Z2**: approvers are named by role, in order. **Z3** (his words): several matching rows **combine** — every required stage and its order is kept, and a duplicated role is not asked twice unless a row explicitly says to keep it separate. **Z4**: the matrix is insert-only, a new version from a date. **Z5**: one approval carries the quote's discount; a line keeps its own card only where the price could not be worked out at all. **Z6** (his words): after four working hours the next role up is **told**, and being told is not approving — the original stage stays required unless Step 5's authorised delegation (H3) moves it, and the two-hour median is **measured**, not assumed. **Z7**: the card shows the ask, the lines, the floor broken, what the customer owes with its last-synced time, the rep's reason, and the quote's history; competitor pressure is the rep's own claim. **Z8**: Decisions inbox and email. **Z9**: median measured first card to final decision, working hours only. **Z10**: no new screen — the audit trail answers who, when and why | 2026-10-21 |
 | Nischay writes every migration | Teammates never write one. They push features to a project branch; he pulls them and checks project and database integration before merging. He made one exception, by name ("0018"), for F3.4's matrix table, because its feature could not be built or tested without it | 2026-10-21 |
+| Commit 0017 | "commit 0017": his round-off migration, written on his PC, committed byte for byte from the cloud workspace so 0018 has a parent on GitHub. Then "lets get quote code on to main": his 2026-10-21 quote and pricing code joined it | 2026-10-22 |
+| Discount card by hand (A) | The rep types their reason and presses **Send for approval** on the quote; pricing a quote never raises a discount card on its own | 2026-10-22 |
+| Pre-merge Action merged | He merged PR #1. The Action runs on every push and pull request, but only on branches that contain `.github/workflows/premerge.yml`, so a teammate branch cut from an older `main` gets no checks until it merges `main` in | 2026-10-22 |
+| Stream B merged, 0019 | "lets integarte my teammates work": the `email-agent` branch merged, its migration renumbered 0016 → 0019 so `main` keeps one head. As the migration owner he still has to confirm the renumber (the pre-merge check warns about it) | 2026-10-22 |
+| Glitches to the teammate | The two wording glitches in stream B's screens (the Test mailbox result says "kept in Other mail as Enquiry" for review mail; "1 emails need review") are the teammate's to fix: GitHub issue #3, assigned to S-Manas8 | 2026-10-22 |
+| Open by itself (A) | Without an AI key, an enquiry the local classifier is sure about opens by itself again, the rules reading its lines and the enquiry marked for checking, as it did before stream B's merge; every enquiry waiting in Review mail for a click was the alternative. Stream B's to build | 2026-10-22 |
+| Vision later | "it the vision part stay when we going for api key we optmise that time": no work on the vision route until there is a key and real scans (Later list) | 2026-10-22 |
+| D3 for development | Free Gemini and Groq keys in `backend\.env` on his PC. Free Gemini prompts may be used by Google and read by its reviewers, so real customer mail waits for a paid key | 2026-10-22 |
+| Change all | Every model route moved to models his keys reach (`app/llm/routing.py`, section 4) | 2026-10-22 |
+| Demo pricing: setup script (A) | Demo pricing data comes from a script he runs once on his PC (`demo_pricing.py`), not from a seed command in the repository and not typed by hand | 2026-10-22 |
 
-Still open (section 7): the freight details G1-G7, D3 new LLM keys, D4 daily update time, whether
-the cost seal check gets a button on the quote cost view, and whether `price_policies` and
-`cost_models` should be made insert-only in the database the way `doa_matrices` now is.
+Still open (section 7): what a discount card does with an unpriced quote, F3.5's Q1-Q11, the freight
+details G1-G7, D4 daily update time, whether the cost seal check gets a button on the quote cost view,
+whether the Decisions list refreshes itself, and whether `price_policies` and `cost_models` should be
+made insert-only in the database the way `doa_matrices` now is.
 
 ## 4. How to run it
 
@@ -312,6 +329,15 @@ so real promotional email needs Forge at a public https address first (Settings 
 "Draft it for me" (the Writing Assistant) needs `GEMINI_API_KEY` and dictation needs `GROQ_API_KEY`
 (D3); without them those two buttons say so and everything else works.
 
+**Which model does each job** is `app/llm/routing.py` alone; agent code names a job, never a model.
+Since 2026-10-22 (Nischay's "Change all") every job ends in a model his free keys reach: fast is
+gpt-oss-20b (Groq) then Gemini 3.5 Flash-Lite; reasoning gpt-oss-120b, Gemini 3.8 Flash, Flash-Lite;
+writing Gemini 3.8 Flash then Flash-Lite (Gemini only, L5); email reading Gemini 3.8 Flash, Flash-Lite,
+gpt-oss-120b; pictures Gemini 3.8 Flash then Flash-Lite; speech whisper-large-v3; embeddings
+gemini-embedding-001. A route that fails falls through to the next one. Free models get retired with
+little notice (Groq dropped Llama 3.1 8B and 3.3 70B on 2026-08-16; Gemini 2.5 answers 404 to new
+keys), so when a job stops working run `check_ai_models.py` (section 1) and change only that file.
+
 **Enquiries (Phase 2, M1).** M1 added migrations 0010-0012 and three packages (`pypdf`, `openpyxl`,
 `defusedxml`), so after copying run `uv sync` and `uv run alembic upgrade head` once, then restart the
 API, worker and beat. To try it without a real mailbox, use **Enquiries → Test mailbox**: write an email
@@ -402,9 +428,10 @@ not connected, as it was from the afternoon of 2026-10-16, no copy can be made a
 GitHub catches this folder up.
 **On 2026-10-21 Claude Code worked in that folder directly**, on Nischay's PC: the Y1-Y8 answers, the
 fixes from walking the test guide and its own copy of these two documents, tested there against the
-Docker Postgres. Its documents are merged into this history; the **code is still uncommitted there**, so
-a cloud session must start from that folder's working tree, not from GitHub, and no bundle may be synced
-over it while it holds work nobody has committed.
+Docker Postgres. Its documents were merged into this history that evening and its code on 2026-10-22
+(`5fb6a28`, `bd08a6a`). **That folder had no git remote at all**; on 2026-10-22 it was pointed at GitHub
+and reset to `origin/main` (his old commit is kept on the branch `pc-backup-1021`), so it now follows
+`main` and `git pull` is how it catches up. No bundle needs syncing over it any more.
 If you edit files here yourself, tell Claude before the next session so it starts from your version.
 Since 2026-10-12 the same history also goes to the GitHub repo (section 1): Claude hands the new
 commits over as a git bundle and they are pushed as they are, never with a `.env` file or a key. A
@@ -517,6 +544,10 @@ backend/
       mail/              the sales mailbox: gmail.py (Gmail API), microsoft.py (Graph), imap.py,
                          oauth.py (sign-in, N4 A), service.py (connect, check every minute)
       mime.py            a raw email -> sender, thread, text, attachments, automatic or not
+      classification/    stream B (2026-10-22, migration 0019): a local TF-IDF classifier that
+                         reads every new email before any model (enquiry / other / unsure); its
+                         model is a JSON file trained from the examples beside it, and anything
+                         unsure goes to Review mail (docs/EMAIL_CLASSIFICATION.md)
       reader.py          what kind of mail it is and what an enquiry asks for (the AI through the
                          gateway); rules.py is the reader without AI
       documents.py       attachments -> requirement lines (PDF text, Excel, CSV; scans and
@@ -567,8 +598,10 @@ backend/
                          card sets the quote's status again
       doa.py             who approves a discount, and in what order (F3.4): the matrix a company
                          writes, dated versions of it, the rows a quote matches, and the chain
-                         they combine into (every row's order kept, a role not asked twice).
-                         On branch f34-doa-matrix until migration 0017 is pushed
+                         they combine into (every row's order kept, a role not asked twice)
+      doa_agent.py       the quote's own discount (the whole quote's, against list prices), the
+                         card that asks the chain for it, and ToolDef.chain_for re-chaining a
+                         counter by its own numbers
     files/store.py     stored files (raw emails, attachments): encrypted, local folder now,
                        S3-compatible later (N9 A); rows never deleted, removal blanks the bytes
     sla/engine.py      the timer engine (F1.10): targets on an "always" or "working" clock,
@@ -609,7 +642,7 @@ backend/
                        review cards on lines, reprice marks, cost alerts, 0016 pricing
                        policies, prices, waterfalls, asks and price cards on lines, 0017 the
                        per-quote round-off switch on revisions, 0018 the discount approval
-                       matrix — 0017 is on his PC and 0018 on branch f34-doa-matrix)
+                       matrix, 0019 stream B's classification outcomes on inbound emails)
   evals/duplicates.py  synthetic duplicate set and quality report (S4A)
   evals/policy_gate.py chaos test: seeded over-limit calls must all be stopped and escalated
   evals/enquiries.py   M1 test set: 200 synthetic emails and BOMs (EN, HI, TE, mixed) measured
@@ -654,8 +687,12 @@ frontend/
                        prices", the total against the floor, validity and delivery place,
                        revisions; it reloads when its tab is shown again), Material rates and
                        Machine-hour rates (RatesPage), Pricing policy (PricePolicyPage),
-                       Approval rules (DoaMatrixPage, F3.4, on branch f34-doa-matrix)
+                       Approval rules (DoaMatrixPage, F3.4) and the discount panel on a quote
+                       (DiscountApproval)
 infra/                 local Postgres + Redis (Docker); erpnext/ = a local ERPNext 15/16 to test with
+scripts/               setup.cmd (one-command setup, section 4) and premerge_check.py (the checks
+                       before a merge, section 7); .github/workflows/premerge.yml runs the latter
+                       on every push
 docs/                  this file, BUILD_LOG.md
 ```
 
@@ -809,23 +846,23 @@ docs/                  this file, BUILD_LOG.md
     `doa_matrices` does (0018), with a test that the app's own login is refused. `price_policies` and
     `cost_models` do not yet (section 7).
 
-## 6. Current state (end of 2026-10-21)
+## 6. Current state (end of 2026-10-22)
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
-first module, **M1 Enquiry, is built for email (2026-10-12)**. **M3 CPQ** is being built one feature at a
-time (C1 B): **F3.1 is built** and waits for Nischay's try, **F3.2's cost engine is built** and
-finished to J1-J4, with freight still to come (G1-G7), **F3.3, the price and the floor, is built**
-(2026-10-18), with **Y1-Y8 answered on 2026-10-21** and that day's follow-up work (per-quote round-off,
-migration 0017, three fixes from the test guide) sitting in the project folder on his PC rather than in
-this history, and **F3.4, discount approvals, is built as far as it can go without that work**: the
-rulebook, its table and its screen are on the branch `f34-doa-matrix`, not on `main`, because migration
-0018 revises his 0017 (see section 7). Tests on that branch: 351 backend (plus 3 that run
-only against a live ERPNext) and 50 frontend, all passing; on `main` itself, 319 and 43. Every new screen
-was checked in a browser, on a desktop and at phone width (390 px), except the F3.3 screens of
-2026-10-21, which have not been seen in one yet. **Nischay's PC is on migration 0017** (he migrated it
-on 2026-10-21); any other machine needs `uv run alembic upgrade head` after a pull, or enquiry and
-quote pages fail. The picture of all 69 features and their Done-When checks is the Build Map:
-https://claude.ai/artifact/Auf4tP4LxsDZZobJgn36Lt (version 14, 2026-10-21).
+first module, **M1 Enquiry, is built for email (2026-10-12)**, and since 2026-10-22 new mail is
+classified locally before any model reads it (stream B's work, migration 0019). **M3 CPQ** is being
+built one feature at a time (C1 B): **F3.1 is built** and waits for Nischay's try, **F3.2's cost engine
+is built** and finished to J1-J4, with freight still to come (G1-G7), **F3.3, the price and the floor,
+is built** and finished to Y1-Y8, and **F3.4, discount approvals, is built** (2026-10-22): the rulebook,
+its screen and the card on the quote. **Next is F3.5, the quote document**, once Q1-Q11 are answered.
+Everything is on `main` and on GitHub, one history again, with migrations running to 0019 and one head.
+Tests: 379 backend (plus 3 that run only against a live ERPNext) and 55 frontend, all passing, and the
+pre-merge Action runs them on every push. Every new screen was checked in a browser, on a desktop and at
+phone width (390 px). **Nischay's PC is on `main` at `8019512` with its database at 0019**, and it now
+follows `origin/main`, so `git pull` brings it up to date; after a pull that adds a migration, run
+`uv run alembic upgrade head`, or enquiry and quote pages fail. His PC has free AI keys (D3), so the AI
+steps run there; the cloud workspace has none. The picture of all 69 features and their Done-When
+checks is the Build Map: https://claude.ai/artifact/Auf4tP4LxsDZZobJgn36Lt (version 15, 2026-10-22).
 
 Two things changed on 2026-10-16 that are not features: a clone is set up by one command and described
 by `START_HERE.md` (section 4), and the API now answers every error in one shape, so a missing key
@@ -918,9 +955,8 @@ Engineering defaults Claude chose inside C1-C18 (ask Nischay if one looks wrong)
 
 ### Phase 2, M3 CPQ, F3.3: the price and the floor, built and answered
 Built 2026-10-18 to C2 A (`4fc8f9e`), finished to Y1-Y8 and the guide walk-through on 2026-10-21
-(section 3; BUILD_LOG's "on his PC" entry for that day). **That last day's code is still uncommitted in
-the project folder on his PC**, so what follows describes F3.3 as it stands there, not as `main` has it.
-How a line is priced (`app/cpq/pricing.py`):
+(section 3; BUILD_LOG's "on his PC" entry for that day); that day's code reached `main` on 2026-10-22
+(`bd08a6a`). How a line is priced (`app/cpq/pricing.py`):
 - **List price**, from the first source that covers it: the customer's own ERPNext price, valid today
   (used **as it is**: no tier discount or quantity break on it, Y6); else the item's rate on the ERP
   connection's default selling price list; else the cost at the family's target margin (the company
@@ -933,17 +969,17 @@ How a line is priced (`app/cpq/pricing.py`):
   quote where someone ticked "Round off prices" (Y5, migration 0017), always up.
 - **The floor**: a line below it, with no cost, no floor or no price goes to a Quote agent card (Y2);
   approve, counter with a price, or send back. The whole quote is weighed against its lines' floor; a
-  whole quote below it has no card of its own **until F3.4's is wired to the quote**. The quote's price
+  whole quote below it is F3.4's to approve: its discount card names the floor it breaks. The quote's price
   status comes from `revision_status()` after pricing and after every card decision. GST comes with the
   quote document, F3.5 (Y7).
 - Known and left as is: a line whose countered price clears the floor keeps its red "Below the floor"
   tag, which describes Forge's own price.
 
-### Phase 2, M3 F3.4 discount approvals: on the branch `f34-doa-matrix`, not on `main`
-Built to Z1-Z10 A (section 3) in commits 9642eff (the engine, on `main`), f1d3758 (migration 0018 and
-the table) and 823535b (the screen). **The last two are on the branch only**, because 0018 revises
-Nischay's 0017, which is on his PC: on `main`, `alembic upgrade head` would fail for everyone. The
-branch merges as it stands once he pushes his 0017.
+### Phase 2, M3 F3.4 discount approvals: built
+Built to Z1-Z10 A and "Discount card by hand" (section 3) in commits 9642eff (the engine), f1d3758
+(migration 0018 and the table), 823535b (the screen) and c3e9a04 (the card on the quote), all on `main`
+since 2026-10-22. Done when Nischay has tried it on his PC ("Sample data"); its two-hour median is
+measured with the first customer.
 - **The rulebook** (`app/cpq/doa.py`). A company's delegation of authority is a matrix: rows saying
   "when a quote looks like this, these roles approve, in this order". A row can ask for a discount from
   a depth, a margin up to a ceiling, the quote being under its floor, or the quote being worth from an
@@ -970,8 +1006,26 @@ branch merges as it stands once he pushes his 0017.
 - **Permission `approvals.manage`** for writing the rulebook; seeing it is `quotes.read`.
 - The clock is the one Step 5 already keeps: four working hours per approval with a reminder at two,
   and escalation that **tells** the next role up without moving the stage (Z6).
-- **Not built yet**: the approval card on the quote itself and the quote's own approval state. They
-  need the quote files Nischay has uncommitted, so they wait for his push.
+- **The card on the quote** (`app/cpq/doa_agent.py`, `DiscountApproval.tsx`). The quote's discount is
+  the **whole quote's**, measured against its own list prices (Z5 A), so five lines at 20% and one at
+  nothing come to the quote's real depth. The quote shows the chain the matrix asks for before anyone
+  is asked; the rep writes their reason (and any competitor) and presses **Send for approval**. One
+  card carries it: what it gives away in margin and money, the lines it is on, the floor it breaks,
+  what the customer owes from the ERP with its last-synced time, and the rep's words marked as the
+  rep's claim (Z7). Permission `discounts.approve`, and the rep can never decide their own (four-eyes).
+- **The chain comes from the matrix, not from a policy rule**, through `ToolDef.chain_for`, which the
+  gate reads out of the facts. Because the facts are worked out again for a counter, **a counter is
+  re-chained by its own numbers**: countering 20% to 6% can drop Finance's stage. A counter writes the
+  allowed discount onto the lines and marks the draft for pricing again, rather than editing numbers
+  someone has already seen.
+- **No new column**: the card *is* the quote's approval state, found by its revision
+  (`dedupe_key=discount:<revision>`) and fingerprinted on the deciding numbers, so a changed quote is
+  asked again, the old card is superseded and a stale card says so. What was allowed is sealed into the
+  audit chain's plain skeleton as `quote.discount.approved` (Z10 A); the rep's words stay in the
+  encrypted evidence.
+- **Known gap, asked 2026-10-22**: a quote whose lines have no price comes to ₹0, and with no rulebook
+  set, Send for approval still raises "Approve 0% off", showing Amount ₹0 and the word "None" for the
+  margins (section 7).
 
 ### Phase 2, M1 Enquiry: built for email
 Built to N1-N15, P1-P3 and "Decline only" (section 3) in commits 613bdec (the email path and screens),
@@ -992,6 +1046,13 @@ c8a727f (test set), dc45bc9 (document reader), ef660dc (can we make this, scorin
 - **Other mail**: payments, complaints, order status, vendors, spam, with label and confidence; one click
   makes one an enquiry, a changed label is recorded; complaints tell the chosen role. Emails that could
   not be read wait here too, with the reason.
+- **Review mail** (Other mail > Review mail, stream B, merged 2026-10-22): a local classifier reads every
+  new email before any model does, and anything it or the model is unsure of waits here with the reason,
+  instead of becoming a guessed enquiry. Tested the same day: across 150 enquiries it never sent one to
+  Other mail, but it is trained on English only, so Hindi and Telugu mail lands here (59 of 65), and an
+  unsure complaint sits here without telling anyone (`tests/Email_Classifier_Test_2026-10-22.md` in the
+  Claude project files). Without an AI key every enquiry currently waits here; "Open by itself"
+  (section 3) changes that once stream B builds it.
 - **Test mailbox**: send Forge an email as a customer (with attachments) without a real mailbox.
 - **Setup**: Mailbox (IMAP now; Gmail and Microsoft 365 once the app registrations exist), Owners
   (routing order, people, regions, limits, reports to), Timers and new mail, Product families (with
@@ -1410,19 +1471,38 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 
 ## 7. Next step and open questions
 
-**The one thing waiting on Nischay: push 0017.** F3.4's migration 0018 revises it, so everything built
-on 2026-10-21 for discount approvals sits on the branch `f34-doa-matrix` and `main` stays migratable.
-The moment his 0017 (and the quote code around it) is pushed, the branch merges as it stands and the
-**approval card on the quote** — the last piece of F3.4 — can be built on top, in the quote files he
-currently has uncommitted.
+**Now, on his PC** (on `main` at `8019512`, database at 0019, free AI keys in `backend\.env`):
+1. **Demo pricing.** Run `demo_pricing.py` (section 1) against company `forge`. Then open the English
+   RFQ he already sent, press **Edit** on the customer card and set Product family to **Steel sections
+   and plates**, and press **Configure** on each line. The quote prices again at once and should come to
+   ₹31,49,804. Sending the same sample again only merges it into that enquiry as a duplicate. A quote
+   line gets a cost only through its configuration, so Configure is the one step a person always does.
+2. **A real enquiry email answered by itself** (F1.8): connect a sales mailbox (Enquiries → Setup →
+   Mailbox, IMAP with a Gmail app password), set up sending and switch it to Live (Messages → Settings →
+   Email account), run beat in its own window, then send an English enquiry from another address. Within
+   about a minute it should be on the Queue, and the sender should get the thank-you with its ENQ
+   reference and no prices, dates or promises.
+3. **Tests 1-3** of the guide (below).
 
-**Pre-merge checks, waiting for his merge: PR #1** (branch `premerge-checks`). It adds
-`scripts/premerge_check.py` — the same five checks that have to pass before a push, plus the migration
-owner rule and the single-head check — and `.github/workflows/premerge.yml`, which runs them on every
-push and on every pull request to `main`, against a fresh Postgres, with no secrets needed. The owner
-check reads `MIGRATION_OWNERS` (a repository variable, `Nischay8506` by default) and fails any push
-that adds or changes a file in `backend/alembic/versions` unless an owner pushed it. He chose on
-2026-10-21 to set this up **now**, before the first teammate feature lands.
+**Pre-merge checks are on `main`** (PR #1, merged 2026-10-22). `scripts/premerge_check.py` runs the same
+five checks that have to pass before a push, plus the migration-owner rule and the single-head check,
+and `.github/workflows/premerge.yml` runs it on every push and on every pull request to `main`, against a
+fresh Postgres, with no secrets needed. The owner check reads `MIGRATION_OWNERS` (a repository variable,
+`Nischay8506` by default) and fails any push that adds or changes a file in `backend/alembic/versions`
+unless an owner pushed it. On a PC: `uv run --no-project --python 3.12 scripts/premerge_check.py
+--tests` (there the owner check only warns). The Action runs only on branches that contain the
+workflow, so a teammate branch cut from an older `main` gets no checks until it merges `main` in. It
+earned its place on its first day: it caught the merge commit that left two migrations claiming 0016.
+
+**Stream B (the teammate, S-Manas8):**
+- **Their own database is stamped 0016**, which was *their* migration and is now F3.3's price tables on
+  `main`. On their PC: `uv run alembic downgrade 0015` while still on their branch, then pull `main`,
+  then `uv run alembic upgrade head` (or drop the database and run `scripts\setup.cmd` again). Upgrading
+  straight would skip F3.3's tables.
+- **GitHub issue #3** has the two wording glitches. A second note waits for Nischay's "send": "Open by
+  itself" (section 3) and the test's four findings — an unsure complaint tells nobody; "we supply" is
+  not caught by the supplier rule; ordinary business mail (invoice copies, GST reminders, transport
+  offers) lands in Review mail; Hindi and Telugu need training examples (L6).
 
 **Worth a line in one of his migrations:** `price_policies` and `cost_models` both say in their
 migration that a version is never edited, but migration 0001's default privileges give `forge_app`
@@ -1430,23 +1510,16 @@ update and delete on every new table, so neither grant enforces anything. `doa_m
 both and has a test for it; the other two could be made to match.
 
 **Y1-Y8 are answered** (2026-10-21, `plans/Phase2_M3_F3.3_Price_Questions.md` in the Claude project
-files). Y1-Y4 and Y6-Y8 as recommended; **Y5 changed**: a policy names the rounding step, and a person
-switches "Round off prices" on per quote, so prices are exact to the paisa otherwise. A further point
-settled the same day: a customer's own ERP price is used as it is, with no tier discount and no quantity
-break. That work was done with him **directly in the project folder on his PC**, with migration 0017 and
-three fixes from walking the test guide. **The two documentary records of 2026-10-21 were merged on the
-evening of that day**, so this file and the build log now hold all of it; what is still only in that
-folder is the **code**.
+files) and built. The code written with him on his PC that day reached `main` on 2026-10-22
+(`bd08a6a`), so there is one history again.
 
-**Now: Nischay runs Tests 1-3 on his PC** (his dev database is already at 0017), then freight once
-G1-G7 are answered. Test 3 (prices, the floor and round-off) was added to the guide on 2026-10-21 with
-figures taken from an API walk-through on his PC; the guide's one old Fail (Test 2, steps 4-5) is
-explained and re-checked in Test 3, step 9. The screens that changed on 2026-10-21 have not been seen in
-a browser yet — his run is the first look at them.
+**Tests 1-3 on his PC**, then freight once G1-G7 are answered. Test 3 (prices, the floor and
+round-off) was added to the guide on 2026-10-21 with figures taken from an API walk-through on his PC;
+the guide's one old Fail (Test 2, steps 4-5) is explained and re-checked in Test 3, step 9.
 
-**And he tries F3.1, the cost engine and the new prices on his PC** ("Sample data"). His PC is already
-on 0017 (he migrated it on 2026-10-21); he only needs the API, worker and beat running.
-On a machine that has not been migrated, `uv run alembic upgrade head` comes first.
+**And he tries F3.1, the cost engine and the new prices on his PC** ("Sample data"). His PC is on 0019;
+he only needs the API, worker and beat running. On a machine that has not been migrated,
+`uv run alembic upgrade head` comes first.
 - F3.1: Enquiries → Setup → Product families → "+ Flanges" → "Options and rules", and "Configure" on
   an enquiry line.
 - Cost engine: Quotes → Cost models → Flanges → "Start from the flanges sample"; then "Start a quote"
@@ -1457,6 +1530,9 @@ On a machine that has not been migrated, `uv run alembic upgrade head` comes fir
   price" opens the waterfall, and **Ask** puts the rep's discount or price on a line. Ask for enough
   off and the line goes under the floor: it turns red and a Quote agent card appears in Decisions,
   where it can be approved or countered with a price.
+- Discount approvals (F3.4): Quotes → Approval rules → start from the sample → save. On a priced quote,
+  Ask for a discount on a line, write a reason and press **Send for approval**; the card goes to the
+  role the rulebook names, never to the rep who asked.
 Fixes from his tries come before more F3.2 work ("Start F3.2 now"). A step-by-step guide for these two
 tries, with the figures to expect and a table for his results, is the Claude Doc written on 2026-10-15:
 https://claude.ai/code/artifact/91919188-ba5c-4b66-8a5a-124d16f8679a
@@ -1470,16 +1546,19 @@ that the person who asked for a card can never decide it or hand it on.
 **Then Claude builds freight** (K1 D) once Nischay answers **G1-G7** in
 `plans/Phase2_M3_F3.2_Freight_Questions.md` in the Claude project files (reference data loading, which
 mapping wins, origin plant, carriers, manual review, export terms, shipments). It is the last piece of
-F3.2; everything else in the cost engine is built, including J1-J4 as answered. **F3.4, discount
-approvals**, is already built as far as the quote files allow (section 6); what is left of it is the
-approval card on the quote itself.
+F3.2; everything else in the cost engine is built, including J1-J4 as answered. **F3.5, the quote
+document**, is next in C1 B's order and waits on **Q1-Q11** in
+`plans/Phase2_M3_F3.5_Quote_Document_Questions.md`. The three that decide its shape are Q2 (GST: place of
+supply from the delivery destination, the rate from the item's HSN, which the ERP already syncs), Q3 (a
+dated terms template per company, because a deviation from it is what F3.4's matrix will measure) and
+Q7 (no editable draft at any point, so a wrong customer name cannot reach a quote).
 
-**M1 on his PC:** after the copy, `uv sync` and `uv run alembic upgrade head` (0010-0012), restart the
-API, worker and beat, then Enquiries → Setup (templates, the sample button under What we make) and
-Enquiries → Test mailbox (section 4).
+**M1 on his PC:** it is on 0019 with free AI keys, so email reading runs with the model there. Enquiries
+→ Setup (templates, the sample button under What we make) and Enquiries → Test mailbox (section 4).
 
-**For M1 to be marked done (N6 A):** the D3 keys (the ≥95% classification and reading scans need the
-AI), about 100 real anonymised enquiry emails and a few real BOMs and drawings to measure again, and a
+**For M1 to be marked done (N6 A):** the AI (the ≥95% classification and reading scans need it; the free
+keys run on his PC, but real customer mail waits for a paid Gemini key), about 100 real anonymised
+enquiry emails and a few real BOMs and drawings to measure again, and a
 real test mailbox on his PC. Gmail and Microsoft 365 sign-in need CognitBotz's two app registrations
 (N4 A; IMAP works without them). The two gaps found while writing the 12 Oct notes (answers into
 existing lines, F1.8; an enquiry timer across a holiday, F1.10) were fixed the same evening (f66dcfe).
@@ -1500,8 +1579,8 @@ existing lines, F1.8; an enquiry timer across a holiday, F1.10) were fixed the s
 worth doing, is `plans/Later_List.md` in the Claude project files. A line leaves it only when it is
 built or when Nischay drops it.
 - **A second person approves a cost model version before quotes use it** — with F3.4, when the
-  delegation-of-authority matrix is built. **That matrix now exists** (F3.4, 2026-10-21, on branch
-  `f34-doa-matrix`), so the condition is met and this is buildable as soon as that branch lands: a cost
+  delegation-of-authority matrix is built. **That matrix now exists** (F3.4, on `main` since
+  2026-10-22), so the condition is met and this is buildable now: a cost
   model version would get a row in the matrix like any other approval, instead of a second approval
   mechanism beside the Decisions inbox (his extra J3 point).
 - **A policy that lets an estimated cost price a quote automatically**, without review — once the review
@@ -1513,6 +1592,9 @@ built or when Nischay drops it.
   proposal on screen gets accepted because it is there; giving the family a cost model is easier and
   more honest. (Nischay left this one out of the "worth now" list.)
 - **Full-truck freight pricing**, after zone freight is built (his own note on K1 D).
+- **Compare vision models on cost and accuracy with real scans**, once there is a paid Gemini key and
+  real scans ("Vision later", 2026-10-22). Its fallback route, Gemini 3.5 Flash-Lite, came with
+  "Change all" the same day.
 - **WhatsApp enquiries (F1.2)** come with WhatsApp (N2 A); M1 stays open for them.
 - **Web form and marketplaces (F1.3)**: the website form, IndiaMART, TradeIndia, Alibaba (N14: email
   first, other platforms later).
@@ -1537,6 +1619,14 @@ built or when Nischay drops it.
   periods per record category and applicable law; record who confirmed it on the retention settings screen.
 
 Open questions for Nischay:
+- **A discount card for an unpriced quote** (asked 2026-10-22, from his English RFQ). A quote whose lines
+  have no price comes to ₹0, and Send for approval still raises "Approve 0% off" with Amount ₹0 and
+  "None" for the margins. **A** Send for approval stays off until every line has a price, naming the
+  lines still unpriced, and cards say "not known" instead of "None" (recommended) / **B** allow it, but
+  the card says "3 of 3 lines not priced" instead of ₹0 / **C** leave it.
+- **F3.5 Q1-Q11**, the quote document (above).
+- **The 0019 renumber**: as the migration owner, confirm stream B's migration as 0019.
+- **The note to the teammate** ("Open by itself" and the test's four findings): waiting for his "send".
 - **G1-G7** freight details (above).
 - **The Decisions list refreshing itself.** The menu count polls every 30 seconds; the list does not,
   so a card changed in another window shows only after F5. Making the list poll the same way is a small
@@ -1545,7 +1635,7 @@ Open questions for Nischay:
 - **The cost seal check**: does it get a "Check costs" button on the quote's cost view (A, the
   recommendation: anyone with `costs.view` can see at a glance that each line's cost is still the one
   Forge worked out), or stay an API and audit check for when something looks wrong (B)?
-- **D3** New Groq/Gemini keys for `backend/.env` (the old ones in `CRM\CRM\backend\.env` should be
-  rotated, never copied). Meaning match (S2A) and AI code suggestions (V3) start working once set,
-  and so do "Draft it for me" (Gemini) and dictation (Groq) from Step 6; F12.5's check 1 needs them.
+- **A paid Gemini key** before real customer mail goes through the AI. D3 is answered for development
+  (free keys on his PC, 2026-10-22), but free Gemini prompts may be used by Google. The old keys in
+  `CRM\CRM\backend\.env` should still be rotated, never copied.
 - **D4** Daily handover update time: 18:50 IST set by default; change?
