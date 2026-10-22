@@ -127,7 +127,7 @@ export interface InboundEmailView {
   label: string | null
   label_name: string | null
   label_confidence: string | null
-  label_source: "model" | "rules" | "person" | null
+  label_source: "model" | "rules" | "person" | "local" | null
   label_reason: string | null
   original_label: string | null
   relabelled_by: string | null
@@ -242,7 +242,7 @@ export interface Review {
   done_at: string | null
 }
 
-export type Counts = Record<View | "other_mail" | "failed", number>
+export type Counts = Record<View | "other_mail" | "mail_review" | "failed", number>
 
 export interface AckDraft {
   subject: string

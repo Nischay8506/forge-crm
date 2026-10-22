@@ -12,8 +12,8 @@ process() reads it (the Enquiry Agent, app/enquiries/reader.py), then:
           an enquiry is opened, checked for duplicates (F1.5), given to an owner
           (F1.9), its timers start (F1.10) and the customer is acknowledged (F1.8);
           anything else goes to Other mail (N5 A), and a complaint tells the chosen role.
-Nothing read is ever dropped. Without an AI key every email that is not automatic
-becomes an enquiry marked for a person to check, so no enquiry is missed.
+Nothing read is ever dropped. New mail is locally classified before extraction;
+uncertain mail and unavailable extraction go to a separate review-mail list.
 """
 
 import logging
@@ -45,6 +45,7 @@ from app.enquiries import (
 )
 from app.enquiries import settings as settings_mod
 from app.enquiries.agent import ACK_TOOL, AGENT_KEY, MERGE_TOOL, NUDGE_TOOL, PARK_TOOL, MessageArgs
+from app.enquiries.classification import classify
 from app.files import store
 from app.models import (
     Contact,
@@ -439,6 +440,35 @@ async def process(session: AsyncSession, row: InboundEmail, now: datetime | None
         await runtime.finish_run(session, ctx, summary={"outcome": "reply",
                                                         "enquiry": thread.ref})
         return "reply"
+    decision = classify(row.subject or "", row.body_text or "",
+                        attachment_text="\n".join(d.text or "" for d in docs),
+                        has_attachments=bool(row.attachments))
+    ctx.saw("email_classification", {"category": decision.category,
+                                   "score": decision.score, "reason": decision.reason})
+    row.label_source = "local"
+    # This is an uncalibrated routing score, not label_confidence (a probability).
+    row.label_confidence = None
+    row.label_reason = decision.reason[:300]
+    row.could_be_enquiry = decision.category != "other"
+    if decision.category != "enquiry":
+        row.label = "enquiry" if decision.category == "review" else "spam"
+        # Preserve useful business subcategories without making an LLM call.
+        if decision.category == "other":
+            hint = reader.rules.read(subject=row.subject or "", body=row.body_text or "",
+                                     from_address=row.from_address, from_name=row.from_name,
+                                     docs=docs, families=[], today=now.date())
+            if hint["label"] != "enquiry":
+                row.label = hint["label"]
+            if row.label == "complaint":
+                await _complaint(session, row, cfg)
+            if row.in_reply_to:
+                await _message(session, row, None)
+        row.stage, row.outcome = "done", decision.category
+        row.last_error, row.next_attempt_at = None, None
+        row.updated_at = now
+        await runtime.finish_run(session, ctx, summary={"outcome": decision.category,
+                                                        "local": decision.reason})
+        return decision.category
     try:
         reading = await reader.read(session, ctx, email=_email(row), docs=docs,
                                     families=await families.active(session), company=company,
@@ -453,11 +483,32 @@ async def process(session: AsyncSession, row: InboundEmail, now: datetime | None
     row.label_confidence = reading.confidence
     row.label_reason = (reading.data.get("reason") or "")[:300] or None
     row.could_be_enquiry = bool(reading.data.get("could_be_enquiry"))
+    if reading.source != "model":
+        # A classifier decision does not imply successful field extraction. Keep the
+        # original email in review instead of saving guessed customers / empty items.
+        row.stage, row.outcome, row.label = "done", "review", "enquiry"
+        row.could_be_enquiry = True
+        row.last_error, row.next_attempt_at = None, None
+        row.label_reason = (reading.why_rules or "LLM extraction unavailable")[:300]
+        row.updated_at = now
+        await runtime.finish_run(session, ctx, summary={"outcome": "review",
+                                                        "reason": row.label_reason})
+        return "review"
+    if reading.label != "enquiry" or not reading.data.get("lines"):
+        row.stage, row.outcome = "done", "review"
+        row.label_reason = "Classifier/extractor disagree or no product lines were extracted"
+        row.last_error, row.next_attempt_at = None, None
+        row.updated_at = now
+        await runtime.finish_run(session, ctx, summary={"outcome": "review",
+                                                        "reason": row.label_reason})
+        return "review"
     is_enquiry, reasons = _decide(reading, float(cfg["intake"]["unsure_below"]))
     if is_enquiry:
         enq = await _open_enquiry(session, ctx, row, reading, reasons, docs, cfg, now)
         outcome, summary = "enquiry", {"outcome": "enquiry", "enquiry": enq.ref,
-                                       "read_by": reading.source}
+                                       "read_by": reading.source,
+                                       "classification": decision.category,
+                                       "classification_reason": decision.reason}
     else:
         row.outcome = outcome = "other"
         if row.in_reply_to:  # an answer to one of our messages (e.g. STOP) stays in it
@@ -621,6 +672,8 @@ async def relabel(session: AsyncSession, row: InboundEmail, label: str, actor: s
         row.original_label = row.label
     row.label, row.label_source = label, "person"
     row.relabelled_by, row.relabelled_at = actor, datetime.now(UTC)
+    if row.outcome == "review" and label != "enquiry":
+        row.outcome = "other"
 
 
 async def convert(session: AsyncSession, row: InboundEmail, actor: str) -> Enquiry:

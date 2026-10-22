@@ -17,6 +17,7 @@ import type { InboundEmailView } from "./types"
 
 const SHOWS = [
   { key: "other", label: "Other mail", hint: "Read as not an enquiry" },
+  { key: "review", label: "Review mail", hint: "Uncertain classification or incomplete AI extraction" },
   { key: "automatic", label: "Automatic", hint: "Out-of-office replies, bounces and our own mail" },
   { key: "failed", label: "Could not be read", hint: "Tried three times" },
   { key: "waiting", label: "Waiting to be read", hint: "Arrived, not read yet" },
@@ -129,7 +130,7 @@ function MailDetail({ id, canWork }: { id: string; canWork: boolean }) {
       <p className="text-[12px] text-ink-500">From {m.from_name ? `${m.from_name} <${m.from_address}>` : m.from_address} · to {m.to.join(", ") || "–"}</p>
       {m.label_source === "person"
         ? <p className="font-mono text-[10.5px] text-teal-600">◆ Labelled by a person {formatDateTime(m.relabelled_at)}</p>
-        : m.label_reason && <p className="font-mono text-[10.5px] text-teal-600">◆ {m.label_source === "model" ? "The AI" : "The rules (not the AI)"}: {m.label_reason}</p>}
+        : m.label_reason && <p className="font-mono text-[10.5px] text-teal-600">◆ {m.label_source === "model" ? "The AI" : m.label_source === "local" ? "Local classifier" : "The rules (not the AI)"}: {m.label_reason}</p>}
       {m.original_label && m.original_label !== m.label && <p className="text-[12px] text-ink-500">First read as {MAIL_LABELS[m.original_label] ?? m.original_label}.</p>}
       {m.last_error && <p className="text-[12px] text-red-500">{m.last_error}</p>}
       <pre className="whitespace-pre-wrap font-body text-[13px] text-ink-900 max-h-[360px] overflow-auto rounded border border-line bg-surface-1 p-2">{m.body || "(empty)"}</pre>
@@ -152,7 +153,7 @@ function MailDetail({ id, canWork }: { id: string; canWork: boolean }) {
           {m.stage === "done" && !m.auto_kind && (
             <>
               <span className="text-[12px] text-ink-500 ml-2">Label it:</span>
-              {OTHER_LABELS.filter((l) => l !== m.label).map((l) => (
+              {OTHER_LABELS.filter((l) => l !== m.label || m.outcome === "review").map((l) => (
                 <button key={l} type="button" onClick={() => relabel.mutate(l)} disabled={relabel.isPending}
                   className="rounded-full border border-line px-2.5 py-0.5 text-[12px] text-ink-500 hover:text-ink-900 hover:border-teal-500">
                   {MAIL_LABELS[l]}

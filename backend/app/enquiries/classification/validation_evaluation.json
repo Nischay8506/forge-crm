@@ -1,0 +1,52 @@
+{
+  "scope": "English synthetic demonstration only; not real-mail accuracy",
+  "split": "validation",
+  "training_rows": 122,
+  "held_out_rows": 36,
+  "accuracy": 0.9722222222222222,
+  "target": ">0.95",
+  "passes": true,
+  "per_class": {
+    "enquiry": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "support": 12
+    },
+    "other": {
+      "precision": 1.0,
+      "recall": 0.9166666666666666,
+      "support": 12
+    },
+    "review": {
+      "precision": 0.9230769230769231,
+      "recall": 1.0,
+      "support": 12
+    }
+  },
+  "confusion": {
+    "enquiry": {
+      "enquiry": 12,
+      "other": 0,
+      "review": 0
+    },
+    "other": {
+      "enquiry": 0,
+      "other": 11,
+      "review": 1
+    },
+    "review": {
+      "enquiry": 0,
+      "other": 0,
+      "review": 12
+    }
+  },
+  "failures": [
+    {
+      "id": "validation-other-010",
+      "expected": "other",
+      "actual": "review",
+      "score": 0.0839
+    }
+  ],
+  "training_sha256": "38aa999462794925bd49a3eadd8e136865b491b4ca5f41bc591b75906aa6a483"
+}

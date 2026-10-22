@@ -49,6 +49,12 @@ export function EnquiriesLayout() {
           <Link to="/enquiries/other-mail?show=failed" className="underline font-semibold">Look at them</Link>
         </div>
       )}
+      {counts.data && counts.data.mail_review > 0 && (
+        <div role="status" className="rounded-md bg-amber-100 text-ink-700 text-[13px] p-3">
+          <b>{counts.data.mail_review} emails need review.</b>{" "}
+          <Link to="/enquiries/other-mail?show=review" className="underline font-semibold">Review mail</Link>
+        </div>
+      )}
       <nav className="flex gap-1 border-b border-line overflow-x-auto -mx-1 px-1">
         {TABS.filter((t) => hasPermission(perms, t.permission)).map((t) => (
           <NavLink key={t.to} to={t.to} end={t.end}
