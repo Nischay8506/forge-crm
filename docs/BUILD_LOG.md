@@ -5,6 +5,49 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-23 (Day 16): nothing built; pricing explained, local models on the later list
+
+Nothing was built and no code changed: `main` is still at `092e33e`, the 2026-10-22 documents.
+
+**His demo pricing works.** His screenshot (09:34Z) shows the English RFQ priced on his PC after
+`demo_pricing.py`: MS plate ₹68,960.87 per MT and ISMB 200 ₹71,732.61 per MT, both at the 8% target
+margin of the steel family's policy dated 2026-10-22. That is step 1 of "Now, on his PC" done.
+
+**Questions answered from the code** (explanations only):
+- **A product that is in no family** can only be priced from the ERP (a contract price or the price
+  list, both by item code). With neither, the line gets two Decisions cards, "Review the unknown cost"
+  (`costs.manage`) and "Approve the price" headed "Nothing could price this line" (`prices.approve`),
+  with no amount on either. A person counters the price card with a unit price, or the product is
+  given a family or an ERP price and the quote is priced again, which closes both cards. A card past
+  its deadline (4 working hours by default, a reminder at 75%) tells the next role up and never
+  approves anything.
+- **Margin and floor**: margin is on the selling price, (price − cost) ÷ price, so cost-plus is
+  cost ÷ (1 − target). Tier discount, quantity break, the rep's ask and rounding come off in that
+  order; a line under the floor, or with no known cost, goes to `prices.approve`; the whole quote is
+  checked against its lines' floors weighted by amount.
+- **Reading email without an LLM** already works (the rules in `app/enquiries/rules.py` and stream
+  B's local classifier), less well and always marked "Not read by AI". **Local models in production**
+  are possible through the same gateway (an OpenAI-style server such as Ollama or vLLM is one more
+  provider and route), but a model of a few million parameters can only sort and tag; reading an
+  enquiry into Forge's structured answer takes roughly 1 to 8 billion, and training needs a few
+  thousand labelled real emails.
+- **jmix-crm** (github.com/jmix-framework/jmix-crm) for M2 and M3: not usable. It is Java on Jmix
+  with server-side Vaadin screens, it has no LICENSE file, it has nothing for M2's evidence-backed
+  stages, and its products have one flat price, which F3.1 to F3.4 are already past.
+
+**Found while answering, not changed:** pressing plain **Approve** on a "Nothing could price this
+line" card accepts the line at ₹0 (`app/cpq/price_agent.py`: `_run` sets a unit price only when the
+card is countered). It belongs with the open ₹0 discount card question. By default only Admin holds
+`prices.approve` and `costs.manage`; the development Sales Manager and Finance roles do not.
+
+**Decision (Nischay):** **Local models later (A)** (12:21Z): running AI tasks on local models is a
+production item on the later list, task by task, once real emails have been labelled.
+
+**Next:** waiting on him for the ₹0 card (A/B/C), F3.5's Q1-Q11, the freight details G1-G7, the 0019
+renumber, the teammate note's "send", and Tests 1-3 with the real-email reply test on his PC.
+
+---
+
 ## 2026-10-22 (Day 15): one history again, F3.4 finished, stream B merged, AI keys that work
 
 **The fork is closed.** Everything that sat on Nischay's PC or on a branch on 2026-10-21 is on `main`

@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-22
+Last updated: 2026-10-23
 
 Email intake update (2026-10-19, stream B): new messages now pass a local three-way classifier
 before LLM extraction. Uncertain classification or unavailable extraction goes to
@@ -214,6 +214,7 @@ recommendation, and record the answer here.
 | D3 for development | Free Gemini and Groq keys in `backend\.env` on his PC. Free Gemini prompts may be used by Google and read by its reviewers, so real customer mail waits for a paid key | 2026-10-22 |
 | Change all | Every model route moved to models his keys reach (`app/llm/routing.py`, section 4) | 2026-10-22 |
 | Demo pricing: setup script (A) | Demo pricing data comes from a script he runs once on his PC (`demo_pricing.py`), not from a seed command in the repository and not typed by hand | 2026-10-22 |
+| Local models later (A) | Running AI tasks on local models (trained and served on Forge's own server) goes on the later list as a production item, task by task, once a few thousand real emails are labelled; nothing is built for it now | 2026-10-23 |
 
 Still open (section 7): what a discount card does with an unpriced quote, F3.5's Q1-Q11, the freight
 details G1-G7, D4 daily update time, whether the cost seal check gets a button on the quote cost view,
@@ -846,7 +847,7 @@ docs/                  this file, BUILD_LOG.md
     `doa_matrices` does (0018), with a test that the app's own login is refused. `price_policies` and
     `cost_models` do not yet (section 7).
 
-## 6. Current state (end of 2026-10-22)
+## 6. Current state (end of 2026-10-23)
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
 first module, **M1 Enquiry, is built for email (2026-10-12)**, and since 2026-10-22 new mail is
@@ -863,6 +864,8 @@ follows `origin/main`, so `git pull` brings it up to date; after a pull that add
 `uv run alembic upgrade head`, or enquiry and quote pages fail. His PC has free AI keys (D3), so the AI
 steps run there; the cloud workspace has none. The picture of all 69 features and their Done-When
 checks is the Build Map: https://claude.ai/artifact/Auf4tP4LxsDZZobJgn36Lt (version 15, 2026-10-22).
+Nothing was built on 2026-10-23; his demo pricing run worked on his PC (the English RFQ priced at the
+steel policy's 8% target), and the day's questions are answered in the build log.
 
 Two things changed on 2026-10-16 that are not features: a clone is set up by one command and described
 by `START_HERE.md` (section 4), and the API now answers every error in one shape, so a missing key
@@ -1472,17 +1475,17 @@ Known gaps from Steps 1 and 2 (none block Step 4):
 ## 7. Next step and open questions
 
 **Now, on his PC** (on `main` at `8019512`, database at 0019, free AI keys in `backend\.env`):
-1. **Demo pricing.** Run `demo_pricing.py` (section 1) against company `forge`. Then open the English
-   RFQ he already sent, press **Edit** on the customer card and set Product family to **Steel sections
-   and plates**, and press **Configure** on each line. The quote prices again at once and should come to
-   ₹31,49,804. Sending the same sample again only merges it into that enquiry as a duplicate. A quote
-   line gets a cost only through its configuration, so Configure is the one step a person always does.
-2. **A real enquiry email answered by itself** (F1.8): connect a sales mailbox (Enquiries → Setup →
+- **Demo pricing: done** (2026-10-23). He ran `demo_pricing.py` (section 1) against company `forge`,
+   and the English RFQ priced at the steel policy's 8% target (MS plate ₹68,960.87 per MT). On a fresh
+   machine: run the script, open the English RFQ, press **Edit** on the customer card and set Product
+   family to **Steel sections and plates**, then **Configure** each line; the quote should come to
+   ₹31,49,804. Sending the same sample again only merges it into that enquiry as a duplicate.
+1. **A real enquiry email answered by itself** (F1.8): connect a sales mailbox (Enquiries → Setup →
    Mailbox, IMAP with a Gmail app password), set up sending and switch it to Live (Messages → Settings →
    Email account), run beat in its own window, then send an English enquiry from another address. Within
    about a minute it should be on the Queue, and the sender should get the thank-you with its ENQ
    reference and no prices, dates or promises.
-3. **Tests 1-3** of the guide (below).
+2. **Tests 1-3** of the guide (below).
 
 **Pre-merge checks are on `main`** (PR #1, merged 2026-10-22). `scripts/premerge_check.py` runs the same
 five checks that have to pass before a push, plus the migration-owner rule and the single-head check,
@@ -1595,6 +1598,13 @@ built or when Nischay drops it.
 - **Compare vision models on cost and accuracy with real scans**, once there is a paid Gemini key and
   real scans ("Vision later", 2026-10-22). Its fallback route, Gemini 3.5 Flash-Lite, came with
   "Change all" the same day.
+- **Local models in production** ("Local models later", 2026-10-23), task by task: a fine-tuned
+  classifier of 100 to 250 million parameters to sort mail in English, Hindi and Telugu (CPU); a 1 to 4
+  billion parameter model trained on real enquiries to read lines, sizes and grades (GPU server), with
+  OCR before it for scans; local embeddings and speech. Telugu and Hindi replies stay on Gemini. Each
+  goes in as a provider and route in `app/llm/routing.py` (`providers.py` needs a placeholder key for a
+  local server) and replaces a cloud route only after scoring as well on the same test set. Waits for a
+  few thousand labelled real emails; the ~100 under N6 can test a model, not train one.
 - **WhatsApp enquiries (F1.2)** come with WhatsApp (N2 A); M1 stays open for them.
 - **Web form and marketplaces (F1.3)**: the website form, IndiaMART, TradeIndia, Alibaba (N14: email
   first, other platforms later).
@@ -1623,7 +1633,9 @@ Open questions for Nischay:
   have no price comes to ₹0, and Send for approval still raises "Approve 0% off" with Amount ₹0 and
   "None" for the margins. **A** Send for approval stays off until every line has a price, naming the
   lines still unpriced, and cards say "not known" instead of "None" (recommended) / **B** allow it, but
-  the card says "3 of 3 lines not priced" instead of ₹0 / **C** leave it.
+  the card says "3 of 3 lines not priced" instead of ₹0 / **C** leave it. Found on 2026-10-23 and
+  belonging with it: plain **Approve** on a line's "Nothing could price this line" card accepts the line
+  at ₹0, because `app/cpq/price_agent.py` sets a unit price only when the card is countered.
 - **F3.5 Q1-Q11**, the quote document (above).
 - **The 0019 renumber**: as the migration owner, confirm stream B's migration as 0019.
 - **The note to the teammate** ("Open by itself" and the test's four findings): waiting for his "send".
