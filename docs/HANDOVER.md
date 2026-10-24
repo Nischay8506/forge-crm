@@ -4,7 +4,7 @@
 ends with this file and [BUILD_LOG.md](BUILD_LOG.md) updated. If something here is out of date,
 the build log's latest entry wins.
 
-Last updated: 2026-10-23
+Last updated: 2026-10-24
 
 Email intake update (2026-10-19, stream B): new messages now pass a local three-way classifier
 before LLM extraction. Uncertain classification or unavailable extraction goes to
@@ -847,7 +847,7 @@ docs/                  this file, BUILD_LOG.md
     `doa_matrices` does (0018), with a test that the app's own login is refused. `price_policies` and
     `cost_models` do not yet (section 7).
 
-## 6. Current state (end of 2026-10-23)
+## 6. Current state (end of 2026-10-24)
 
 Phase 1 (Steps 0 to 6) is built; its open checks are listed per step below and in section 7. Phase 2's
 first module, **M1 Enquiry, is built for email (2026-10-12)**, and since 2026-10-22 new mail is
@@ -864,7 +864,7 @@ follows `origin/main`, so `git pull` brings it up to date; after a pull that add
 `uv run alembic upgrade head`, or enquiry and quote pages fail. His PC has free AI keys (D3), so the AI
 steps run there; the cloud workspace has none. The picture of all 69 features and their Done-When
 checks is the Build Map: https://claude.ai/artifact/Auf4tP4LxsDZZobJgn36Lt (version 15, 2026-10-22).
-Nothing was built on 2026-10-23; his demo pricing run worked on his PC (the English RFQ priced at the
+Nothing was built on 2026-10-23 or 2026-10-24; his demo pricing run worked on his PC (the English RFQ priced at the
 steel policy's 8% target), and the day's questions are answered in the build log.
 
 Two things changed on 2026-10-16 that are not features: a clone is set up by one command and described

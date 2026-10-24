@@ -5,6 +5,16 @@ The current overall state is in [HANDOVER.md](HANDOVER.md).
 
 ---
 
+## 2026-10-24 (Day 17): nothing built
+
+Nothing was built, nothing is in progress, and Nischay has not written since choosing "Local models
+later" on 2026-10-23. **Waiting on him:** the ₹0 discount card (A/B/C, now with the plain-Approve gap
+on price cards), F3.5's Q1-Q11, the freight details G1-G7, confirming the 0019 renumber, "send" for the
+teammate note, and Tests 1-3 with the real-email reply test on his PC. **Next:** F3.5 once Q1-Q11 are
+answered, or freight if G1-G7 come first.
+
+---
+
 ## 2026-10-23 (Day 16): nothing built; pricing explained, local models on the later list
 
 Nothing was built and no code changed: `main` is still at `092e33e`, the 2026-10-22 documents.
